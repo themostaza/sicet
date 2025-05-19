@@ -1,0 +1,176 @@
+'use server'
+
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { createServerSupabaseClient } from "../../lib/supabase";
+import type { Database } from "@/supabase/database.types";
+import type { SupabaseClient, PostgrestError } from "@supabase/supabase-js";
+
+/** -------------------------------------------------------------------------
+ * 1 · VALIDAZIONE ZOD
+ * ------------------------------------------------------------------------*/
+
+const DeviceBase = z.object({
+  id: z.string().uuid({ message: "ID deve essere un UUID v4" }),
+  name: z.string().min(2).max(60),
+  location: z.string().min(2).max(120),
+  description: z.string().max(250).nullish(),
+  tags: z.array(z.string().min(1).max(30)).max(10).default([]),
+  model: z.string().max(60).nullish(),
+  type: z.string().max(40).nullish(),
+  qrcodeUrl: z.string().url().nullish(),
+});
+export type Device = z.infer<typeof DeviceBase>;
+
+const DeviceInsertSchema = DeviceBase.omit({
+  qrcodeUrl: true,
+}).extend({
+  description: z.string().max(250).nullish().optional(),
+});
+
+const DeviceUpdateSchema = DeviceBase.partial().extend({
+  id: z.string().uuid(),
+});
+
+const ListParamsSchema = z.object({
+  offset: z.coerce.number().int().min(0).default(0),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+/** -------------------------------------------------------------------------
+ * 2 · SUPABASE CLIENT TIPIZZATO
+ * ------------------------------------------------------------------------*/
+
+type DevicesTable = Database["public"]["Tables"]["devices"];
+export type DevicesRow = DevicesTable["Row"];
+
+type DevicesInsertRow = DevicesTable["Insert"];
+type DevicesUpdateRow = DevicesTable["Update"];
+
+const supabase = (): SupabaseClient<Database> =>
+  createServerSupabaseClient() as SupabaseClient<Database>;
+
+/** -------------------------------------------------------------------------
+ * 3 · MAPPERS camelCase ⇆ snake_case
+ * ------------------------------------------------------------------------*/
+
+const toDevice = (row: DevicesRow): Device => ({
+  id: row.id,
+  name: row.name,
+  location: row.location ?? "",
+  description: row.description ?? "",
+  tags: row.tags ?? [],
+  model: row.model ?? undefined,
+  type: row.type ?? undefined,
+  qrcodeUrl: row.qrcode_url ?? undefined,
+});
+
+const toInsertRow = (d: z.infer<typeof DeviceInsertSchema>): DevicesInsertRow => ({
+  id: d.id,
+  name: d.name,
+  location: d.location,
+  description: d.description ?? null,
+  tags: d.tags ?? [],
+  model: d.model ?? null,
+  type: d.type ?? null,
+  qrcode_url: null,
+});
+
+const toUpdateRow = (d: z.infer<typeof DeviceUpdateSchema>): DevicesUpdateRow => {
+  const patch: DevicesUpdateRow = {} as DevicesUpdateRow;
+  if (d.name !== undefined) patch.name = d.name;
+  if (d.location !== undefined) patch.location = d.location;
+  if (d.description !== undefined) patch.description = d.description ?? null;
+  if (d.tags !== undefined) patch.tags = d.tags;
+  if (d.model !== undefined) patch.model = d.model ?? null;
+  if (d.type !== undefined) patch.type = d.type ?? null;
+  if (d.qrcodeUrl !== undefined) patch.qrcode_url = d.qrcodeUrl ?? null;
+  return patch;
+};
+
+/** -------------------------------------------------------------------------
+ * 4 · ERROR HANDLING
+ * ------------------------------------------------------------------------*/
+
+function handlePostgrestError(e: PostgrestError): never {
+  switch (e.code) {
+    case "23505":
+      throw new Error("ID già esistente");
+    default:
+      throw new Error(e.message || "Errore inatteso; riprova più tardi");
+  }
+}
+
+/** -------------------------------------------------------------------------
+ * 5 · SERVER ACTIONS ( directive "use server" *within* each function )
+ * ------------------------------------------------------------------------*/
+
+export async function getDevices(
+  params: unknown,
+): Promise<{ devices: Device[]; hasMore: boolean }> {
+  const { offset, limit } = ListParamsSchema.parse(params);
+
+  const { data, count, error } = await supabase()
+    .from("devices")
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (error) handlePostgrestError(error);
+
+  const devices = (data ?? []).map(toDevice);
+  const hasMore = count !== null ? offset + limit < count : devices.length === limit;
+  return { devices, hasMore };
+}
+
+export async function getDevice(id: string): Promise<Device | null> {
+  const { data, error } = await supabase()
+    .from("devices")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) handlePostgrestError(error);
+  return data ? toDevice(data) : null;
+}
+
+export async function createDevice(raw: unknown): Promise<Device> {
+  const d = DeviceInsertSchema.parse(raw);
+
+  const { data, error } = await supabase()
+    .from("devices")
+    .insert(toInsertRow(d))
+    .select()
+    .single();
+
+  if (error) handlePostgrestError(error);
+
+  revalidatePath("/device");
+  return toDevice(data!);
+}
+
+export async function updateDevice(raw: unknown): Promise<Device> {
+  const d = DeviceUpdateSchema.parse(raw);
+
+  const { data, error } = await supabase()
+    .from("devices")
+    .update(toUpdateRow(d))
+    .eq("id", d.id)
+    .select()
+    .single();
+
+  if (error) handlePostgrestError(error);
+
+  revalidatePath("/device");
+  return toDevice(data!);
+}
+
+export async function deleteDevice(id: string): Promise<void> {
+  const { error } = await supabase()
+    .from("devices")
+    .delete()
+    .eq("id", id);
+
+  if (error) handlePostgrestError(error);
+  revalidatePath("/device");
+}

@@ -1,4 +1,4 @@
-import { getDevice, updateDevice, deleteDevice } from "@/lib/actions-device"
+import { getDevice, updateDevice, deleteDevice } from "@/app/actions/actions-device"
 import { redirect } from "next/navigation"
 import DeviceForm from "@/components/device/form"
 import { Button } from "@/components/ui/button"
@@ -22,7 +22,6 @@ export default async function Page(props: { params: { id: string } }) {
   }
 
   async function onDelete() {
-    "use server"
     await deleteDevice(params.id)
     redirect("/device")
   }

@@ -3,7 +3,7 @@ import { useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
-import type { Device } from "@/lib/actions-device"
+import type { Device } from "@/app/actions/actions-device"
 import { Textarea } from "../ui/textarea"
 
 interface Props {

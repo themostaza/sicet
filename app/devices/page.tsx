@@ -1,9 +1,6 @@
-import { getDevices } from "@/lib/actions-device"
+import { getDevices } from "@/app/actions/actions-device"
 import DeviceList from "@/components/devices/client"
 import { Suspense } from "react"
-
-export const dynamic = "force-dynamic"
-export const revalidate = 60
 
 export default async function Page() {
   const { devices } = await getDevices({ offset: 0, limit: 20 })

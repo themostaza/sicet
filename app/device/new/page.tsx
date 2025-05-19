@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
-import { createDevice } from "@/lib/actions-device"
+import { createDevice } from "@/app/actions/actions-device"
 import DeviceForm from "@/components/device/form"
 import { useMemo } from "react"
 import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card"
