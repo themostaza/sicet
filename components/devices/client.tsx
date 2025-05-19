@@ -12,8 +12,8 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion"
-import type { Device } from "@/lib/actions"
-import { getDevices } from "@/lib/actions"
+import type { Device } from "@/lib/actions-device"
+import { getDevices } from "@/lib/actions-device"
 
 interface Props {
   initialDevices: Device[]

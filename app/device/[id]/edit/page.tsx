@@ -1,4 +1,4 @@
-import { getDevice, updateDevice, deleteDevice } from "@/lib/actions"
+import { getDevice, updateDevice, deleteDevice } from "@/lib/actions-device"
 import { redirect } from "next/navigation"
 import DeviceForm from "@/components/device/form"
 import { Button } from "@/components/ui/button"

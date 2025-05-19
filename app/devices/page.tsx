@@ -1,4 +1,4 @@
-import { getDevices } from "@/lib/actions"
+import { getDevices } from "@/lib/actions-device"
 import DeviceList from "@/components/devices/client"
 import { Suspense } from "react"
 
