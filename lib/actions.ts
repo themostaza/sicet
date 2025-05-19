@@ -24,8 +24,6 @@ const toDevice = (row: DevicesRow): Device => ({
   name: row.name,
   location: row.location ?? "",
   description: row.description ?? "",
-  imageUrl: row.image_url ?? "",
-  icon: row.icon ?? "",
   tags: row.tags ?? [],
 })
 
@@ -35,8 +33,6 @@ const toRow = (d: Device): DevicesRow => ({
   location: d.location,
   description: d.description ?? null,
   type: null,
-  image_url: d.imageUrl ?? null,
-  icon: d.icon ?? null,
   tags: d.tags ?? [],
   model: null,
   qrcode_url: null,
@@ -66,7 +62,7 @@ export async function createDevice(d: Device): Promise<Device> {
   const { data, error } = await supabase.from("devices").insert([toRow(d)]).select()
   if (error) throw new Error(error.message)
 
-  revalidatePath("/devices")
+  revalidatePath("/device")
   return toDevice(data![0])
 }
 
@@ -76,7 +72,7 @@ export async function updateDevice(d: Device): Promise<Device> {
   const { data, error } = await supabase.from("devices").update(toRow(d)).eq("id", d.id).select()
   if (error) throw new Error(error.message)
   if (!data?.length) throw new Error("Device non trovato")
-  revalidatePath("/devices")
+  revalidatePath("/device")
   return toDevice(data[0])
 }
 
@@ -84,5 +80,5 @@ export async function deleteDevice(id: string): Promise<void> {
   const supabase = createServerSupabaseClient()
   const { error } = await supabase.from("devices").delete().eq("id", id)
   if (error) throw new Error(error.message)
-  revalidatePath("/devices")
+  revalidatePath("/device")
 }

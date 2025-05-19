@@ -130,7 +130,7 @@ export default function DeviceList({ initialDevices }: Props) {
                       <Button
                         className="bg-black hover:bg-gray-800"
                         size="sm"
-                        onClick={() => router.push(`/devices/edit/${d.id}`)}
+                        onClick={() => router.push(`/device/${d.id}/edit`)}
                       >
                         <Edit className="w-4 h-4 mr-2" /> Modifica
                       </Button>
