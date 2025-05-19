@@ -41,7 +41,7 @@ export default function DeviceList({ initialDevices }: Props) {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Dispositivi</h1>
-        <Button className="bg-black hover:bg-gray-800" onClick={() => router.push("/devices/nuovo")}>        
+        <Button className="bg-black hover:bg-gray-800" onClick={() => router.push("/device/new")}>        
           <Plus className="mr-2 h-4 w-4" /> Nuovo Device
         </Button>
       </div>
@@ -83,7 +83,7 @@ export default function DeviceList({ initialDevices }: Props) {
           {search ? (
             <Button variant="outline" className="mt-4" onClick={() => setSearch("")}>Cancella ricerca</Button>
           ) : (
-            <Button className="mt-4 bg-black hover:bg-gray-800" onClick={() => router.push("/devices/nuovo")}>              
+            <Button className="mt-4 bg-black hover:bg-gray-800" onClick={() => router.push("/device/new")}>              
               <Plus className="mr-2 h-4 w-4" /> Nuovo Device
             </Button>
           )}

@@ -1,5 +1,5 @@
 import { getDevices } from "@/lib/actions"
-import DeviceList from "../../components/devices/client"
+import DeviceList from "@/components/devices/client"
 import { Suspense } from "react"
 
 export const dynamic = "force-dynamic"

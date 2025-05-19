@@ -4,15 +4,17 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 import type { Device } from "@/lib/actions"
+import { Textarea } from "../ui/textarea"
 
 interface Props {
   device?: Device | null
   mode: "create" | "edit"
   action: (formData: FormData) => void
   disabled?: boolean
+  defaultId?: string
 }
 
-export default function DeviceForm({ device, mode, action, disabled }: Props) {
+export default function DeviceForm({ device, mode, action, disabled, defaultId }: Props) {
   const [tags, setTags] = useState<string[]>(device?.tags ?? [])
   const [tagInput, setTagInput] = useState("")
 
@@ -24,31 +26,31 @@ export default function DeviceForm({ device, mode, action, disabled }: Props) {
   }
 
   return (
-    <form action={action} className="space-y-6">
+    <form action={action} className="space-y-6" autoComplete="off">
       <input type="hidden" name="tags" value={JSON.stringify(tags)} />
       {mode === "edit" && (
         <div className="space-y-2">
           <label className="text-sm font-medium">ID</label>
-          <Input name="id" defaultValue={device?.id} disabled className="bg-gray-50" />
+          <Input name="id" defaultValue={device?.id} disabled className="bg-gray-50" autoComplete="off" />
         </div>
       )}
       {mode === "create" && (
         <div className="space-y-2">
           <label className="text-sm font-medium">ID</label>
-          <Input name="id" required />
+          <Input name="id" required defaultValue={defaultId} autoComplete="off" />
         </div>
       )}
       <div className="space-y-2">
         <label className="text-sm font-medium">Nome</label>
-        <Input name="name" defaultValue={device?.name} required />
+        <Input name="name" defaultValue={device?.name} required autoComplete="off" />
       </div>
       <div className="space-y-2">
         <label className="text-sm font-medium">Descrizione</label>
-        <Input name="description" defaultValue={device?.description ?? ""} />
+        <Textarea name="description" defaultValue={device?.description ?? ""} autoComplete="off" />
       </div>
       <div className="space-y-2">
         <label className="text-sm font-medium">Posizione</label>
-        <Input name="location" defaultValue={device?.location ?? ""} />
+        <Input name="location" defaultValue={device?.location ?? ""} autoComplete="off" />
       </div>
       <div className="space-y-2">
         <label className="text-sm font-medium">Tag</label>
@@ -56,8 +58,15 @@ export default function DeviceForm({ device, mode, action, disabled }: Props) {
           <Input
             value={tagInput}
             onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === ",") {
+                e.preventDefault()
+                addTag()
+              }
+            }}
             placeholder="Aggiungi tag"
             className="rounded-r-none mr-2"
+            autoComplete="off"
           />
           <Button type="button" variant="outline" onClick={addTag} className="rounded-l-none">
             <Plus className="h-4 w-4" />
@@ -74,9 +83,11 @@ export default function DeviceForm({ device, mode, action, disabled }: Props) {
           </div>
         )}
       </div>
-      <Button type="submit" disabled={disabled} className="bg-black hover:bg-gray-800">
-        {mode === "create" ? "Crea" : "Salva"}
-      </Button>
+      <div className="flex justify-end">
+        <Button type="submit" disabled={disabled} className="bg-black hover:bg-gray-800">
+          {mode === "create" ? "Crea" : "Salva"}
+        </Button>
+      </div>
     </form>
   )
 } 

@@ -12,7 +12,7 @@ export default function Sidebar() {
           <LayoutGrid size={20} />
           <span>Dashboard</span>
         </Link>
-        <Link href="/punti-di-controllo" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100">
+        <Link href="/devices" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100">
           <Layers size={20} />
           <span>Punti di Controllo</span>
         </Link>
