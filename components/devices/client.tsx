@@ -1,7 +1,6 @@
-
 "use client"
 
-import { useState, useDeferredValue, useMemo } from "react"
+import { useState, useDeferredValue, useMemo, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { QrCode, Edit, Plus, MapPin, Info } from "lucide-react"
@@ -14,6 +13,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion"
 import type { Device } from "@/lib/actions"
+import { getDevices } from "@/lib/actions"
 
 interface Props {
   initialDevices: Device[]
@@ -24,18 +24,51 @@ export default function DeviceList({ initialDevices }: Props) {
   const [search, setSearch] = useState("")
   const deferred = useDeferredValue(search)
   const [qr, setQr] = useState<{ open: boolean; device?: Device }>({ open: false })
+  const [devices, setDevices] = useState<Device[]>(initialDevices)
+  const [hasMore, setHasMore] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [page, setPage] = useState(1)
+  const loaderRef = useRef<HTMLDivElement | null>(null)
 
   const list = useMemo(() => {
     const term = deferred.toLowerCase()
-    return initialDevices.filter(
+    return devices.filter(
       (d) =>
         d.name.toLowerCase().includes(term) ||
         (d.location ?? "").toLowerCase().includes(term) ||
         d.tags?.some((t) => t.toLowerCase().includes(term)),
     )
-  }, [initialDevices, deferred])
+  }, [devices, deferred])
 
   const openQr = (device: Device) => setQr({ open: true, device })
+
+  const loadMore = async () => {
+    if (loading || !hasMore) return
+    setLoading(true)
+    const res = await getDevices({ offset: devices.length, limit: 20 })
+    setDevices((prev) => {
+      const all = [...prev, ...res.devices]
+      const unique = Array.from(new Map(all.map(d => [d.id, d])).values())
+      return unique
+    })
+    setHasMore(res.hasMore)
+    setLoading(false)
+    setPage((p) => p + 1)
+  }
+
+  useEffect(() => {
+    if (!loaderRef.current) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading) {
+          loadMore()
+        }
+      },
+      { threshold: 1 }
+    )
+    observer.observe(loaderRef.current)
+    return () => observer.disconnect()
+  }, [loaderRef.current, hasMore, loading])
 
   return (
     <div className="space-y-6">
@@ -143,6 +176,11 @@ export default function DeviceList({ initialDevices }: Props) {
               </AccordionItem>
             ))}
           </Accordion>
+          {hasMore && (
+            <div ref={loaderRef} className="py-4 text-center text-gray-400">
+              {loading ? "Caricamento altri device..." : "Scorri per caricare altri"}
+            </div>
+          )}
         </div>
       )}
 

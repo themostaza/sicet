@@ -1,4 +1,3 @@
-
 "use server"
 
 import { revalidatePath } from "next/cache"
@@ -39,11 +38,17 @@ const toRow = (d: Device): DevicesRow => ({
   created_at: new Date().toISOString(),
 })
 
-export async function getDevices(): Promise<Device[]> {
+export async function getDevices({ offset, limit }: { offset: number, limit: number }): Promise<{ devices: Device[], hasMore: boolean }> {
   const supabase = createServerSupabaseClient()
-  const { data, error } = await supabase.from("devices").select("*").order("created_at", { ascending: false })
+  const { data, error } = await supabase
+    .from("devices")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1)
   if (error) throw new Error(error.message)
-  return data.map(toDevice)
+  const devices = Array.isArray(data) ? data.map(toDevice) : []
+  const hasMore = Array.isArray(data) && data.length === limit
+  return { devices, hasMore }
 }
 
 export async function getDevice(id: string): Promise<Device | null> {
