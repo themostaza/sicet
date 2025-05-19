@@ -3,10 +3,9 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import type { Kpi } from "@/app/actions/actions-kpi"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { X, Plus, Trash2 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
 
 interface Props {
   kpi?: Kpi | null
@@ -22,7 +21,7 @@ const tipiCampo = [
   { value: "number", label: "Numero intero" },
   { value: "decimal", label: "Numero decimale" },
   { value: "date", label: "Data" },
-  { value: "checkbox", label: "Checkbox" },
+  { value: "boolean", label: "Sì/No" },
   { value: "select", label: "Selezione" },
 ]
 
@@ -236,11 +235,19 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                  <Checkbox
-                    checked={campo.obbligatorio}
-                    onCheckedChange={checked => handleFieldChange(campo.id, "obbligatorio", checked === true)}
+                  <Select
+                    value={campo.obbligatorio ? "si" : "no"}
+                    onValueChange={value => handleFieldChange(campo.id, "obbligatorio", value === "si")}
                     disabled={disabled}
-                  />
+                  >
+                    <SelectTrigger className="w-24">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="si">Sì</SelectItem>
+                      <SelectItem value="no">No</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <label className="text-sm font-medium leading-none">Campo obbligatorio</label>
                 </div>
                 <Button
