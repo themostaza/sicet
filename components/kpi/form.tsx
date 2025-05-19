@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import type { Kpi } from "@/app/actions/actions-kpi"
 import { useState } from "react"
-import { X, Plus, Trash2 } from "lucide-react"
+import { Plus, Trash2 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface Props {
@@ -14,8 +14,7 @@ interface Props {
   disabled?: boolean
 }
 
-// Tipi di campo disponibili
-const tipiCampo = [
+const fieldTypes = [
   { value: "text", label: "Testo breve" },
   { value: "textarea", label: "Testo lungo" },
   { value: "number", label: "Numero intero" },
@@ -25,47 +24,55 @@ const tipiCampo = [
   { value: "select", label: "Selezione" },
 ]
 
-// Interfaccia per un campo
-interface Campo {
+// Interface for a field
+interface Field {
   id: string
-  nome: string
-  tipo: string
-  descrizione: string
-  obbligatorio: boolean
+  name: string
+  type: string
+  description: string
+  required: boolean
   min?: string | number
   max?: string | number
 }
 
-// Genera un ID univoco per i campi
-const generateId = () => `campo_${Date.now()}_${Math.floor(Math.random() * 1000)}`
+// Generate a unique ID for fields
+const generateId = () => `field_${Date.now()}_${Math.floor(Math.random() * 1000)}`
 
-// Campo vuoto per inizializzare un nuovo campo
-const emptyField = (): Campo => ({
+// Empty field template
+const emptyField = (): Field => ({
   id: generateId(),
-  nome: "",
-  tipo: "text",
-  descrizione: "",
-  obbligatorio: false,
+  name: "",
+  type: "text",
+  description: "",
+  required: false,
 })
 
 export default function KpiForm({ kpi, mode, action, disabled }: Props) {
-  // Inizializza i campi da kpi.value se esiste, altrimenti array vuoto
-  const [fields, setFields] = useState<Campo[]>(
+  // Initialize fields from kpi.value if exists, otherwise with an empty array
+  const [fields, setFields] = useState<Field[]>(
     Array.isArray(kpi?.value)
-      ? kpi.value.map((campo: any) => ({ ...campo, id: generateId() }))
+      ? kpi.value.map((field: any) => ({
+          id: generateId(),
+          name: field.name ?? "",
+          type: field.type ?? "text",
+          description: field.description ?? "",
+          required: field.required ?? false,
+          min: field.min,
+          max: field.max,
+        }))
       : [emptyField()]
   )
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
-  // Gestisce il cambiamento di un campo
-  const handleFieldChange = (id: string, field: keyof Campo, value: any) => {
+  // Handle field change
+  const handleFieldChange = (id: string, field: keyof Field, value: any) => {
     setFields((prevFields) => {
-      const updatedFields = prevFields.map((campo) =>
-        campo.id === id ? { ...campo, [field]: value } : campo
+      const updatedFields = prevFields.map((f) =>
+        f.id === id ? { ...f, [field]: value } : f
       )
       return updatedFields
     })
-    // Rimuovi eventuali errori per questo campo
+    // Remove any errors for this field
     if (fieldErrors[id]) {
       setFieldErrors((prev) => {
         const newErrors = { ...prev }
@@ -75,14 +82,14 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
     }
   }
 
-  // Rimuove un campo
+  // Remove a field
   const handleRemoveField = (id: string) => {
     setFields((prevFields) => {
-      if (prevFields.length === 1 && prevFields[0].nome === "") return prevFields
-      const filteredFields = prevFields.filter((campo) => campo.id !== id)
+      if (prevFields.length === 1 && prevFields[0].name === "") return prevFields
+      const filteredFields = prevFields.filter((f) => f.id !== id)
       if (filteredFields.length === 0) return [emptyField()]
       const lastField = filteredFields[filteredFields.length - 1]
-      if (lastField && lastField.nome.trim() !== "" && !filteredFields.some((campo) => campo.nome === "")) {
+      if (lastField && lastField.name.trim() !== "" && !filteredFields.some((f) => f.name === "")) {
         return [...filteredFields, emptyField()]
       }
       return filteredFields
@@ -96,24 +103,24 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
     }
   }
 
-  // Validazione dei campi prima dell'invio
+  // Validate fields before submit
   const validateFields = () => {
     const errors: Record<string, string> = {}
     const fieldNames = new Set<string>()
-    const nonEmptyFields = fields.filter((campo) => campo.nome.trim() !== "")
-    for (const campo of nonEmptyFields) {
-      if (campo.nome.trim() === "") {
-        errors[campo.id] = "Il nome del campo è obbligatorio"
-      } else if (fieldNames.has(campo.nome)) {
-        errors[campo.id] = "Esiste già un campo con questo nome"
+    const nonEmptyFields = fields.filter((f) => f.name.trim() !== "")
+    for (const f of nonEmptyFields) {
+      if (f.name.trim() === "") {
+        errors[f.id] = "Il nome del campo è obbligatorio"
+      } else if (fieldNames.has(f.name)) {
+        errors[f.id] = "Esiste già un campo con questo nome"
       } else {
-        fieldNames.add(campo.nome)
+        fieldNames.add(f.name)
       }
-      if ((campo.tipo === "number" || campo.tipo === "decimal") && campo.min && campo.max) {
-        const min = Number.parseFloat(campo.min.toString())
-        const max = Number.parseFloat(campo.max.toString())
+      if ((f.type === "number" || f.type === "decimal") && f.min && f.max) {
+        const min = Number.parseFloat(f.min.toString())
+        const max = Number.parseFloat(f.max.toString())
         if (!isNaN(min) && !isNaN(max) && min >= max) {
-          errors[campo.id] = "Il valore minimo deve essere inferiore al valore massimo"
+          errors[f.id] = "Il valore minimo deve essere inferiore al valore massimo"
         }
       }
     }
@@ -121,13 +128,19 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
     return Object.keys(errors).length === 0
   }
 
-  // Verifica se un campo è di tipo numerico
-  const isNumericField = (tipo: string) => tipo === "number" || tipo === "decimal"
+  // Check if a field is numeric
+  const isNumericField = (type: string) => type === "number" || type === "decimal"
 
-  // Serializza i campi in JSON per il submit (solo quelli con nome)
-  const serializedFields = JSON.stringify(fields.filter((campo) => campo.nome.trim() !== "").map(({ id, ...rest }) => rest))
+  // Serialize fields to JSON for submit (only those with a name)
+  const serializedFields = JSON.stringify(
+    fields
+      .filter((f) => f.name.trim() !== "")
+      .map(({ id, ...rest }) => ({
+        ...rest
+      }))
+  )
 
-  // AGGIUNGI questa funzione per aggiungere un nuovo campo vuoto
+  // Add a new empty field
   const handleAddField = () => {
     setFields((prevFields) => [...prevFields, emptyField()])
   }
@@ -155,16 +168,16 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
       <div className="space-y-2">
         <label className="text-sm font-medium">Campi del KPI</label>
         <div className="space-y-4">
-          {fields.map((campo, index) => (
+          {fields.map((field, index) => (
             <div
-              key={campo.id}
+              key={field.id}
               className={`p-4 border ${
-                fieldErrors[campo.id]
+                fieldErrors[field.id]
                   ? "border-red-500 bg-red-50"
                   : "bg-gray-50 border-gray-200"
               } rounded-md`}
             >
-              {fieldErrors[campo.id] && <div className="text-red-500 text-sm mb-2">{fieldErrors[campo.id]}</div>}
+              {fieldErrors[field.id] && <div className="text-red-500 text-sm mb-2">{fieldErrors[field.id]}</div>}
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">
@@ -172,42 +185,42 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
                   </label>
                   <Input
                     placeholder="Inserisci nome campo"
-                    value={campo.nome}
-                    onChange={e => handleFieldChange(campo.id, "nome", e.target.value)}
-                    className={fieldErrors[campo.id] ? "border-red-500" : ""}
+                    value={field.name}
+                    onChange={e => handleFieldChange(field.id, "name", e.target.value)}
+                    className={fieldErrors[field.id] ? "border-red-500" : ""}
                     disabled={disabled}
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Tipo</label>
                   <Select
-                    value={campo.tipo}
-                    onValueChange={value => handleFieldChange(campo.id, "tipo", value)}
+                    value={field.type}
+                    onValueChange={value => handleFieldChange(field.id, "type", value)}
                     disabled={disabled}
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {tipiCampo.map((tipo) => (
-                        <SelectItem key={`${campo.id}-${tipo.value}`} value={tipo.value}>
-                          {tipo.label}
+                      {fieldTypes.map((type) => (
+                        <SelectItem key={`${field.id}-${type.value}`} value={type.value}>
+                          {type.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
-              {isNumericField(campo.tipo) && (
+              {isNumericField(field.type) && (
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">Valore minimo</label>
                     <Input
                       type="number"
                       placeholder="Valore minimo"
-                      value={campo.min || ""}
-                      onChange={e => handleFieldChange(campo.id, "min", e.target.value)}
-                      step={campo.tipo === "decimal" ? "0.01" : "1"}
+                      value={field.min || ""}
+                      onChange={e => handleFieldChange(field.id, "min", e.target.value)}
+                      step={field.type === "decimal" ? "0.01" : "1"}
                       disabled={disabled}
                     />
                   </div>
@@ -216,9 +229,9 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
                     <Input
                       type="number"
                       placeholder="Valore massimo"
-                      value={campo.max || ""}
-                      onChange={e => handleFieldChange(campo.id, "max", e.target.value)}
-                      step={campo.tipo === "decimal" ? "0.01" : "1"}
+                      value={field.max || ""}
+                      onChange={e => handleFieldChange(field.id, "max", e.target.value)}
+                      step={field.type === "decimal" ? "0.01" : "1"}
                       disabled={disabled}
                     />
                   </div>
@@ -228,16 +241,16 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
                 <label className="block text-sm font-medium mb-1">Descrizione</label>
                 <Textarea
                   placeholder="Inserisci una descrizione per questo campo"
-                  value={campo.descrizione}
-                  onChange={e => handleFieldChange(campo.id, "descrizione", e.target.value)}
+                  value={field.description}
+                  onChange={e => handleFieldChange(field.id, "description", e.target.value)}
                   disabled={disabled}
                 />
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <Select
-                    value={campo.obbligatorio ? "si" : "no"}
-                    onValueChange={value => handleFieldChange(campo.id, "obbligatorio", value === "si")}
+                    value={field.required ? "si" : "no"}
+                    onValueChange={value => handleFieldChange(field.id, "required", value === "si")}
                     disabled={disabled}
                   >
                     <SelectTrigger className="w-24">
@@ -254,7 +267,7 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => handleRemoveField(campo.id)}
+                  onClick={() => handleRemoveField(field.id)}
                   className="text-red-500 h-8 p-0"
                   disabled={disabled}
                 >
@@ -264,7 +277,7 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
             </div>
           ))}
         </div>
-        {/* Pulsante per aggiungere un nuovo campo */}
+        {/* Button to add a new field */}
         <Button
           type="button"
           variant="outline"
@@ -274,7 +287,7 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
         >
           <Plus className="h-4 w-4 mr-2" /> Aggiungi campo
         </Button>
-        {/* Campo hidden per serializzare i campi */}
+        {/* Hidden input to serialize fields */}
         <input type="hidden" name="value" value={serializedFields} />
       </div>
       <div className="flex justify-end">

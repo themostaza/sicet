@@ -142,13 +142,13 @@ export default function KpiList({ initialKpis }: Props) {
                               className="bg-white border rounded-lg p-4 shadow-sm"
                             >
                               <div>
-                                <div className="text-lg font-semibold text-gray-900">{item.nome}</div>
-                                <div className="text-sm italic text-gray-500 mb-2">{item.descrizione || "Nessuna descrizione"}</div>
+                                <div className="text-lg font-semibold text-gray-900">{item.name}</div>
+                                <div className="text-sm italic text-gray-500 mb-2">{item.description || "Nessuna descrizione"}</div>
                               </div>
                               <div className="flex items-center text-sm text-gray-700 mb-2">
                                 <span className="font-medium mr-2">Tipo:</span>
-                                <span className="capitalize mr-2">{item.tipo}</span>
-                                {item.tipo === "number" && (
+                                <span className="capitalize mr-2">{item.type}</span>
+                                {item.type === "number" && (
                                   <span className="text-xs text-gray-500 ml-2">
                                     (min: <span className="font-semibold">{item.min}</span>, max: <span className="font-semibold">{item.max}</span>)
                                   </span>
@@ -156,7 +156,7 @@ export default function KpiList({ initialKpis }: Props) {
                               </div>
                               <div>
                                 <span className="font-medium text-sm mr-2">Obbligatorio:</span>
-                                {item.obbligatorio ? (
+                                {item.required ? (
                                   <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-800">
                                     <CheckCircle2 className="w-3 h-3 mr-1" /> Sì
                                   </span>
@@ -171,13 +171,13 @@ export default function KpiList({ initialKpis }: Props) {
                         ) : typeof k.value === "object" && k.value !== null ? (
                           <div className="bg-white border rounded-lg p-4 shadow-sm">
                             <div>
-                              <div className="text-lg font-semibold text-gray-900">{k.value.nome}</div>
-                              <div className="text-sm italic text-gray-500 mb-2">{k.value.descrizione || "Nessuna descrizione"}</div>
+                              <div className="text-lg font-semibold text-gray-900">{k.value.name}</div>
+                              <div className="text-sm italic text-gray-500 mb-2">{k.value.description || "Nessuna descrizione"}</div>
                             </div>
                             <div className="flex items-center text-sm text-gray-700 mb-2">
                               <span className="font-medium mr-2">Tipo:</span>
-                              <span className="capitalize mr-2">{k.value.tipo}</span>
-                              {k.value.tipo === "number" && (
+                              <span className="capitalize mr-2">{k.value.type}</span>
+                              {k.value.type === "number" && (
                                 <span className="text-xs text-gray-500 ml-2">
                                   (min: <span className="font-semibold">{k.value.min}</span>, max: <span className="font-semibold">{k.value.max}</span>)
                                 </span>
@@ -185,7 +185,7 @@ export default function KpiList({ initialKpis }: Props) {
                             </div>
                             <div>
                               <span className="font-medium text-sm mr-2">Obbligatorio:</span>
-                              {k.value.obbligatorio ? (
+                              {k.value.required ? (
                                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-800">
                                   <CheckCircle2 className="w-3 h-3 mr-1" /> Sì
                                 </span>
