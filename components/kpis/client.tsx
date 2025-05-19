@@ -3,7 +3,7 @@
 import { useState, useDeferredValue, useMemo, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Edit, Plus, Info } from "lucide-react"
+import { Edit, Plus, Info, Hash, HashIcon, Type, Minus, Plus as PlusIcon, CheckCircle2, XCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 import {
   Accordion,
@@ -123,7 +123,6 @@ export default function KpiList({ initialKpis }: Props) {
                   <div className="flex flex-1 items-center justify-between pr-4">
                     <div className="text-left">
                       <h3 className="text-base font-medium">{k.name}</h3>
-                      <p className="text-sm text-gray-500 mt-1">{k.id}</p>
                     </div>
                   </div>
                 </AccordionTrigger>
@@ -135,10 +134,71 @@ export default function KpiList({ initialKpis }: Props) {
                     </div>
                     <div className="space-y-1">
                       <div className="text-sm text-muted-foreground">Valore</div>
-                      <div className="text-sm font-mono break-all bg-gray-50 rounded p-2 border">
-                        {typeof k.value === "object"
-                          ? JSON.stringify(k.value, null, 2)
-                          : String(k.value)}
+                      <div className="space-y-4">
+                        {Array.isArray(k.value) ? (
+                          k.value.map((item: any, idx: number) => (
+                            <div
+                              key={idx}
+                              className="bg-white border rounded-lg p-4 shadow-sm"
+                            >
+                              <div>
+                                <div className="text-lg font-semibold text-gray-900">{item.nome}</div>
+                                <div className="text-sm italic text-gray-500 mb-2">{item.descrizione || "Nessuna descrizione"}</div>
+                              </div>
+                              <div className="flex items-center text-sm text-gray-700 mb-2">
+                                <span className="font-medium mr-2">Tipo:</span>
+                                <span className="capitalize mr-2">{item.tipo}</span>
+                                {item.tipo === "number" && (
+                                  <span className="text-xs text-gray-500 ml-2">
+                                    (min: <span className="font-semibold">{item.min}</span>, max: <span className="font-semibold">{item.max}</span>)
+                                  </span>
+                                )}
+                              </div>
+                              <div>
+                                <span className="font-medium text-sm mr-2">Obbligatorio:</span>
+                                {item.obbligatorio ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-800">
+                                    <CheckCircle2 className="w-3 h-3 mr-1" /> Sì
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-600">
+                                    <XCircle className="w-3 h-3 mr-1" /> No
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))
+                        ) : typeof k.value === "object" && k.value !== null ? (
+                          <div className="bg-white border rounded-lg p-4 shadow-sm">
+                            <div>
+                              <div className="text-lg font-semibold text-gray-900">{k.value.nome}</div>
+                              <div className="text-sm italic text-gray-500 mb-2">{k.value.descrizione || "Nessuna descrizione"}</div>
+                            </div>
+                            <div className="flex items-center text-sm text-gray-700 mb-2">
+                              <span className="font-medium mr-2">Tipo:</span>
+                              <span className="capitalize mr-2">{k.value.tipo}</span>
+                              {k.value.tipo === "number" && (
+                                <span className="text-xs text-gray-500 ml-2">
+                                  (min: <span className="font-semibold">{k.value.min}</span>, max: <span className="font-semibold">{k.value.max}</span>)
+                                </span>
+                              )}
+                            </div>
+                            <div>
+                              <span className="font-medium text-sm mr-2">Obbligatorio:</span>
+                              {k.value.obbligatorio ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-800">
+                                  <CheckCircle2 className="w-3 h-3 mr-1" /> Sì
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-600">
+                                  <XCircle className="w-3 h-3 mr-1" /> No
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="block text-base">{String(k.value)}</span>
+                        )}
                       </div>
                     </div>
                     <div className="flex space-x-3 pt-2">

@@ -8,7 +8,7 @@ import Link from "next/link"
 import { format } from "date-fns"
 import { it } from "date-fns/locale"
 import { useToast } from "@/components/ui/use-toast"
-import { getPuntiControllo } from "@/lib/actions"
+import { getPuntiControllo } from "@/app/actions/actions-device"
 import { getControlli } from "@/lib/actions-kpi"
 import { createTodolist } from "@/lib/actions-todolist"
 

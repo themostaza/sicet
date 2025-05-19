@@ -12,7 +12,7 @@ export default function Page() {
       description: formData.get("description")?.toString() ?? "",
       value: JSON.parse(formData.get("value")!.toString()),
     })
-    redirect("/kpi")
+    redirect("/kpis")
   }
 
   return (
