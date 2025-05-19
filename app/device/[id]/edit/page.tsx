@@ -22,6 +22,7 @@ export default async function Page(props: { params: { id: string } }) {
   }
 
   async function onDelete() {
+    "use server"
     await deleteDevice(params.id)
     redirect("/device")
   }

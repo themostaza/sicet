@@ -3,51 +3,46 @@
 import { useState, useDeferredValue, useMemo, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { QrCode, Edit, Plus, MapPin, Info } from "lucide-react"
+import { Edit, Plus, Info } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { QRCodeModal } from "@/components/qr-code-modal"
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion"
-import type { Device } from "@/app/actions/actions-device"
-import { getDevices } from "@/app/actions/actions-device"
+import type { Kpi } from "@/app/actions/actions-kpi"
+import { getKpis } from "@/app/actions/actions-kpi"
 
 interface Props {
-  initialDevices: Device[]
+  initialKpis: Kpi[]
 }
 
-export default function DeviceList({ initialDevices }: Props) {
+export default function KpiList({ initialKpis }: Props) {
   const router = useRouter()
   const [search, setSearch] = useState("")
   const deferred = useDeferredValue(search)
-  const [qr, setQr] = useState<{ open: boolean; device?: Device }>({ open: false })
-  const [devices, setDevices] = useState<Device[]>(initialDevices)
+  const [kpis, setKpis] = useState<Kpi[]>(initialKpis)
   const [hasMore, setHasMore] = useState(true)
   const [loading, setLoading] = useState(false)
   const loaderRef = useRef<HTMLDivElement | null>(null)
 
   const list = useMemo(() => {
     const term = deferred.toLowerCase()
-    return devices.filter(
-      (d) =>
-        d.name.toLowerCase().includes(term) ||
-        (d.location ?? "").toLowerCase().includes(term) ||
-        d.tags?.some((t) => t.toLowerCase().includes(term)),
+    return kpis.filter(
+      (k) =>
+        k.name.toLowerCase().includes(term) ||
+        (k.description ?? "").toLowerCase().includes(term)
     )
-  }, [devices, deferred])
-
-  const openQr = (device: Device) => setQr({ open: true, device })
+  }, [kpis, deferred])
 
   const loadMore = async () => {
     if (loading || !hasMore) return
     setLoading(true)
-    const res = await getDevices({ offset: devices.length, limit: 20 })
-    setDevices((prev) => {
-      const all = [...prev, ...res.devices]
-      const unique = Array.from(new Map(all.map(d => [d.id, d])).values())
+    const res = await getKpis({ offset: kpis.length, limit: 20 })
+    setKpis((prev) => {
+      const all = [...prev, ...res.kpis]
+      const unique = Array.from(new Map(all.map(k => [k.id, k])).values())
       return unique
     })
     setHasMore(res.hasMore)
@@ -71,16 +66,16 @@ export default function DeviceList({ initialDevices }: Props) {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Dispositivi</h1>
-        <Button className="bg-black hover:bg-gray-800" onClick={() => router.push("/device/new")}>        
-          <Plus className="mr-2 h-4 w-4" /> Nuovo Device
+        <h1 className="text-2xl font-bold">KPI</h1>
+        <Button className="bg-black hover:bg-gray-800" onClick={() => router.push("/kpi/new")}>
+          <Plus className="mr-2 h-4 w-4" /> Nuovo KPI
         </Button>
       </div>
 
       <div className="relative">
         <Input
           className="pl-10"
-          placeholder="Cerca device..."
+          placeholder="Cerca KPI..."
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -107,28 +102,28 @@ export default function DeviceList({ initialDevices }: Props) {
       {list.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed">
           <Info className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-lg font-medium text-gray-900">Nessun device trovato</h3>
+          <h3 className="mt-2 text-lg font-medium text-gray-900">Nessun KPI trovato</h3>
           <p className="mt-1 text-sm text-gray-500">
-            {search ? "Nessun risultato per la ricerca corrente." : "Inizia creando un nuovo device."}
+            {search ? "Nessun risultato per la ricerca corrente." : "Inizia creando un nuovo KPI."}
           </p>
           {search ? (
             <Button variant="outline" className="mt-4" onClick={() => setSearch("")}>Cancella ricerca</Button>
           ) : (
-            <Button className="mt-4 bg-black hover:bg-gray-800" onClick={() => router.push("/device/new")}>              
-              <Plus className="mr-2 h-4 w-4" /> Nuovo Device
+            <Button className="mt-4 bg-black hover:bg-gray-800" onClick={() => router.push("/kpi/new")}>
+              <Plus className="mr-2 h-4 w-4" /> Nuovo KPI
             </Button>
           )}
         </div>
       ) : (
         <div className="bg-white rounded-lg border">
           <Accordion type="single" collapsible className="w-full">
-            {list.map((d) => (
-              <AccordionItem key={d.id} value={d.id} className="border-b">
+            {list.map((k) => (
+              <AccordionItem key={k.id} value={k.id} className="border-b">
                 <AccordionTrigger className="px-4 py-3 hover:bg-gray-50 group">
                   <div className="flex flex-1 items-center justify-between pr-4">
                     <div className="text-left">
-                      <h3 className="text-base font-medium">{d.name}</h3>
-                      <p className="text-sm text-gray-500 mt-1">{d.id}</p>
+                      <h3 className="text-base font-medium">{k.name}</h3>
+                      <p className="text-sm text-gray-500 mt-1">{k.id}</p>
                     </div>
                   </div>
                 </AccordionTrigger>
@@ -136,37 +131,23 @@ export default function DeviceList({ initialDevices }: Props) {
                   <div className="space-y-4">
                     <div className="space-y-1">
                       <div className="text-sm text-muted-foreground">Descrizione</div>
-                      <div className="text-sm">{d.description || "Nessuna descrizione disponibile"}</div>
+                      <div className="text-sm">{k.description || "Nessuna descrizione disponibile"}</div>
                     </div>
                     <div className="space-y-1">
-                      <div className="text-sm text-muted-foreground">Posizione</div>
-                      <div className="text-sm flex items-center">
-                        <MapPin className="w-4 h-4 mr-2 text-gray-500" />
-                        {d.location}
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="text-sm text-muted-foreground">Tag</div>
-                      <div className="flex flex-wrap gap-1">
-                        {d.tags && d.tags.length > 0 ? (
-                          d.tags.map((tag) => (
-                            <span key={tag} className="inline-block bg-gray-100 rounded-full px-2 py-0.5 text-xs text-gray-800">{tag}</span>
-                          ))
-                        ) : (
-                          <span className="text-sm">Nessun tag disponibile</span>
-                        )}
+                      <div className="text-sm text-muted-foreground">Valore</div>
+                      <div className="text-sm font-mono break-all bg-gray-50 rounded p-2 border">
+                        {typeof k.value === "object"
+                          ? JSON.stringify(k.value, null, 2)
+                          : String(k.value)}
                       </div>
                     </div>
                     <div className="flex space-x-3 pt-2">
                       <Button
                         className="bg-black hover:bg-gray-800"
                         size="sm"
-                        onClick={() => router.push(`/device/${d.id}/edit`)}
+                        onClick={() => router.push(`/kpi/${k.id}/edit`)}
                       >
                         <Edit className="w-4 h-4 mr-2" /> Modifica
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => openQr(d)}>
-                        <QrCode className="w-4 h-4 mr-2" /> QR Code
                       </Button>
                     </div>
                   </div>
@@ -176,19 +157,10 @@ export default function DeviceList({ initialDevices }: Props) {
           </Accordion>
           {hasMore && (
             <div ref={loaderRef} className="py-4 text-center text-gray-400">
-              {loading ? "Caricamento altri device..." : "Scorri per caricare altri"}
+              {loading ? "Caricamento altri KPI..." : "Scorri per caricare altri"}
             </div>
           )}
         </div>
-      )}
-
-      {qr.open && qr.device && (
-        <QRCodeModal
-          isOpen={qr.open}
-          onClose={() => setQr({ open: false })}
-          deviceId={qr.device.id}
-          deviceName={qr.device.name}
-        />
       )}
     </div>
   )

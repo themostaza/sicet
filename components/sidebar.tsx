@@ -16,7 +16,7 @@ export default function Sidebar() {
           <Layers size={20} />
           <span>Punti di Controllo</span>
         </Link>
-        <Link href="/controlli" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100">
+        <Link href="/kpis" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100">
           <FileText size={20} />
           <span>Controlli</span>
         </Link>
