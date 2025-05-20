@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
-import { getPuntoControllo } from "@/lib/actions"
+import { getPuntoControllo } from "@/app/actions/actions-device"
 import { getTodayTodolistForDevice } from "@/lib/actions-todolist"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
