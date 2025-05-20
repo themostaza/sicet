@@ -5,6 +5,7 @@ import { z } from "zod"
 import { createServerSupabaseClient } from "@/lib/supabase"
 import type { Database } from "@/supabase/database.types"
 import type { SupabaseClient, PostgrestError } from "@supabase/supabase-js"
+import { TablesInsert } from "@/supabase/database.types"
 
 /** -------------------------------------------------------------------------
  * 1 · VALIDAZIONE ZOD
@@ -235,7 +236,7 @@ export async function getTodolistsGrouped() {
 
 type TimeSlot = "mattina" | "pomeriggio" | "sera" | "notte";
 
-const timeSlotOrder: Record<TimeSlot, number> = {
+const timeSlotOrder: Record<string, number> = {
   mattina: 1,
   pomeriggio: 2,
   sera: 3,
@@ -289,4 +290,56 @@ export async function getTodolistsGroupedWithFilters() {
   };
 
   return { filtered, counts };
+}
+
+// Define a UUID generator function
+function generateUUID(): string {
+  return crypto.randomUUID();
+}
+
+// Crea task per todolist
+export async function createTodolist(deviceId: string, date: string, timeSlot: string, kpiId: string): Promise<Task> {
+  const { startTime } = getTimeRangeFromSlot(date, timeSlot)
+  
+  const insertData: TablesInsert<"tasks"> = {
+    id: generateUUID(), // Generate UUID for client-side
+    device_id: deviceId,
+    kpi_id: kpiId,
+    scheduled_execution: startTime,
+    status: "pending",
+    value: null
+  }
+  
+  const { data, error } = await supabase()
+    .from("tasks")
+    .insert(insertData)
+    .select()
+    .single()
+  
+  if (error) handlePostgrestError(error)
+  
+  revalidatePath("/todolist")
+  return toTask(data!)
+}
+
+// Utility per creare multiple task
+export async function createMultipleTasks(deviceId: string, date: string, timeSlot: string, kpiIds: string[]): Promise<void> {
+  const { startTime } = getTimeRangeFromSlot(date, timeSlot)
+  
+  const tasksToInsert: TablesInsert<"tasks">[] = kpiIds.map(kpiId => ({
+    id: generateUUID(), // Generate UUID for each task
+    device_id: deviceId,
+    kpi_id: kpiId,
+    scheduled_execution: startTime,
+    status: "pending",
+    value: null
+  }))
+  
+  const { error } = await supabase()
+    .from("tasks")
+    .insert(tasksToInsert)
+  
+  if (error) handlePostgrestError(error)
+  
+  revalidatePath("/todolist")
 }

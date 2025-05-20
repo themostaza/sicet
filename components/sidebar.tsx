@@ -25,7 +25,6 @@ export default function Sidebar() {
           <span>Todolist</span>
         </Link>
       </nav>
-      <div className="p-4 text-xs text-gray-500 border-t">© 2023 Sistema di Gestione</div>
     </div>
   )
 }

@@ -1,0 +1,528 @@
+"use client"
+
+import { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from "react"
+import { useToast } from "@/components/ui/use-toast"
+import { getDevices } from "@/app/actions/actions-device"
+import { getKpis } from "@/app/actions/actions-kpi"
+import { 
+  Device, KPI, DateTimeEntry, ValidationErrors, TimeSlot,
+  mapDbDeviceToDevice, mapDbKpiToKpi
+} from "./types"
+import { toggle, areEqual } from "./helpers"
+import { format } from "date-fns"
+
+// Definizione dell'interfaccia del context
+interface TodolistContextType {
+  // Stati base
+  devices: Device[]
+  kpis: KPI[]
+  isLoading: boolean
+  isSubmitting: boolean
+  
+  // Selezioni utente
+  selectedTags: Set<string>
+  manualSelectedDevices: Set<string>
+  selectedKpis: Set<string>
+  dateEntries: DateTimeEntry[]
+  defaultTimeSlot: TimeSlot
+  intervalDays: number
+  startDate: Date | null
+  monthsToRepeat: number
+  
+  // Stati modali
+  isDeviceSheetOpen: boolean
+  isKpiSheetOpen: boolean
+  isDateSheetOpen: boolean
+  
+  // Stati UI
+  deviceSearchTerm: string
+  kpiSearchTerm: string
+  errors: ValidationErrors
+  selectedDates: Date[]
+  
+  // Dati derivati
+  devicesByTag: Record<string, Set<string>>
+  availableTags: string[]
+  tagCounts: Record<string, number>
+  autoSelectedFromTags: Set<string>
+  selectedDevices: Set<string>
+  filteredDevices: Device[]
+  filteredKpis: KPI[]
+  deviceKpis: KPI[]
+  selectedDevicesArray: Device[]
+  selectedKpisArray: KPI[]
+  totalTodolistCount: number
+  allRowsSelected: boolean
+  someRowsSelected: boolean
+  allKpiSelected: boolean
+  someKpiSelected: boolean
+  
+  // Setters
+  setIsDeviceSheetOpen: (open: boolean) => void
+  setIsKpiSheetOpen: (open: boolean) => void
+  setIsDateSheetOpen: (open: boolean) => void
+  setDeviceSearchTerm: (term: string) => void
+  setKpiSearchTerm: (term: string) => void
+  setSelectedTags: (tags: Set<string>) => void
+  setManualSelectedDevices: (devices: Set<string>) => void
+  setSelectedKpis: (kpis: Set<string>) => void
+  setDateEntries: (entries: DateTimeEntry[]) => void
+  setDefaultTimeSlot: (slot: TimeSlot) => void
+  setIntervalDays: (days: number) => void
+  setStartDate: (date: Date | null) => void
+  setMonthsToRepeat: (months: number) => void
+  setSelectedDates: (dates: Date[]) => void
+  setErrors: (errors: ValidationErrors) => void
+  setIsSubmitting: (submitting: boolean) => void
+  
+  // Handlers
+  handleTagClick: (tag: string) => void
+  clearAllTags: () => void
+  handleToggleAllDevices: () => void
+  handleToggleAllKpis: () => void
+  updateDateEntry: (date: Date, timeSlot: TimeSlot) => void
+  removeDateEntry: (index: number) => void
+  applyIntervalSelection: () => void
+  updateExistingDateEntry: (index: number, newDate: Date, newTimeSlot: TimeSlot) => void
+}
+
+// Creazione del context
+const TodolistContext = createContext<TodolistContextType | undefined>(undefined)
+
+// Provider component
+export function TodolistProvider({ children }: { children: ReactNode }) {
+  const { toast } = useToast()
+  
+  // Stati base
+  const [devices, setDevices] = useState<Device[]>([])
+  const [kpis, setKpis] = useState<KPI[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  
+  // Selezioni utente
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set())
+  const [manualSelectedDevices, setManualSelectedDevices] = useState<Set<string>>(new Set())
+  const [selectedKpis, setSelectedKpis] = useState<Set<string>>(new Set())
+  const [dateEntries, setDateEntries] = useState<DateTimeEntry[]>([])
+  const [defaultTimeSlot, setDefaultTimeSlot] = useState<TimeSlot>("mattina")
+  const [intervalDays, setIntervalDays] = useState(7)
+  const [startDate, setStartDate] = useState<Date | null>(null)
+  const [monthsToRepeat, setMonthsToRepeat] = useState(1)
+  
+  // Stati modali
+  const [isDeviceSheetOpen, setIsDeviceSheetOpen] = useState(false)
+  const [isKpiSheetOpen, setIsKpiSheetOpen] = useState(false)
+  const [isDateSheetOpen, setIsDateSheetOpen] = useState(false)
+  
+  // Stati UI
+  const [deviceSearchTerm, setDeviceSearchTerm] = useState("")
+  const [kpiSearchTerm, setKpiSearchTerm] = useState("")
+  const [errors, setErrors] = useState<ValidationErrors>({})
+  const [selectedDates, setSelectedDates] = useState<Date[]>([])
+
+  // Fetch Dati Iniziale
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const [devicesResponse, kpisResponse] = await Promise.all([
+          getDevices({ limit: 100 }),
+          getKpis({ limit: 100 })
+        ])
+        
+        // Assicuriamoci che mapDbDeviceToDevice e mapDbKpiToKpi siano compatibili con i tipi restituiti
+        const mappedDevices = devicesResponse.devices.map(device => ({
+          id: device.id,
+          nome: device.name,
+          posizione: device.location,
+          tags: device.tags || []
+        }));
+        
+        const mappedKpis = kpisResponse.kpis.map(kpi => ({
+          id: kpi.id,
+          nome: kpi.name,
+          descrizione: kpi.description,
+          value: kpi.value
+        }));
+        
+        setDevices(mappedDevices)
+        setKpis(mappedKpis)
+      } catch (error) {
+        console.error("Errore nel caricamento dei dati:", error)
+        toast({ title: "Errore", description: "Impossibile caricare i dati", variant: "destructive" })
+      } finally {
+        setIsLoading(false)
+      }
+    })()
+  }, [toast])
+
+  // Computazioni derivate - Tags
+  const devicesByTag = useMemo(() => {
+    const result: Record<string, Set<string>> = {}
+    
+    for (const device of devices) {
+      if (device.tags && device.tags.length > 0) {
+        for (const tag of device.tags) {
+          if (!result[tag]) {
+            result[tag] = new Set()
+          }
+          result[tag].add(device.id)
+        }
+      }
+    }
+    
+    return result
+  }, [devices])
+  
+  const availableTags = useMemo(() => 
+    Object.keys(devicesByTag).sort((a, b) => a.localeCompare(b)),
+  [devicesByTag])
+  
+  const tagCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const tag of availableTags) {
+      counts[tag] = devicesByTag[tag].size
+    }
+    return counts
+  }, [availableTags, devicesByTag])
+  
+  // Dispositivi selezionati automaticamente dai tag
+  const autoSelectedFromTags = useMemo(() => {
+    const selectedDeviceIds = new Set<string>()
+    
+    if (selectedTags.size === 0) return selectedDeviceIds
+    
+    for (const tag of selectedTags) {
+      if (devicesByTag[tag]) {
+        for (const deviceId of devicesByTag[tag]) {
+          selectedDeviceIds.add(deviceId)
+        }
+      }
+    }
+    
+    return selectedDeviceIds
+  }, [selectedTags, devicesByTag])
+  
+  // Unione dei dispositivi selezionati manualmente e tramite tag
+  const selectedDevices = useMemo(() => {
+    const allSelected = new Set([...autoSelectedFromTags, ...manualSelectedDevices])
+    return allSelected
+  }, [autoSelectedFromTags, manualSelectedDevices])
+  
+  // Dispositivi filtrati per ricerca e pre-selezione
+  const filteredDevices = useMemo(() => {
+    if (!deviceSearchTerm && selectedTags.size === 0) return devices
+    
+    return devices.filter(device => {
+      const matchesSearch = !deviceSearchTerm || 
+        device.nome.toLowerCase().includes(deviceSearchTerm.toLowerCase()) ||
+        device.id.toLowerCase().includes(deviceSearchTerm.toLowerCase()) ||
+        (device.posizione && device.posizione.toLowerCase().includes(deviceSearchTerm.toLowerCase()))
+      
+      const matchesTags = selectedTags.size === 0 || 
+        (device.tags && [...selectedTags].every(tag => device.tags?.includes(tag)))
+      
+      return matchesSearch && matchesTags
+    })
+  }, [devices, deviceSearchTerm, selectedTags])
+  
+  // KPIs filtrati per ricerca
+  const filteredKpis = useMemo(() => {
+    if (!kpiSearchTerm) return kpis
+    
+    return kpis.filter(kpi => 
+      kpi.nome.toLowerCase().includes(kpiSearchTerm.toLowerCase()) ||
+      kpi.id.toLowerCase().includes(kpiSearchTerm.toLowerCase()) ||
+      (kpi.descrizione && kpi.descrizione.toLowerCase().includes(kpiSearchTerm.toLowerCase()))
+    )
+  }, [kpis, kpiSearchTerm])
+  
+  // Array di dispositivi e KPI selezionati
+  const selectedDevicesArray = useMemo(() => 
+    devices.filter(device => selectedDevices.has(device.id)),
+  [devices, selectedDevices])
+  
+  const selectedKpisArray = useMemo(() => 
+    kpis.filter(kpi => selectedKpis.has(kpi.id)),
+  [kpis, selectedKpis])
+  
+  // KPI per dispositivi selezionati (esempio di funzionalità avanzata)
+  const deviceKpis = useMemo(() => {
+    // Qui potrebbe esserci una logica che seleziona i KPI appropriati 
+    // in base ai dispositivi selezionati
+    return kpis
+  }, [kpis])
+  
+  // Conteggio totale delle todolist da creare
+  const totalTodolistCount = useMemo(() => 
+    selectedDevices.size * selectedKpis.size * dateEntries.length,
+  [selectedDevices.size, selectedKpis.size, dateEntries.length])
+  
+  // Stati di selezione tutti/alcuni
+  const allRowsSelected = useMemo(() => 
+    filteredDevices.length > 0 && 
+    filteredDevices.every(device => selectedDevices.has(device.id)),
+  [filteredDevices, selectedDevices])
+  
+  const someRowsSelected = useMemo(() => 
+    !allRowsSelected && 
+    filteredDevices.some(device => selectedDevices.has(device.id)),
+  [allRowsSelected, filteredDevices, selectedDevices])
+  
+  const allKpiSelected = useMemo(() => 
+    filteredKpis.length > 0 && 
+    filteredKpis.every(kpi => selectedKpis.has(kpi.id)),
+  [filteredKpis, selectedKpis])
+  
+  const someKpiSelected = useMemo(() => 
+    !allKpiSelected && 
+    filteredKpis.some(kpi => selectedKpis.has(kpi.id)),
+  [allKpiSelected, filteredKpis, selectedKpis])
+  
+  // Handler per click su tag
+  const handleTagClick = useCallback((tag: string) => {
+    setSelectedTags(prev => toggle(prev, tag))
+  }, [])
+  
+  // Cancella tutti i tags selezionati
+  const clearAllTags = useCallback(() => {
+    setSelectedTags(new Set())
+  }, [])
+  
+  // Toggle selezione di tutti i dispositivi
+  const handleToggleAllDevices = useCallback(() => {
+    if (allRowsSelected) {
+      // Deseleziona tutti i dispositivi filtrati ma mantieni quelli non visibili
+      const visibleIds = new Set(filteredDevices.map(d => d.id))
+      setManualSelectedDevices(prev => {
+        const next = new Set(prev)
+        for (const id of visibleIds) {
+          if (next.has(id) && !autoSelectedFromTags.has(id)) {
+            next.delete(id)
+          }
+        }
+        return next
+      })
+    } else {
+      // Seleziona tutti i dispositivi filtrati
+      setManualSelectedDevices(prev => {
+        const visibleIds = filteredDevices.map(d => d.id)
+        return new Set([...prev, ...visibleIds])
+      })
+    }
+  }, [allRowsSelected, filteredDevices, autoSelectedFromTags])
+  
+  // Toggle selezione di tutti i KPI
+  const handleToggleAllKpis = useCallback(() => {
+    if (allKpiSelected) {
+      // Deseleziona tutti i KPI filtrati
+      const visibleIds = new Set(filteredKpis.map(k => k.id))
+      setSelectedKpis(prev => {
+        const next = new Set(prev)
+        for (const id of visibleIds) {
+          next.delete(id)
+        }
+        return next
+      })
+    } else {
+      // Seleziona tutti i KPI filtrati
+      const visibleIds = filteredKpis.map(k => k.id)
+      setSelectedKpis(prev => new Set([...prev, ...visibleIds]))
+    }
+  }, [allKpiSelected, filteredKpis])
+  
+  // Aggiorna o aggiungi una data entry
+  const updateDateEntry = useCallback((date: Date, timeSlot: TimeSlot) => {
+    if (!date) return;
+    
+    // Normalize date to avoid timezone issues
+    const normalizedDate = new Date(date)
+    normalizedDate.setHours(0, 0, 0, 0)
+    
+    // Format for comparison
+    const dateStr = format(normalizedDate, "yyyy-MM-dd")
+    
+    setDateEntries(prev => {
+      // Check if this date+timeSlot combination already exists
+      const existingIndex = prev.findIndex(
+        entry => 
+          format(entry.date, "yyyy-MM-dd") === dateStr &&
+          entry.timeSlot === timeSlot
+      )
+      
+      if (existingIndex >= 0) {
+        // Entry already exists, no need to update
+        return prev
+      } else {
+        // Add as new entry
+        return [...prev, { 
+          date: normalizedDate, 
+          timeSlot, 
+          time: format(normalizedDate, "HH:mm") 
+        }]
+      }
+    })
+    
+    // Also update selectedDates to include this date if it's not already there
+    setSelectedDates(prev => {
+      const isDateAlreadySelected = prev.some(d => 
+        format(d, "yyyy-MM-dd") === dateStr
+      )
+      
+      if (!isDateAlreadySelected) {
+        return [...prev, normalizedDate]
+      }
+      return prev
+    })
+  }, [])
+  
+  // Remove a date entry by index
+  const removeDateEntry = useCallback((idx: number) => {
+    setDateEntries(prev => {
+      if (idx < 0 || idx >= prev.length) return prev
+      
+      const dateToRemove = prev[idx].date
+      const dateStr = format(dateToRemove, "yyyy-MM-dd")
+      
+      const newEntries = prev.filter((_, i) => i !== idx)
+      
+      // Check if there are any other entries with the same date
+      const hasSameDateEntry = newEntries.some(entry => 
+        format(entry.date, "yyyy-MM-dd") === dateStr
+      )
+      
+      // If no other entries have the same date, remove from selectedDates too
+      if (!hasSameDateEntry) {
+        setSelectedDates(prevDates => 
+          prevDates.filter(d => format(d, "yyyy-MM-dd") !== dateStr)
+        )
+      }
+      
+      return newEntries
+    })
+  }, [])
+  
+  // Apply interval selection
+  const applyIntervalSelection = useCallback(() => {
+    if (!startDate || intervalDays < 1 || monthsToRepeat < 1) return
+    
+    // Generate dates at regular intervals
+    const newDates: Date[] = []
+    const endDate = new Date(startDate)
+    endDate.setMonth(endDate.getMonth() + monthsToRepeat)
+    
+    let currentDate = new Date(startDate)
+    currentDate.setHours(0, 0, 0, 0)
+    
+    while (currentDate <= endDate) {
+      newDates.push(new Date(currentDate))
+      currentDate.setDate(currentDate.getDate() + intervalDays)
+    }
+    
+    // Add each date with the default time slot
+    for (const newDate of newDates) {
+      updateDateEntry(newDate, defaultTimeSlot)
+    }
+    
+    // Show feedback message
+    toast({
+      title: "Date selezionate",
+      description: `Aggiunte ${newDates.length} date a intervalli di ${intervalDays} giorni per ${monthsToRepeat} mesi`,
+    })
+  }, [startDate, intervalDays, monthsToRepeat, defaultTimeSlot, updateDateEntry, toast])
+
+  // Make sure startDate is initialized
+  useEffect(() => {
+    if (!startDate) {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      setStartDate(today)
+    }
+  }, [startDate, setStartDate])
+
+  // Add a new function specifically for updating an existing date entry
+  const updateExistingDateEntry = useCallback((index: number, newDate: Date, newTimeSlot: TimeSlot) => {
+    setDateEntries(prev => {
+      if (index < 0 || index >= prev.length) return prev
+      
+      // Normalize date
+      const normalizedDate = new Date(newDate)
+      normalizedDate.setHours(0, 0, 0, 0)
+      
+      // Get the current entry to modify
+      const currentEntry = prev[index]
+      const oldDateStr = format(currentEntry.date, "yyyy-MM-dd")
+      const newDateStr = format(normalizedDate, "yyyy-MM-dd")
+      
+      // Create a new array with the updated entry
+      const newEntries = [...prev]
+      newEntries[index] = {
+        date: normalizedDate,
+        timeSlot: newTimeSlot,
+        time: format(normalizedDate, "HH:mm")
+      }
+      
+      // If the date has changed, update selectedDates as well
+      if (oldDateStr !== newDateStr) {
+        // Check if the old date appears elsewhere in the entries
+        const oldDateExists = prev.some((entry, i) => 
+          i !== index && format(entry.date, "yyyy-MM-dd") === oldDateStr
+        )
+        
+        // If not, remove it from selectedDates
+        if (!oldDateExists) {
+          setSelectedDates(prevDates => 
+            prevDates.filter(d => format(d, "yyyy-MM-dd") !== oldDateStr)
+          )
+        }
+        
+        // Check if the new date is already in selectedDates
+        const newDateExists = selectedDates.some(d => 
+          format(d, "yyyy-MM-dd") === newDateStr
+        )
+        
+        // If not, add it
+        if (!newDateExists) {
+          setSelectedDates(prevDates => [...prevDates, normalizedDate])
+        }
+      }
+      
+      return newEntries
+    })
+  }, [selectedDates])
+
+  const contextValue = {
+    // Stati
+    devices, kpis, isLoading, isSubmitting,
+    selectedTags, manualSelectedDevices, selectedKpis, dateEntries,
+    defaultTimeSlot, intervalDays, startDate, monthsToRepeat,
+    isDeviceSheetOpen, isKpiSheetOpen, isDateSheetOpen,
+    deviceSearchTerm, kpiSearchTerm, errors, selectedDates,
+    
+    // Dati derivati
+    devicesByTag, availableTags, tagCounts, autoSelectedFromTags,
+    selectedDevices, filteredDevices, filteredKpis, deviceKpis,
+    selectedDevicesArray, selectedKpisArray, totalTodolistCount,
+    allRowsSelected, someRowsSelected, allKpiSelected, someKpiSelected,
+    
+    // Setters
+    setIsDeviceSheetOpen, setIsKpiSheetOpen, setIsDateSheetOpen,
+    setDeviceSearchTerm, setKpiSearchTerm, setSelectedTags,
+    setManualSelectedDevices, setSelectedKpis, setDateEntries,
+    setDefaultTimeSlot, setIntervalDays, setStartDate, setMonthsToRepeat,
+    setSelectedDates, setErrors, setIsSubmitting,
+    
+    // Handlers
+    handleTagClick, clearAllTags, handleToggleAllDevices, handleToggleAllKpis,
+    updateDateEntry, removeDateEntry, applyIntervalSelection, updateExistingDateEntry,
+  }
+
+  return <TodolistContext.Provider value={contextValue}>{children}</TodolistContext.Provider>
+}
+
+export function useTodolist() {
+  const context = useContext(TodolistContext)
+  if (context === undefined) {
+    throw new Error('useTodolist must be used within a TodolistProvider')
+  }
+  return context
+}

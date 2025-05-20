@@ -3,7 +3,11 @@
 import React from "react"
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, AlertTriangle, ArrowRight, CheckCircle2 } from "lucide-react"
+import { Calendar, AlertTriangle, ArrowRight, CheckCircle2, Plus } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { cn } from "@/lib/utils"
 
 type TimeSlot = "mattina" | "pomeriggio" | "sera" | "notte"
 type FilterType = "all" | "today" | "overdue" | "future" | "completed"
@@ -40,96 +44,119 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
     router.push(`/todolist/view/${todolist.device_id}/${todolist.date}/${todolist.time_slot}`)
   }
 
-  return (
-    <div>
-      {/* Filtri */}
-      <div className="flex gap-2 mb-4">
-        <button
-          className={`px-3 py-1 rounded ${activeFilter === "all" ? "bg-primary text-white" : "bg-gray-100"}`}
-          onClick={() => setActiveFilter("all")}
-        >
-          Tutte <Badge>{counts.all}</Badge>
-        </button>
-        <button
-          className={`px-3 py-1 rounded ${activeFilter === "today" ? "bg-primary text-white" : "bg-gray-100"}`}
-          onClick={() => setActiveFilter("today")}
-        >
-          Oggi <Badge>{counts.today}</Badge>
-        </button>
-        <button
-          className={`px-3 py-1 rounded ${activeFilter === "overdue" ? "bg-primary text-white" : "bg-gray-100"}`}
-          onClick={() => setActiveFilter("overdue")}
-        >
-          Scadute <Badge>{counts.overdue}</Badge>
-        </button>
-        <button
-          className={`px-3 py-1 rounded ${activeFilter === "future" ? "bg-primary text-white" : "bg-gray-100"}`}
-          onClick={() => setActiveFilter("future")}
-        >
-          Future <Badge>{counts.future}</Badge>
-        </button>
-        <button
-          className={`px-3 py-1 rounded ${activeFilter === "completed" ? "bg-primary text-white" : "bg-gray-100"}`}
-          onClick={() => setActiveFilter("completed")}
-        >
-          Completate <Badge>{counts.completed}</Badge>
-        </button>
-      </div>
+  const handleCreateTodolist = () => {
+    router.push("/todolist/new")
+  }
 
-      {/* Tabella */}
-      <div className="overflow-x-auto">
-        <table className="min-w-full border bg-white">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="px-3 py-2 text-left">Dispositivo</th>
-              <th className="px-3 py-2 text-left">Data</th>
-              <th className="px-3 py-2 text-left">Fascia</th>
-              <th className="px-3 py-2 text-left">Stato</th>
-              <th className="px-3 py-2 text-left">Task</th>
-              <th className="px-3 py-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={6} className="text-center text-gray-400 py-8">
-                  Nessuna todolist trovata.
-                </td>
-              </tr>
-            )}
-            {filtered.map((item) => (
-              <tr
-                key={`${item.device_id}_${item.date}_${item.time_slot}`}
-                className="hover:bg-gray-50 cursor-pointer"
-                onClick={() => handleRowClick(item)}
-              >
-                <td className="px-3 py-2">{item.device_name}</td>
-                <td className="px-3 py-2">{item.date}</td>
-                <td className="px-3 py-2">{item.time_slot}</td>
-                <td className="px-3 py-2">
-                  {item.status === "completed" ? (
-                    <span className="inline-flex items-center gap-1 text-green-600">
-                      <CheckCircle2 size={16} /> Completata
-                    </span>
-                  ) : item.status === "in_progress" ? (
-                    <span className="inline-flex items-center gap-1 text-yellow-600">
-                      <AlertTriangle size={16} /> In corso
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-gray-500">
-                      <Calendar size={16} /> Da fare
-                    </span>
-                  )}
-                </td>
-                <td className="px-3 py-2">{item.count}</td>
-                <td className="px-3 py-2">
-                  <ArrowRight size={18} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Todolist</CardTitle>
+        <Button onClick={handleCreateTodolist} className="ml-auto" variant="default">
+          <Plus className="mr-2 h-4 w-4" /> Crea Todolist
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {/* Filtri */}
+        <div className="flex flex-wrap gap-2 mb-6">
+          <Button
+            variant={activeFilter === "all" ? "default" : "outline"}
+            onClick={() => setActiveFilter("all")}
+            size="sm"
+            className={activeFilter === "all" ? "bg-blue-500 hover:bg-blue-600" : ""}
+          >
+            Tutte <Badge className="ml-2" variant={activeFilter === "all" ? "outline" : "secondary"}>{counts.all}</Badge>
+          </Button>
+          <Button
+            variant={activeFilter === "today" ? "default" : "outline"}
+            onClick={() => setActiveFilter("today")}
+            size="sm"
+            className={activeFilter === "today" ? "bg-yellow-500 hover:bg-yellow-600" : ""}
+          >
+            Oggi <Badge className="ml-2" variant={activeFilter === "today" ? "outline" : "secondary"}>{counts.today}</Badge>
+          </Button>
+          <Button
+            variant={activeFilter === "overdue" ? "default" : "outline"}
+            onClick={() => setActiveFilter("overdue")}
+            size="sm"
+            className={activeFilter === "overdue" ? "bg-red-500 hover:bg-red-600" : ""}
+          >
+            Scadute <Badge className="ml-2" variant={activeFilter === "overdue" ? "outline" : "secondary"}>{counts.overdue}</Badge>
+          </Button>
+          <Button
+            variant={activeFilter === "future" ? "default" : "outline"}
+            onClick={() => setActiveFilter("future")}
+            size="sm"
+            className={activeFilter === "future" ? "bg-purple-500 hover:bg-purple-600" : ""}
+          >
+            Future <Badge className="ml-2" variant={activeFilter === "future" ? "outline" : "secondary"}>{counts.future}</Badge>
+          </Button>
+          <Button
+            variant={activeFilter === "completed" ? "default" : "outline"}
+            onClick={() => setActiveFilter("completed")}
+            size="sm"
+            className={activeFilter === "completed" ? "bg-green-500 hover:bg-green-600" : ""}
+          >
+            Completate <Badge className="ml-2" variant={activeFilter === "completed" ? "outline" : "secondary"}>{counts.completed}</Badge>
+          </Button>
+        </div>
+
+        {/* Tabella */}
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Dispositivo</TableHead>
+                <TableHead>Data</TableHead>
+                <TableHead>Fascia</TableHead>
+                <TableHead>Stato</TableHead>
+                <TableHead>Task</TableHead>
+                <TableHead className="w-[50px]"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    Nessuna todolist trovata.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filtered.map((item) => (
+                  <TableRow
+                    key={`${item.device_id}_${item.date}_${item.time_slot}`}
+                    className="cursor-pointer"
+                    onClick={() => handleRowClick(item)}
+                  >
+                    <TableCell>{item.device_name}</TableCell>
+                    <TableCell>{item.date}</TableCell>
+                    <TableCell>{item.time_slot}</TableCell>
+                    <TableCell>
+                      {item.status === "completed" ? (
+                        <span className="inline-flex items-center gap-1 text-green-600">
+                          <CheckCircle2 size={16} /> Completata
+                        </span>
+                      ) : item.status === "in_progress" ? (
+                        <span className="inline-flex items-center gap-1 text-yellow-600">
+                          <AlertTriangle size={16} /> In corso
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-muted-foreground">
+                          <Calendar size={16} /> Da fare
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>{item.count}</TableCell>
+                    <TableCell>
+                      <ArrowRight size={18} className="text-muted-foreground" />
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
