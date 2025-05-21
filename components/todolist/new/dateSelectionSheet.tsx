@@ -4,33 +4,10 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Label } from "@/components/ui/label"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetFooter,
-  SheetClose,
-} from "@/components/ui/sheet"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs"
-import { format, isSameDay } from "date-fns"
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Card, CardContent } from "@/components/ui/card"
+import { format, startOfToday } from "date-fns"
 import { it } from "date-fns/locale"
 import { CalendarIcon, Clock, Plus, X } from "lucide-react"
 import { useTodolist } from "./context"
@@ -59,41 +36,35 @@ export function DateSelectionSheet() {
     removeDateEntry,
     defaultTimeSlot,
     setDefaultTimeSlot,
-    selectedDates,
-    setSelectedDates,
     startDate,
     setStartDate,
     intervalDays,
     setIntervalDays,
     monthsToRepeat,
     setMonthsToRepeat,
-    applyIntervalSelection
+    applyIntervalSelection,
   } = useTodolist()
 
-  // State per la selezione temporanea della fascia oraria
+  /**
+   * TEMP STATES
+   */
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlot>(defaultTimeSlot)
-
-  // State per la data selezionata temporaneamente - inizializzata con la data odierna
   const [tempSelectedDate, setTempSelectedDate] = useState<Date | undefined>(new Date())
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false)
 
-  // Gestisce l'aggiunta di una nuova data
+  /**
+   * HANDLERS
+   */
   const handleAddDate = () => {
     if (!tempSelectedDate) return
-    
-    // Ensure we're working with a valid date object
     const validDate = new Date(tempSelectedDate)
-    validDate.setHours(0, 0, 0, 0) // Reset time components to avoid timezone issues
-    
+    validDate.setHours(0, 0, 0, 0)
     updateDateEntry(validDate, selectedTimeSlot)
-    setDefaultTimeSlot(selectedTimeSlot) // Salva l'ultima fascia oraria selezionata
-    // Non resettiamo la data selezionata per permettere selezioni multiple
+    setDefaultTimeSlot(selectedTimeSlot)
   }
 
-  // Gestisce l'applicazione dell'intervallo
   const handleApplyInterval = () => {
     if (!tempSelectedDate) return
-    
-    // Usa la data selezionata nel calendario come data di inizio
     setStartDate(tempSelectedDate)
     applyIntervalSelection()
   }
@@ -111,13 +82,12 @@ export function DateSelectionSheet() {
         <Card className="border-none shadow-none">
           <CardContent className="p-0">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-              {/* Prima riga */}
+              {/* -------- Fascia oraria -------- */}
               <div>
-                <Label htmlFor="timeSlot" className="mb-2 block">Fascia oraria</Label>
-                <Select 
-                  value={selectedTimeSlot} 
-                  onValueChange={(value) => setSelectedTimeSlot(value as TimeSlot)}
-                >
+                <Label htmlFor="timeSlot" className="mb-2 block">
+                  Fascia oraria
+                </Label>
+                <Select value={selectedTimeSlot} onValueChange={(v) => setSelectedTimeSlot(v as TimeSlot)}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Seleziona fascia oraria" />
                   </SelectTrigger>
@@ -129,8 +99,11 @@ export function DateSelectionSheet() {
                 </Select>
               </div>
 
+              {/* -------- Intervallo giorni -------- */}
               <div>
-                <Label htmlFor="intervalDays" className="mb-2 block">Intervallo (giorni)</Label>
+                <Label htmlFor="intervalDays" className="mb-2 block">
+                  Intervallo (giorni)
+                </Label>
                 <Input
                   id="intervalDays"
                   type="number"
@@ -141,43 +114,56 @@ export function DateSelectionSheet() {
                 />
               </div>
 
-              {/* Seconda riga - Sostituisci il calendario con il DatePicker */}
+              {/* -------- Date Picker -------- */}
               <div>
                 <Label className="mb-2 block">Seleziona data</Label>
-                <Popover>
+                <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
                   <PopoverTrigger asChild>
                     <Button
-                      variant={"outline"}
+                      variant="outline"
                       className={cn(
                         "w-full justify-start text-left font-normal",
                         !tempSelectedDate && "text-muted-foreground"
                       )}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {tempSelectedDate ? format(tempSelectedDate, "EEEE d MMMM", { locale: it }) : <span>Seleziona una data</span>}
+                      {tempSelectedDate ? (
+                        format(tempSelectedDate, "EEEE d MMMM", { locale: it })
+                      ) : (
+                        <span>Seleziona una data</span>
+                      )}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
+
+                  {/*
+                    pointer-events-auto è ESSENZIALE quando Popover
+                    vive in un portal (Sheet, Dialog, ecc.).
+                  */}
+                  <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
                     <Calendar
                       mode="single"
                       selected={tempSelectedDate}
-                      onSelect={(date) => {
-                        if (date) setTempSelectedDate(date);
+                      onSelect={(d) => {
+                        if (d) {
+                          setTempSelectedDate(d);
+                          setIsCalendarOpen(false); // Close popover when a date is selected
+                        }
                       }}
-                      month={tempSelectedDate}
                       defaultMonth={tempSelectedDate}
+                      disabled={{ before: startOfToday() }}
                       initialFocus
-                      disabled={{
-                        before: new Date(),
-                      }}
                       locale={it}
+                      className="pointer-events-auto" /* garantisce interazione */
                     />
                   </PopoverContent>
                 </Popover>
               </div>
 
+              {/* -------- Mesi da ripetere -------- */}
               <div>
-                <Label htmlFor="months" className="mb-2 block">Mesi da ripetere</Label>
+                <Label htmlFor="months" className="mb-2 block">
+                  Mesi da ripetere
+                </Label>
                 <Input
                   id="months"
                   type="number"
@@ -189,30 +175,20 @@ export function DateSelectionSheet() {
               </div>
             </div>
 
-            {/* Bottoni */}
+            {/* -------- ACTION BUTTONS -------- */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-              <Button 
-                type="button" 
-                onClick={handleAddDate}
-                disabled={!tempSelectedDate}
-                className="flex items-center w-full"
-              >
+              <Button type="button" onClick={handleAddDate} disabled={!tempSelectedDate} className="flex items-center w-full">
                 <Plus className="h-4 w-4 mr-1" /> Aggiungi data
               </Button>
-              
-              <Button 
-                type="button" 
-                onClick={handleApplyInterval}
-                disabled={!tempSelectedDate || intervalDays < 1}
-                className="w-full"
-              >
+
+              <Button type="button" onClick={handleApplyInterval} disabled={!tempSelectedDate || intervalDays < 1} className="w-full">
                 Applica intervallo
               </Button>
             </div>
           </CardContent>
         </Card>
 
-        {/* Date selezionate - mostra sempre la tabella */}
+        {/* -------- DATE LIST -------- */}
         <div className="mt-6">
           <h3 className="text-sm font-medium mb-2">Date selezionate ({dateEntries.length})</h3>
           <div className="border rounded-md p-4">
@@ -226,9 +202,11 @@ export function DateSelectionSheet() {
               </thead>
               <tbody>
                 {dateEntries.length > 0 ? (
-                  dateEntries.map((entry, index) => (
-                    <tr key={index} className="border-b last:border-b-0">
-                      <td className="py-2">{format(entry.date, "EEEE d MMMM", { locale: it })}</td>
+                  dateEntries.map((entry, idx) => (
+                    <tr key={idx} className="border-b last:border-b-0">
+                      <td className="py-2">
+                        {format(entry.date, "EEEE d MMMM", { locale: it })}
+                      </td>
                       <td className="py-2">
                         <span className="flex items-center">
                           <Clock className="h-3 w-3 inline mr-1" />
@@ -236,12 +214,12 @@ export function DateSelectionSheet() {
                         </span>
                       </td>
                       <td className="py-2 text-right">
-                        <Button 
-                          type="button" 
-                          variant="ghost" 
-                          size="sm" 
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
                           className="h-7 w-7 p-0 hover:bg-gray-200 rounded-full"
-                          onClick={() => removeDateEntry(index)}
+                          onClick={() => removeDateEntry(idx)}
                         >
                           <X className="h-4 w-4" />
                         </Button>
@@ -263,3 +241,5 @@ export function DateSelectionSheet() {
     </Sheet>
   )
 }
+
+export default DateSelectionSheet;

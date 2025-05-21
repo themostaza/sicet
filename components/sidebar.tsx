@@ -8,10 +8,10 @@ export default function Sidebar() {
         <h1 className="text-xl font-bold">Sistema di Gestione</h1>
       </div>
       <nav className="flex-1 p-4 space-y-2">
-        <Link href="/dashboard" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100">
+        {/* <Link href="/dashboard" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100">
           <LayoutGrid size={20} />
           <span>Dashboard</span>
-        </Link>
+        </Link> */}
         <Link href="/devices" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100">
           <Layers size={20} />
           <span>Punti di Controllo</span>
@@ -23,6 +23,10 @@ export default function Sidebar() {
         <Link href="/todolist" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100">
           <ClipboardList size={20} />
           <span>Todolist</span>
+        </Link>
+        <Link href="/export" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100">
+          <FileText size={20} />
+          <span>Esporta Dati</span>
         </Link>
       </nav>
     </div>
