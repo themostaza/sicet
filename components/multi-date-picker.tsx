@@ -113,11 +113,9 @@ export function MultiDatePicker({ selectedEntries = [], onEntriesChange, classNa
   const formatTimeSlot = (timeSlot: TimeSlot) => {
     switch (timeSlot) {
       case "mattina":
-        return "Mattina (fino alle 12:00)"
+        return "Mattina (fino alle 14:00)"
       case "pomeriggio":
-        return "Pomeriggio (fino alle 18:00)"
-      case "sera":
-        return "Sera (fino alle 22:00)"
+        return "Pomeriggio (fino alle 22:00)"
       case "notte":
         return "Notte (fino alle 06:00)"
       default:
@@ -154,8 +152,8 @@ export function MultiDatePicker({ selectedEntries = [], onEntriesChange, classNa
                     <SelectValue placeholder="Seleziona fascia oraria" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="mattina">Mattina (fino alle 12:00)</SelectItem>
-                    <SelectItem value="pomeriggio">Pomeriggio (fino alle 18:00)</SelectItem>
+                    <SelectItem value="mattina">Mattina (fino alle 14:00)</SelectItem>
+                    <SelectItem value="pomeriggio">Pomeriggio (fino alle 22:00)</SelectItem>
                     <SelectItem value="sera">Sera (fino alle 22:00)</SelectItem>
                     <SelectItem value="notte">Notte (fino alle 06:00)</SelectItem>
                   </SelectContent>
@@ -216,8 +214,8 @@ export function MultiDatePicker({ selectedEntries = [], onEntriesChange, classNa
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="mattina">Mattina (fino alle 12:00)</SelectItem>
-                                <SelectItem value="pomeriggio">Pomeriggio (fino alle 18:00)</SelectItem>
+                                <SelectItem value="mattina">Mattina (fino alle 14:00)</SelectItem>
+                                <SelectItem value="pomeriggio">Pomeriggio (fino alle 22:00)</SelectItem>
                                 <SelectItem value="sera">Sera (fino alle 22:00)</SelectItem>
                                 <SelectItem value="notte">Notte (fino alle 06:00)</SelectItem>
                               </SelectContent>

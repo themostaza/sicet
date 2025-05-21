@@ -245,9 +245,8 @@ const timeSlotOrder: Record<string, number> = {
 
 function getCurrentTimeSlot(dateObj: Date): TimeSlot {
   const hours = dateObj.getHours();
-  if (hours >= 6 && hours < 12) return "mattina";
-  if (hours >= 12 && hours < 18) return "pomeriggio";
-  if (hours >= 18 && hours < 22) return "sera";
+  if (hours >= 6 && hours < 14) return "mattina";
+  if (hours >= 14 && hours < 22) return "pomeriggio";
   return "notte";
 }
 

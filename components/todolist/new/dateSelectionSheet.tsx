@@ -122,11 +122,9 @@ export function DateSelectionSheet() {
                     <SelectValue placeholder="Seleziona fascia oraria" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="mattina">Mattina (fino alle 12)</SelectItem>
-                    <SelectItem value="pomeriggio">Pomeriggio (fino alle 18)</SelectItem>
-                    <SelectItem value="sera">Sera (fino alle 22)</SelectItem>
-                    <SelectItem value="notte">Notte (fino alle 6)</SelectItem>
-                    <SelectItem value="giornata">Giornata (fino alle 17)</SelectItem>
+                    <SelectItem value="mattina">Mattina (fino alle 14:00)</SelectItem>
+                    <SelectItem value="pomeriggio">Pomeriggio (fino alle 22:00)</SelectItem>
+                    <SelectItem value="notte">Notte (fino alle 06:00)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -13,13 +13,9 @@ export const areEqual = (a: Set<string>, b: Set<string>) =>
 export const formatTimeSlot = (timeSlot: string) => {
   switch (timeSlot) {
     case "mattina":
-      return "Mattina (fino alle 12:00)"
+      return "Mattina (fino alle 14:00)"
     case "pomeriggio":
-      return "Pomeriggio (fino alle 18:00)"
-    case "giornata":
-      return "Giornata (fino alle 17:00)"
-    case "sera":
-      return "Sera (fino alle 22:00)"
+      return "Pomeriggio (fino alle 22:00)"
     case "notte":
       return "Notte (fino alle 06:00)"
     default:

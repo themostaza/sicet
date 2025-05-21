@@ -6,7 +6,7 @@ export type DbKpi = Tables<"kpis">
 export type DbTask = Tables<"tasks">
 
 // TimeSlot
-export type TimeSlot = "mattina" | "pomeriggio" | "giornata" | "sera" | "notte"
+export type TimeSlot = "mattina" | "pomeriggio" | "sera" | "notte"
 
 // Interfacce semplificate per l'uso nell'UI
 export interface Device {
@@ -55,19 +55,14 @@ export const mapDbKpiToKpi = (dbKpi: DbKpi): KPI => ({
 export const timeSlotToScheduledTime = (date: Date, timeSlot: TimeSlot): string => {
   const dateStr = date.toISOString().split('T')[0]
   
-  // Questo è solo un esempio, adatta in base alle tue esigenze
   switch (timeSlot) {
     case "mattina":
-      return `${dateStr}T08:00:00`
+      return `${dateStr}T06:00:00`
     case "pomeriggio":
       return `${dateStr}T14:00:00`
-    case "giornata":
-      return `${dateStr}T09:00:00`
-    case "sera":
-      return `${dateStr}T18:00:00`
     case "notte":
       return `${dateStr}T22:00:00`
     default:
-      return `${dateStr}T12:00:00`
+      return `${dateStr}T06:00:00`
   }
 }
