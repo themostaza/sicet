@@ -354,7 +354,7 @@ export default function ExportPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-10"></TableHead>
-                        <TableHead>Nome dispositivo</TableHead>
+                        <TableHead>Nome Punto di controllo</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -400,7 +400,7 @@ export default function ExportPage() {
                                           htmlFor={`device-${device.value}-all-kpis`}
                                           className="font-medium"
                                         >
-                                          Seleziona tutti i KPI
+                                          Seleziona tutti i Controlli
                                         </Label>
                                       </div>
                                       

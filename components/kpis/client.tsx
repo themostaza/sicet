@@ -66,16 +66,16 @@ export default function KpiList({ initialKpis }: Props) {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">KPI</h1>
+        <h1 className="text-2xl font-bold">Controlli</h1>
         <Button className="bg-black hover:bg-gray-800" onClick={() => router.push("/kpi/new")}>
-          <Plus className="mr-2 h-4 w-4" /> Nuovo KPI
+          <Plus className="mr-2 h-4 w-4" /> Nuovo Controllo
         </Button>
       </div>
 
       <div className="relative">
         <Input
           className="pl-10"
-          placeholder="Cerca KPI..."
+          placeholder="Cerca Controllo..."
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -102,15 +102,15 @@ export default function KpiList({ initialKpis }: Props) {
       {list.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed">
           <Info className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-lg font-medium text-gray-900">Nessun KPI trovato</h3>
+          <h3 className="mt-2 text-lg font-medium text-gray-900">Nessun Controllo trovato</h3>
           <p className="mt-1 text-sm text-gray-500">
-            {search ? "Nessun risultato per la ricerca corrente." : "Inizia creando un nuovo KPI."}
+            {search ? "Nessun risultato per la ricerca corrente." : "Inizia creando un nuovo Controllo."}
           </p>
           {search ? (
             <Button variant="outline" className="mt-4" onClick={() => setSearch("")}>Cancella ricerca</Button>
           ) : (
             <Button className="mt-4 bg-black hover:bg-gray-800" onClick={() => router.push("/kpi/new")}>
-              <Plus className="mr-2 h-4 w-4" /> Nuovo KPI
+              <Plus className="mr-2 h-4 w-4" /> Nuovo Controllo
             </Button>
           )}
         </div>
@@ -217,7 +217,7 @@ export default function KpiList({ initialKpis }: Props) {
           </Accordion>
           {hasMore && (
             <div ref={loaderRef} className="py-4 text-center text-gray-400">
-              {loading ? "Caricamento altri KPI..." : "Scorri per caricare altri"}
+              {loading ? "Caricamento altri Controlli..." : "Scorri per caricare altri"}
             </div>
           )}
         </div>

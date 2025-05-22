@@ -29,11 +29,11 @@ export function Summary() {
           
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-500">Dispositivi:</span>
+              <span className="text-gray-500">Punti di controllo:</span>
               <span className="text-gray-900">{selectedDevicesArray.length}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-500">KPI:</span>
+              <span className="text-gray-500">Controlli:</span>
               <span className="text-gray-900">{selectedKpisArray.length}</span>
             </div>
             <div className="flex justify-between">

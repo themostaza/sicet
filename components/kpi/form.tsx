@@ -166,7 +166,7 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
         <Textarea name="description" defaultValue={kpi?.description ?? ""} autoComplete="off" />
       </div>
       <div className="space-y-2">
-        <label className="text-sm font-medium">Campi del KPI</label>
+        <label className="text-sm font-medium">Campi del Controllo</label>
         <div className="space-y-4">
           {fields.map((field, index) => (
             <div

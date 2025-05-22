@@ -42,9 +42,9 @@ export function DeviceSelectionSheet() {
     <Sheet open={isDeviceSheetOpen} onOpenChange={setIsDeviceSheetOpen}>
       <SheetContent className="w-full sm:max-w-3xl overflow-y-auto">
         <SheetHeader className="mb-4">
-          <SheetTitle>Seleziona dispositivi</SheetTitle>
+          <SheetTitle>Seleziona Punti di controllo</SheetTitle>
           <SheetDescription>
-            Filtra per tag o cerca i dispositivi da includere nella todolist
+            Seleziona i Punti di controllo per la tua todolist
           </SheetDescription>
         </SheetHeader>
 
@@ -84,7 +84,7 @@ export function DeviceSelectionSheet() {
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
             <Input
               type="search"
-              placeholder="Cerca dispositivi..."
+              placeholder="Cerca Punti di controllo..."
               className="pl-8"
               value={deviceSearchTerm}
               onChange={(e) => setDeviceSearchTerm(e.target.value)}
@@ -100,7 +100,7 @@ export function DeviceSelectionSheet() {
                     <Checkbox
                       checked={allRowsSelected}
                       onCheckedChange={handleToggleAllDevices}
-                      aria-label="Select all devices"
+                      aria-label="Select all Punti di controllo"
                     />
                   </TableHead>
                   <TableHead>Nome</TableHead>

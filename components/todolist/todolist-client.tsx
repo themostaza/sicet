@@ -670,7 +670,7 @@ export default function TodolistClient({
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
                             <CardTitle className="text-md flex items-center">
-                              {kpi?.name ?? "KPI sconosciuto"}
+                              {kpi?.name ?? "Controllo sconosciuto"}
                               {dirty && (
                                 <Badge variant="outline" className="ml-2 text-amber-600 border-amber-600">
                                   Modificato
@@ -736,7 +736,7 @@ export default function TodolistClient({
                           <CardContent className="p-3">
                             <div className="flex justify-between items-start">
                               <div className="w-full">
-                                <h4 className="font-medium">{kpi?.name ?? "KPI sconosciuto"}</h4>
+                                <h4 className="font-medium">{kpi?.name ?? "Controllo sconosciuto"}</h4>
                                 
                                 {/* Display task value based on its type */}
                                 <div className="text-sm text-muted-foreground mt-1">

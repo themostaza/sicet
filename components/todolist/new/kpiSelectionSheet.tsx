@@ -35,9 +35,9 @@ export function KpiSelectionSheet() {
     <Sheet open={isKpiSheetOpen} onOpenChange={setIsKpiSheetOpen}>
       <SheetContent className="w-full sm:max-w-3xl overflow-y-auto">
         <SheetHeader className="mb-4">
-          <SheetTitle>Seleziona KPI</SheetTitle>
+          <SheetTitle>Seleziona Controlli</SheetTitle>
           <SheetDescription>
-            Seleziona i KPI da misurare per questi dispositivi
+            Seleziona i Controlli da misurare per questi Punti di controllo
           </SheetDescription>
         </SheetHeader>
 
@@ -47,7 +47,7 @@ export function KpiSelectionSheet() {
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
             <Input
               type="search"
-              placeholder="Cerca KPI..."
+              placeholder="Cerca Controlli..."
               className="pl-8"
               value={kpiSearchTerm}
               onChange={(e) => setKpiSearchTerm(e.target.value)}
@@ -63,7 +63,7 @@ export function KpiSelectionSheet() {
                     <Checkbox
                       checked={allKpiSelected}
                       onCheckedChange={handleToggleAllKpis}
-                      aria-label="Select all KPIs"
+                      aria-label="Select all Controlli"
                     />
                   </TableHead>
                   <TableHead>Nome</TableHead>

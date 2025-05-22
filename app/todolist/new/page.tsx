@@ -45,11 +45,11 @@ function TodolistCreationForm() {
     const newErrors: {[key: string]: string} = {}
     
     if (selectedDevices.size === 0) {
-      newErrors.devices = "Seleziona almeno un dispositivo"
+      newErrors.devices = "Seleziona almeno un Punto di controllo"
     }
     
     if (selectedKpis.size === 0) {
-      newErrors.kpis = "Seleziona almeno un KPI"
+      newErrors.kpis = "Seleziona almeno un Controllo"
     }
     
     if (dateEntries.length === 0) {

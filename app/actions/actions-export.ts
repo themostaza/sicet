@@ -55,7 +55,7 @@ export async function exportTodolistData(config: ExportConfig): Promise<Blob> {
   
   // If no tasks found
   if (!tasks || tasks.length === 0) {
-    return new Blob(['Data,Device,KPI Name,Value Name,Value\nNessun dato trovato'], { type: 'text/csv;charset=utf-8' })
+    return new Blob(['Data,Punto di controllo,Nome Controllo,Value Name,Value\nNessun dato trovato'], { type: 'text/csv;charset=utf-8' })
   }
   
   // Collect unique device and KPI IDs
@@ -98,13 +98,13 @@ export async function exportTodolistData(config: ExportConfig): Promise<Blob> {
   }
   
   // CSV header
-  let csvContent = 'Data,Device,KPI Name,Value Name,Value\n'
+  let csvContent = 'Data,Punto di controllo,Nome Controllo,Value Name,Value\n'
   
   // Process each task
   for (const task of tasks) {
     const date = format(parseISO(task.scheduled_execution), 'dd/MM/yyyy')
-    const deviceName = escapeCSV(deviceMap[task.device_id] || 'Dispositivo sconosciuto')
-    const kpiName = escapeCSV(kpiMap[task.kpi_id]?.name || 'KPI sconosciuto')
+    const deviceName = escapeCSV(deviceMap[task.device_id] || 'Punto di controllo sconosciuto')
+    const kpiName = escapeCSV(kpiMap[task.kpi_id]?.name || 'Controllo sconosciuto')
     const fieldNamesMap = kpiFieldNamesMap[task.kpi_id] || {}
     
     // Skip tasks with no value

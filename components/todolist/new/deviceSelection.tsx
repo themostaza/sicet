@@ -22,7 +22,7 @@ export function DeviceSelection() {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold flex items-center">
-            Dispositivi
+            Punti di controllo
             {errors.devices && (
               <div className="ml-2 text-red-500 flex items-center">
                 <AlertCircle className="h-4 w-4 mr-1" />

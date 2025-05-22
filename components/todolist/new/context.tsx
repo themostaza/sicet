@@ -245,10 +245,10 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
     kpis.filter(kpi => selectedKpis.has(kpi.id)),
   [kpis, selectedKpis])
   
-  // KPI per dispositivi selezionati (esempio di funzionalità avanzata)
+  // KPI per Punti di controllo selezionati (esempio di funzionalità avanzata)
   const deviceKpis = useMemo(() => {
-    // Qui potrebbe esserci una logica che seleziona i KPI appropriati 
-    // in base ai dispositivi selezionati
+    // Qui potrebbe esserci una logica che seleziona i Controlli appropriati 
+    // in base ai Punti di controllo selezionati
     return kpis
   }, [kpis])
   
