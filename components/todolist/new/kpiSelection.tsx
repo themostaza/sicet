@@ -3,8 +3,34 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
-import { AlertCircle, Plus, Settings } from "lucide-react"
+import { AlertCircle, Plus, Settings, BellRing } from "lucide-react"
 import { useTodolist } from "./context"
+import { useState } from "react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+
+// Define types for KPI and field
+interface KpiField {
+  id: string;
+  name: string;
+  description?: string;
+  type: 'numeric' | 'text' | 'boolean' | string;
+  placeholder?: string;
+  matchAlert?: boolean;
+  min?: string | number;
+  max?: string | number;
+  required?: boolean;
+}
+
+interface Kpi {
+  id: string;
+  nome: string;
+  descrizione?: string | null;
+  fields?: KpiField[];
+  value?: any;
+}
 
 export function KpiSelection() {
   const { 
@@ -14,6 +40,90 @@ export function KpiSelection() {
     setIsKpiSheetOpen,
     errors 
   } = useTodolist()
+  
+  const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false)
+  const [selectedKpiForAlert, setSelectedKpiForAlert] = useState<Kpi | null>(null)
+
+  // Create fields from KPI value data
+  const getKpiFields = (kpi: Kpi): KpiField[] => {
+    // If kpi already has fields defined, use those
+    if (kpi.fields && kpi.fields.length > 0) {
+      return kpi.fields;
+    }
+    
+    // Check if kpi has value property with field definitions
+    if (kpi.value) {
+      const fields: KpiField[] = [];
+      
+      // Handle array of fields
+      if (Array.isArray(kpi.value)) {
+        return kpi.value.map((field: any) => ({
+          id: field.id || `${kpi.id}-${field.name}`,
+          name: field.name,
+          description: field.description,
+          type: mapFieldType(field.type),
+          min: field.min,
+          max: field.max,
+          required: field.required,
+          matchAlert: field.type === 'text'
+        }));
+      } 
+      // Handle single field object
+      else if (typeof kpi.value === 'object' && kpi.value !== null) {
+        return [{
+          id: kpi.value.id || `${kpi.id}-value`,
+          name: kpi.value.name || 'Valore',
+          description: kpi.value.description,
+          type: mapFieldType(kpi.value.type),
+          min: kpi.value.min,
+          max: kpi.value.max,
+          required: kpi.value.required,
+          matchAlert: kpi.value.type === 'text'
+        }];
+      }
+    }
+    
+    // Default fields if no value data exists
+    return [
+      {
+        id: `${kpi.id}-value`,
+        name: 'Valore',
+        description: 'Misura corrente',
+        type: 'numeric'
+      },
+      {
+        id: `${kpi.id}-unit`,
+        name: 'Unità di misura',
+        description: 'Unità della grandezza',
+        type: 'text',
+        matchAlert: true
+      }
+    ];
+  };
+
+  // Map KPI field types to alert field types
+  const mapFieldType = (type: string): 'numeric' | 'text' | 'boolean' | string => {
+    switch (type) {
+      case 'number':
+      case 'decimal':
+        return 'numeric';
+      case 'text':
+      case 'textarea':
+      case 'select':
+        return 'text';
+      case 'boolean':
+      case 'Si/No':
+      case 'Sì/No':
+        return 'boolean';
+      default:
+        return type || 'text';
+    }
+  };
+
+  const handleOpenAlertDialog = (kpi: Kpi) => {
+    setSelectedKpiForAlert(kpi)
+    setIsAlertDialogOpen(true)
+  }
 
   return (
     <Card>
@@ -47,6 +157,7 @@ export function KpiSelection() {
                   <TableHead>ID</TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead className="hidden md:table-cell">Descrizione</TableHead>
+                  <TableHead>Azioni</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -55,6 +166,17 @@ export function KpiSelection() {
                     <TableCell className="font-medium">{kpi.id}</TableCell>
                     <TableCell>{kpi.nome}</TableCell>
                     <TableCell className="hidden md:table-cell">{kpi.descrizione || "-"}</TableCell>
+                    <TableCell>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleOpenAlertDialog(kpi)}
+                      >
+                        <BellRing className="h-4 w-4 mr-2" />
+                        Set Alert
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -74,6 +196,100 @@ export function KpiSelection() {
           </div>
         )}
       </CardContent>
+
+      {/* Alert Dialog */}
+      <Dialog open={isAlertDialogOpen} onOpenChange={setIsAlertDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedKpiForAlert && `Set Alert for KPI ${selectedKpiForAlert.id}`}
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="flex items-center space-x-2">
+              <Switch id="activate-alert" />
+              <Label htmlFor="activate-alert">Activate Alert</Label>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" type="email" placeholder="Enter email for notifications" />
+            </div>
+
+            {selectedKpiForAlert && getKpiFields(selectedKpiForAlert).map((field) => (
+              <div key={field.id} className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <Label htmlFor={field.id}>{field.name}</Label>
+                  <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                    {field.type === 'boolean' ? 'Sì/No' : field.type}
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground">{field.description}</p>
+                
+                {field.type === 'numeric' ? (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label htmlFor={`${field.id}-min`}>Min</Label>
+                        <Input 
+                          id={`${field.id}-min`} 
+                          type="number" 
+                          placeholder="Minimum value" 
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor={`${field.id}-max`}>Max</Label>
+                        <Input 
+                          id={`${field.id}-max`} 
+                          type="number" 
+                          placeholder="Maximum value" 
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : field.type === 'text' && field.matchAlert ? (
+                  <div className="space-y-2">
+                    <Label htmlFor={`${field.id}-match`}>Alert when text matches:</Label>
+                    <Input 
+                      id={`${field.id}-match`} 
+                      placeholder="Text to match" 
+                    />
+                  </div>
+                ) : field.type === 'boolean' ? (
+                  <div className="space-y-2">
+                    <Label htmlFor={`${field.id}-boolean`}>Alert when value is:</Label>
+                    <div className="flex space-x-4">
+                      <div className="flex items-center space-x-2">
+                        <input 
+                          type="radio" 
+                          id={`${field.id}-boolean-si`} 
+                          name={`${field.id}-boolean`} 
+                          value="si" 
+                        />
+                        <Label htmlFor={`${field.id}-boolean-si`}>Sì</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <input 
+                          type="radio" 
+                          id={`${field.id}-boolean-no`} 
+                          name={`${field.id}-boolean`} 
+                          value="no" 
+                        />
+                        <Label htmlFor={`${field.id}-boolean-no`}>No</Label>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-end">
+            <Button type="button">Save</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
