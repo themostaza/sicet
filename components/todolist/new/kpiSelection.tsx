@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { AlertCircle, Plus, Settings, BellRing } from "lucide-react"
 import { useTodolist } from "./context"
 import { useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/sheet"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -41,7 +41,7 @@ export function KpiSelection() {
     errors 
   } = useTodolist()
   
-  const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false)
+  const [isAlertSheetOpen, setIsAlertSheetOpen] = useState(false)
   const [selectedKpiForAlert, setSelectedKpiForAlert] = useState<Kpi | null>(null)
 
   // Create fields from KPI value data
@@ -120,9 +120,9 @@ export function KpiSelection() {
     }
   };
 
-  const handleOpenAlertDialog = (kpi: Kpi) => {
+  const handleOpenAlertSheet = (kpi: Kpi) => {
     setSelectedKpiForAlert(kpi)
-    setIsAlertDialogOpen(true)
+    setIsAlertSheetOpen(true)
   }
 
   return (
@@ -154,7 +154,6 @@ export function KpiSelection() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>ID</TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead className="hidden md:table-cell">Descrizione</TableHead>
                   <TableHead>Azioni</TableHead>
@@ -163,7 +162,6 @@ export function KpiSelection() {
               <TableBody>
                 {selectedKpisArray.map((kpi) => (
                   <TableRow key={kpi.id}>
-                    <TableCell className="font-medium">{kpi.id}</TableCell>
                     <TableCell>{kpi.nome}</TableCell>
                     <TableCell className="hidden md:table-cell">{kpi.descrizione || "-"}</TableCell>
                     <TableCell>
@@ -171,7 +169,7 @@ export function KpiSelection() {
                         type="button" 
                         variant="outline" 
                         size="sm"
-                        onClick={() => handleOpenAlertDialog(kpi)}
+                        onClick={() => handleOpenAlertSheet(kpi)}
                       >
                         <BellRing className="h-4 w-4 mr-2" />
                         Set Alert
@@ -197,14 +195,14 @@ export function KpiSelection() {
         )}
       </CardContent>
 
-      {/* Alert Dialog */}
-      <Dialog open={isAlertDialogOpen} onOpenChange={setIsAlertDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {selectedKpiForAlert && `Set Alert for KPI ${selectedKpiForAlert.id}`}
-            </DialogTitle>
-          </DialogHeader>
+      {/* Alert Sheet */}
+      <Sheet open={isAlertSheetOpen} onOpenChange={setIsAlertSheetOpen}>
+        <SheetContent className="sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>
+              {selectedKpiForAlert && `Imposta alert per il controllo ${selectedKpiForAlert.nome}`}
+            </SheetTitle>
+          </SheetHeader>
           
           <div className="space-y-4 py-4">
             <div className="flex items-center space-x-2">
@@ -285,11 +283,11 @@ export function KpiSelection() {
             ))}
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex justify-end mt-6">
             <Button type="button">Save</Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     </Card>
   )
 }
