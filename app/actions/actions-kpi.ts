@@ -5,48 +5,15 @@ import { z } from "zod";
 import { createServerSupabaseClient } from "../../lib/supabase";
 import type { Database } from "@/supabase/database.types";
 import type { SupabaseClient, PostgrestError } from "@supabase/supabase-js";
+import {
+  Kpi,
+  KpiInsertSchema,
+  KpiUpdateSchema,
+  ListParamsSchema
+} from "@/lib/validation/kpi-schemas";
 
 /** -------------------------------------------------------------------------
- * 1 · VALIDAZIONE ZOD
- * ------------------------------------------------------------------------*/
-
-// Helper per rappresentare JSON in Zod (semplice ma efficace)
-const JsonSchema: z.ZodType<
-  string | number | boolean | null | { [k: string]: any } | Array<any>
-> = z.lazy(() =>
-  z.union([
-    z.string(),
-    z.number(),
-    z.boolean(),
-    z.null(),
-    z.array(JsonSchema),
-    z.record(JsonSchema),
-  ]),
-);
-
-const KpiBase = z.object({
-  id: z.string().uuid({ message: "ID deve essere un UUID v4" }),
-  name: z.string().min(2).max(80),
-  description: z.string().max(250).nullish(),
-  value: JsonSchema, // qualsiasi JSON valido
-});
-export type Kpi = z.infer<typeof KpiBase>;
-
-const KpiInsertSchema = KpiBase.extend({
-  description: z.string().max(250).nullish().optional(),
-});
-
-const KpiUpdateSchema = KpiBase.partial().extend({
-  id: z.string().uuid(),
-});
-
-const ListParamsSchema = z.object({
-  offset: z.coerce.number().int().min(0).default(0),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-});
-
-/** -------------------------------------------------------------------------
- * 2 · SUPABASE CLIENT TIPIZZATO
+ * 1 · SUPABASE CLIENT TIPIZZATO
  * ------------------------------------------------------------------------*/
 
 type KpisTable = Database["public"]["Tables"]["kpis"];
@@ -58,7 +25,7 @@ const supabase = (): SupabaseClient<Database> =>
   createServerSupabaseClient() as SupabaseClient<Database>;
 
 /** -------------------------------------------------------------------------
- * 3 · MAPPERS camelCase ⇆ snake_case
+ * 2 · MAPPERS camelCase ⇆ snake_case
  * ------------------------------------------------------------------------*/
 
 const toKpi = (row: KpisRow): Kpi => ({
@@ -68,37 +35,87 @@ const toKpi = (row: KpisRow): Kpi => ({
   value: row.value,
 });
 
-const toInsertRow = (k: z.infer<typeof KpiInsertSchema>): KpisInsertRow => ({
-  id: k.id,
-  name: k.name,
-  description: k.description ?? null,
-  value: k.value,
-  // created_at gestito dal DB
-});
+const toInsertRow = (k: z.infer<typeof KpiInsertSchema>): KpisInsertRow => {
+  // Assicuriamoci che value sia sempre un array valido o un oggetto per il DB
+  let processedValue = k.value;
+  
+  // Se value è una stringa, proviamo a parsarla come JSON
+  if (typeof k.value === 'string') {
+    try {
+      processedValue = JSON.parse(k.value);
+    } catch (e) {
+      throw new KpiActionError("Il valore deve essere un JSON valido", "VALIDATION_ERROR");
+    }
+  }
+  
+  return {
+    id: k.id,
+    name: k.name,
+    description: k.description ?? null,
+    value: processedValue,
+  };
+};
 
 const toUpdateRow = (k: z.infer<typeof KpiUpdateSchema>): KpisUpdateRow => {
   const patch: KpisUpdateRow = {} as KpisUpdateRow;
   if (k.name !== undefined) patch.name = k.name;
   if (k.description !== undefined) patch.description = k.description ?? null;
-  if (k.value !== undefined) patch.value = k.value;
+  
+  if (k.value !== undefined) {
+    // Stesso trattamento di value come in toInsertRow
+    let processedValue = k.value;
+    if (typeof k.value === 'string') {
+      try {
+        processedValue = JSON.parse(k.value);
+      } catch (e) {
+        throw new KpiActionError("Il valore deve essere un JSON valido", "VALIDATION_ERROR");
+      }
+    }
+    patch.value = processedValue;
+  }
+  
   return patch;
 };
 
 /** -------------------------------------------------------------------------
- * 4 · ERROR HANDLING
+ * 3 · ERROR HANDLING
  * ------------------------------------------------------------------------*/
+
+class KpiActionError extends Error {
+  public readonly code: string;
+  public readonly errors?: z.ZodIssue[];
+  constructor(message: string, code: string, errors?: z.ZodIssue[]) {
+    super(message);
+    this.name = "KpiActionError";
+    this.code = code;
+    this.errors = errors;
+  }
+}
 
 function handlePostgrestError(e: PostgrestError): never {
   switch (e.code) {
     case "23505":
-      throw new Error("ID già esistente");
+      throw new KpiActionError("ID già esistente", "DUPLICATE_ID");
     default:
-      throw new Error(e.message || "Errore inatteso; riprova più tardi");
+      throw new KpiActionError(e.message || "Errore inatteso; riprova più tardi", "DATABASE_ERROR");
   }
 }
 
+function handleZodError(e: z.ZodError): never {
+  const errorsMessage = e.errors.map(err => {
+    const path = err.path.join(".");
+    return `${path}: ${err.message}`;
+  }).join(", ");
+  
+  throw new KpiActionError(
+    `Errore di validazione: ${errorsMessage}`,
+    "VALIDATION_ERROR",
+    e.errors
+  );
+}
+
 /** -------------------------------------------------------------------------
- * 5 · SERVER ACTIONS
+ * 4 · SERVER ACTIONS
  * ------------------------------------------------------------------------*/
 
 export async function getKpis(
@@ -131,34 +148,55 @@ export async function getKpi(id: string): Promise<Kpi | null> {
 }
 
 export async function createKpi(raw: unknown): Promise<Kpi> {
-  const k = KpiInsertSchema.parse(raw);
+  try {
+    // Log per debug
+    console.log("Raw data:", JSON.stringify(raw));
+    
+    const k = KpiInsertSchema.parse(raw);
+    
+    const insertRow = toInsertRow(k);
+    console.log("Processed data:", JSON.stringify(insertRow));
 
-  const { data, error } = await supabase()
-    .from("kpis")
-    .insert(toInsertRow(k))
-    .select()
-    .single();
+    const { data, error } = await supabase()
+      .from("kpis")
+      .insert(insertRow)
+      .select()
+      .single();
 
-  if (error) handlePostgrestError(error);
+    if (error) handlePostgrestError(error);
 
-  revalidatePath("/kpi");
-  return toKpi(data!);
+    revalidatePath("/kpi");
+    return toKpi(data!);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      handleZodError(error);
+    }
+    console.error("Error creating KPI:", error);
+    throw error;
+  }
 }
 
 export async function updateKpi(raw: unknown): Promise<Kpi> {
-  const k = KpiUpdateSchema.parse(raw);
+  try {
+    const k = KpiUpdateSchema.parse(raw);
 
-  const { data, error } = await supabase()
-    .from("kpis")
-    .update(toUpdateRow(k))
-    .eq("id", k.id)
-    .select()
-    .single();
+    const { data, error } = await supabase()
+      .from("kpis")
+      .update(toUpdateRow(k))
+      .eq("id", k.id)
+      .select()
+      .single();
 
-  if (error) handlePostgrestError(error);
+    if (error) handlePostgrestError(error);
 
-  revalidatePath("/kpi");
-  return toKpi(data!);
+    revalidatePath("/kpi");
+    return toKpi(data!);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      handleZodError(error);
+    }
+    throw error;
+  }
 }
 
 export async function deleteKpi(id: string): Promise<void> {
