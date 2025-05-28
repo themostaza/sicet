@@ -6,33 +6,13 @@ import { createServerSupabaseClient } from "@/lib/supabase"
 import type { Database } from "@/supabase/database.types"
 import type { SupabaseClient, PostgrestError } from "@supabase/supabase-js"
 import { TablesInsert } from "@/supabase/database.types"
+import {
+  Task,
+  TodolistParamsSchema
+} from "@/lib/validation/todolist-schemas"
 
 /** -------------------------------------------------------------------------
- * 1 · VALIDAZIONE ZOD
- * ------------------------------------------------------------------------*/
-
-const TaskBase = z.object({
-  id: z.string(),
-  device_id: z.string(),
-  kpi_id: z.string(),
-  scheduled_execution: z.string(),
-  status: z.string(),
-  value: z.any().optional(),
-  completion_date: z.string().optional().nullable(),
-  created_at: z.string().optional().nullable(),
-})
-export type Task = z.infer<typeof TaskBase>
-
-const ListParamsSchema = z.object({
-  deviceId: z.string(),
-  date: z.string(), // formato YYYY-MM-DD
-  timeSlot: z.string(),
-  offset: z.coerce.number().int().min(0).default(0),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-})
-
-/** -------------------------------------------------------------------------
- * 2 · SUPABASE CLIENT TIPIZZATO
+ * 1 · SUPABASE CLIENT TIPIZZATO
  * ------------------------------------------------------------------------*/
 
 type TasksTable = Database["public"]["Tables"]["tasks"]
@@ -42,7 +22,7 @@ const supabase = (): SupabaseClient<Database> =>
   createServerSupabaseClient() as SupabaseClient<Database>
 
 /** -------------------------------------------------------------------------
- * 3 · MAPPERS
+ * 2 · MAPPERS
  * ------------------------------------------------------------------------*/
 
 const toTask = (row: TasksRow): Task => ({
@@ -57,15 +37,39 @@ const toTask = (row: TasksRow): Task => ({
 })
 
 /** -------------------------------------------------------------------------
- * 4 · ERROR HANDLING
+ * 3 · ERROR HANDLING
  * ------------------------------------------------------------------------*/
 
+class TodolistActionError extends Error {
+  public readonly code: string;
+  public readonly errors?: z.ZodIssue[];
+  constructor(message: string, code: string, errors?: z.ZodIssue[]) {
+    super(message);
+    this.name = "TodolistActionError";
+    this.code = code;
+    this.errors = errors;
+  }
+}
+
 function handlePostgrestError(e: PostgrestError): never {
-  throw new Error(e.message || "Errore inatteso; riprova più tardi")
+  throw new TodolistActionError(e.message || "Errore inatteso; riprova più tardi", "DATABASE_ERROR");
+}
+
+function handleZodError(e: z.ZodError): never {
+  const errorsMessage = e.errors.map(err => {
+    const path = err.path.join(".");
+    return `${path}: ${err.message}`;
+  }).join(", ");
+  
+  throw new TodolistActionError(
+    `Errore di validazione: ${errorsMessage}`,
+    "VALIDATION_ERROR",
+    e.errors
+  );
 }
 
 /** -------------------------------------------------------------------------
- * 5 · SERVER ACTIONS
+ * 4 · SERVER ACTIONS
  * ------------------------------------------------------------------------*/
 
 // Utility per fascia oraria
@@ -92,7 +96,7 @@ function getTimeRangeFromSlot(date: string, timeSlot: string) {
 
 // Ottieni le task per una todolist (con paginazione)
 export async function getTodolistTasks(params: unknown): Promise<{ tasks: Task[]; hasMore: boolean }> {
-  const { deviceId, date, timeSlot, offset, limit } = ListParamsSchema.parse(params)
+  const { deviceId, date, timeSlot, offset, limit } = TodolistParamsSchema.parse(params)
   const { startTime, endTime } = getTimeRangeFromSlot(date, timeSlot)
 
   const { data, count, error } = await supabase()
