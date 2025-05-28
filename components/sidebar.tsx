@@ -1,34 +1,85 @@
-import { LayoutGrid, Layers, ClipboardList, FileText } from "lucide-react"
+"use client"
+
+import { LayoutGrid, Layers, ClipboardList, FileText, Menu } from "lucide-react"
 import NavLinkWithLoading from "./ui/NavLinkWithLoading"
+import { Button } from "./ui/button"
+import {
+  Sidebar as UISidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuItem,
+  useSidebar
+} from "./ui/sidebar"
 
 export default function Sidebar() {
+  const { isMobile, toggleSidebar, isOpen } = useSidebar()
+
+  const menuItems = [
+    {
+      href: "/dashboard",
+      icon: <LayoutGrid size={20} />,
+      label: "Dashboard"
+    },
+    {
+      href: "/devices",
+      icon: <Layers size={20} />,
+      label: "Punti di Controllo"
+    },
+    {
+      href: "/kpis",
+      icon: <FileText size={20} />,
+      label: "Controlli"
+    },
+    {
+      href: "/todolist",
+      icon: <ClipboardList size={20} />,
+      label: "Todolist"
+    },
+    {
+      href: "/export",
+      icon: <FileText size={20} />,
+      label: "Esporta Dati"
+    }
+  ]
+
   return (
-    <div className="w-60 h-full border-r bg-white flex flex-col">
-      <div className="p-6 border-b">
-        <h1 className="text-xl font-bold">Sistema di Gestione</h1>
-      </div>
-      <nav className="flex-1 p-4 space-y-2">
-        <NavLinkWithLoading href="/dashboard" className="flex items-center p-3 rounded-md hover:bg-gray-100 transition-colors">
-          <LayoutGrid size={20} />
-          <span>Dashboard</span>
-        </NavLinkWithLoading>
-        <NavLinkWithLoading href="/devices" className="flex items-center p-3 rounded-md hover:bg-gray-100 transition-colors">
-          <Layers size={20} />
-          <span>Punti di Controllo</span>
-        </NavLinkWithLoading>
-        <NavLinkWithLoading href="/kpis" className="flex items-center p-3 rounded-md hover:bg-gray-100 transition-colors">
-          <FileText size={20} />
-          <span>Controlli</span>
-        </NavLinkWithLoading>
-        <NavLinkWithLoading href="/todolist" className="flex items-center p-3 rounded-md hover:bg-gray-100 transition-colors">
-          <ClipboardList size={20} />
-          <span>Todolist</span>
-        </NavLinkWithLoading>
-        <NavLinkWithLoading href="/export" className="flex items-center p-3 rounded-md hover:bg-gray-100 transition-colors">
-          <FileText size={20} />
-          <span>Esporta Dati</span>
-        </NavLinkWithLoading>
-      </nav>
-    </div>
+    <>
+      {/* Mobile menu button - only show when menu is closed */}
+      {isMobile && !isOpen && (
+        <div className="fixed top-1 right-1 z-[100] md:hidden">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 bg-background/80 backdrop-blur-sm hover:bg-background"
+            onClick={toggleSidebar}
+            aria-label="Toggle Menu"
+          >
+            <Menu className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
+      <UISidebar>
+        <SidebarHeader>
+          <h1 className="text-xl font-bold">Sistema di Gestione</h1>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarMenu>
+            {menuItems.map((item) => (
+              <SidebarMenuItem key={item.href}>
+                <NavLinkWithLoading
+                  href={item.href}
+                  className="flex items-center p-2 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
+                >
+                  {item.icon}
+                  <span className="ml-2">{item.label}</span>
+                </NavLinkWithLoading>
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
+        </SidebarContent>
+      </UISidebar>
+    </>
   )
 }

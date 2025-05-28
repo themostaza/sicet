@@ -33,6 +33,10 @@
     --ring: 222.2 84% 4.9%;
 
     --radius: 0.5rem;
+
+    --sidebar-width: 16rem;
+    --sidebar-width-mobile: 18rem;
+    --sidebar-width-icon: 3rem;
   }
 
   .dark {
@@ -87,4 +91,47 @@
 .animate-fade-in {
   opacity: 1 !important;
   animation: fadeIn 0.3s ease-in-out forwards;
+}
+
+/* Mobile menu styles */
+@media (max-width: 768px) {
+  [data-sidebar="sidebar"] {
+    @apply w-[var(--sidebar-width-mobile)];
+  }
+
+  [data-sidebar="trigger"] {
+    @apply fixed top-4 right-4 z-50;
+  }
+
+  [data-sidebar="menu-button"] {
+    @apply w-full;
+  }
+}
+
+/* Sidebar transitions */
+[data-sidebar="sidebar"] {
+  @apply transition-all duration-300 ease-in-out;
+}
+
+[data-sidebar="menu-button"] {
+  @apply transition-colors duration-200;
+}
+
+/* Mobile menu overlay */
+[data-sidebar="overlay"] {
+  @apply fixed inset-0 bg-black/50 z-40 md:hidden;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+/* Mobile menu content */
+[data-sidebar="content"] {
+  @apply transition-transform duration-300 ease-in-out;
+}
+
+[data-sidebar="content"][data-state="open"] {
+  @apply translate-x-0;
+}
+
+[data-sidebar="content"][data-state="closed"] {
+  @apply -translate-x-full;
 }

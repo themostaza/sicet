@@ -266,31 +266,31 @@ export default function ExportPage() {
   }
   
   return (
-    <div className="container">
-      <h1 className="text-3xl font-bold mb-6">Esporta dati todolist</h1>
+    <div>
+      <h1 className="text-2xl font-bold mb-4">Esporta dati todolist</h1>
       
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-4">
           <CardTitle>Esportazione CSV</CardTitle>
           <CardDescription>
             Seleziona l'intervallo di date e filtra per dispositivi e KPI
           </CardDescription>
         </CardHeader>
         
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4">
           {/* Date Range */}
           <div className="space-y-2">
             <h3 className="font-medium text-sm">Intervallo di date</h3>
-            <div className="flex flex-wrap gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="start-date">Data inizio</Label>
+            <div className="flex flex-wrap gap-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="start-date" className="text-sm">Data inizio</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
                       id="start-date"
                       variant="outline"
                       className={cn(
-                        "w-[200px] justify-start text-left font-normal",
+                        "w-[180px] justify-start text-left font-normal h-9",
                         !startDate && "text-muted-foreground"
                       )}
                     >
@@ -309,15 +309,15 @@ export default function ExportPage() {
                 </Popover>
               </div>
               
-              <div className="grid gap-2">
-                <Label htmlFor="end-date">Data fine</Label>
+              <div className="grid gap-1.5">
+                <Label htmlFor="end-date" className="text-sm">Data fine</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
                       id="end-date"
                       variant="outline"
                       className={cn(
-                        "w-[200px] justify-start text-left font-normal",
+                        "w-[180px] justify-start text-left font-normal h-9",
                         !endDate && "text-muted-foreground"
                       )}
                     >
@@ -343,17 +343,17 @@ export default function ExportPage() {
             <h3 className="font-medium text-sm">Dispositivi e KPI</h3>
             
             {isLoading ? (
-              <div className="flex items-center justify-center p-4">
-                <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                <span>Caricamento dispositivi...</span>
+              <div className="flex items-center justify-center p-3">
+                <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                <span className="text-sm">Caricamento dispositivi...</span>
               </div>
             ) : devices.length > 0 ? (
               <div className="border rounded-md overflow-hidden">
-                <ScrollArea className="h-[400px]">
+                <ScrollArea className="h-[350px]">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-10"></TableHead>
+                        <TableHead className="w-8"></TableHead>
                         <TableHead>Nome Punto di controllo</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -361,17 +361,17 @@ export default function ExportPage() {
                       {devices.map(device => (
                         <React.Fragment key={device.value}>
                           <TableRow>
-                            <TableCell>
+                            <TableCell className="py-2">
                               <Checkbox 
                                 id={`device-${device.value}`} 
                                 checked={selectedDevices.includes(device.value)}
                                 onCheckedChange={() => toggleDevice(device.value)}
                               />
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="py-2">
                               <Label 
                                 htmlFor={`device-${device.value}`}
-                                className="cursor-pointer"
+                                className="cursor-pointer text-sm"
                               >
                                 {device.label}
                               </Label>
@@ -382,15 +382,15 @@ export default function ExportPage() {
                           {selectedDevices.includes(device.value) && (
                             <TableRow className="bg-muted/50">
                               <TableCell colSpan={2} className="p-0">
-                                <div className="pl-8 pr-4 py-2">
+                                <div className="pl-6 pr-3 py-1.5">
                                   {loadingDeviceKpis[device.value] ? (
-                                    <div className="flex items-center py-2">
+                                    <div className="flex items-center py-1.5">
                                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
                                       <span className="text-sm">Caricamento KPI...</span>
                                     </div>
                                   ) : deviceKpiOptions[device.value]?.length > 0 ? (
-                                    <div className="space-y-2">
-                                      <div className="flex items-center space-x-2 mb-2">
+                                    <div className="space-y-1.5">
+                                      <div className="flex items-center space-x-2 mb-1.5">
                                         <Checkbox 
                                           id={`device-${device.value}-all-kpis`}
                                           checked={areAllKpisSelected(device.value)}
@@ -398,13 +398,13 @@ export default function ExportPage() {
                                         />
                                         <Label 
                                           htmlFor={`device-${device.value}-all-kpis`}
-                                          className="font-medium"
+                                          className="font-medium text-sm"
                                         >
                                           Seleziona tutti i Controlli
                                         </Label>
                                       </div>
                                       
-                                      <div className="space-y-2 ml-4">
+                                      <div className="space-y-1.5 ml-4">
                                         {deviceKpiOptions[device.value].map(kpi => (
                                           <div key={`${device.value}-${kpi.value}`} className="flex items-center space-x-2">
                                             <Checkbox 
@@ -414,7 +414,7 @@ export default function ExportPage() {
                                             />
                                             <Label 
                                               htmlFor={`${device.value}-kpi-${kpi.value}`}
-                                              className="cursor-pointer"
+                                              className="cursor-pointer text-sm"
                                             >
                                               {kpi.label}
                                             </Label>
@@ -423,7 +423,7 @@ export default function ExportPage() {
                                       </div>
                                     </div>
                                   ) : (
-                                    <p className="text-sm text-muted-foreground py-2">
+                                    <p className="text-sm text-muted-foreground py-1.5">
                                       Nessun KPI disponibile per questo dispositivo nel periodo indicato
                                     </p>
                                   )}
@@ -438,18 +438,18 @@ export default function ExportPage() {
                 </ScrollArea>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground p-4 border rounded-md">
+              <p className="text-sm text-muted-foreground p-3 border rounded-md">
                 Nessun dispositivo disponibile
               </p>
             )}
           </div>
         </CardContent>
         
-        <CardFooter>
+        <CardFooter className="pt-2">
           <Button 
             onClick={handleExport}
             disabled={isExporting || isLoading || selectedDevices.length === 0 || getAllSelectedKpis().length === 0}
-            className="ml-auto"
+            className="ml-auto h-9"
           >
             {isExporting ? (
               <>
