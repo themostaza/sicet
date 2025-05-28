@@ -5,40 +5,15 @@ import { z } from "zod";
 import { createServerSupabaseClient } from "../../lib/supabase";
 import type { Database } from "@/supabase/database.types";
 import type { SupabaseClient, PostgrestError } from "@supabase/supabase-js";
+import { 
+  Device,
+  DeviceInsertSchema, 
+  DeviceUpdateSchema, 
+  ListParamsSchema 
+} from "@/lib/validation/device-schemas";
 
 /** -------------------------------------------------------------------------
- * 1 · VALIDAZIONE ZOD
- * ------------------------------------------------------------------------*/
-
-const DeviceBase = z.object({
-  id: z.string().uuid({ message: "ID deve essere un UUID v4" }),
-  name: z.string().min(2).max(60),
-  location: z.string().min(2).max(120),
-  description: z.string().max(250).nullish(),
-  tags: z.array(z.string().min(1).max(30)).max(10).default([]),
-  model: z.string().max(60).nullish(),
-  type: z.string().max(40).nullish(),
-  qrcodeUrl: z.string().url().nullish(),
-});
-export type Device = z.infer<typeof DeviceBase>;
-
-const DeviceInsertSchema = DeviceBase.omit({
-  qrcodeUrl: true,
-}).extend({
-  description: z.string().max(250).nullish().optional(),
-});
-
-const DeviceUpdateSchema = DeviceBase.partial().extend({
-  id: z.string().uuid(),
-});
-
-const ListParamsSchema = z.object({
-  offset: z.coerce.number().int().min(0).default(0),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-});
-
-/** -------------------------------------------------------------------------
- * 2 · SUPABASE CLIENT TIPIZZATO
+ * 1 · SUPABASE CLIENT TIPIZZATO
  * ------------------------------------------------------------------------*/
 
 type DevicesTable = Database["public"]["Tables"]["devices"];
@@ -51,7 +26,7 @@ const supabase = (): SupabaseClient<Database> =>
   createServerSupabaseClient() as SupabaseClient<Database>;
 
 /** -------------------------------------------------------------------------
- * 3 · MAPPERS camelCase ⇆ snake_case
+ * 2 · MAPPERS camelCase ⇆ snake_case
  * ------------------------------------------------------------------------*/
 
 const toDevice = (row: DevicesRow): Device => ({
@@ -89,20 +64,44 @@ const toUpdateRow = (d: z.infer<typeof DeviceUpdateSchema>): DevicesUpdateRow =>
 };
 
 /** -------------------------------------------------------------------------
- * 4 · ERROR HANDLING
+ * 3 · ERROR HANDLING
  * ------------------------------------------------------------------------*/
+
+class DeviceActionError extends Error {
+  public readonly code: string;
+  public readonly errors?: z.ZodIssue[];
+  constructor(message: string, code: string, errors?: z.ZodIssue[]) {
+    super(message);
+    this.name = "DeviceActionError";
+    this.code = code;
+    this.errors = errors;
+  }
+}
 
 function handlePostgrestError(e: PostgrestError): never {
   switch (e.code) {
     case "23505":
-      throw new Error("ID già esistente");
+      throw new DeviceActionError("ID già esistente", "DUPLICATE_ID");
     default:
-      throw new Error(e.message || "Errore inatteso; riprova più tardi");
+      throw new DeviceActionError(e.message || "Errore inatteso; riprova più tardi", "DATABASE_ERROR");
   }
 }
 
+function handleZodError(e: z.ZodError): never {
+  const errorsMessage = e.errors.map(err => {
+    const path = err.path.join(".");
+    return `${path}: ${err.message}`;
+  }).join(", ");
+  
+  throw new DeviceActionError(
+    `Errore di validazione: ${errorsMessage}`,
+    "VALIDATION_ERROR",
+    e.errors
+  );
+}
+
 /** -------------------------------------------------------------------------
- * 5 · SERVER ACTIONS ( directive "use server" *within* each function )
+ * 4 · SERVER ACTIONS ( directive "use server" *within* each function )
  * ------------------------------------------------------------------------*/
 
 export async function getDevices(
@@ -135,34 +134,48 @@ export async function getDevice(id: string): Promise<Device | null> {
 }
 
 export async function createDevice(raw: unknown): Promise<Device> {
-  const d = DeviceInsertSchema.parse(raw);
+  try {
+    const d = DeviceInsertSchema.parse(raw);
 
-  const { data, error } = await supabase()
-    .from("devices")
-    .insert(toInsertRow(d))
-    .select()
-    .single();
+    const { data, error } = await supabase()
+      .from("devices")
+      .insert(toInsertRow(d))
+      .select()
+      .single();
 
-  if (error) handlePostgrestError(error);
+    if (error) handlePostgrestError(error);
 
-  revalidatePath("/device");
-  return toDevice(data!);
+    revalidatePath("/device");
+    return toDevice(data!);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      handleZodError(error);
+    }
+    throw error;
+  }
 }
 
 export async function updateDevice(raw: unknown): Promise<Device> {
-  const d = DeviceUpdateSchema.parse(raw);
+  try {
+    const d = DeviceUpdateSchema.parse(raw);
 
-  const { data, error } = await supabase()
-    .from("devices")
-    .update(toUpdateRow(d))
-    .eq("id", d.id)
-    .select()
-    .single();
+    const { data, error } = await supabase()
+      .from("devices")
+      .update(toUpdateRow(d))
+      .eq("id", d.id)
+      .select()
+      .single();
 
-  if (error) handlePostgrestError(error);
+    if (error) handlePostgrestError(error);
 
-  revalidatePath("/device");
-  return toDevice(data!);
+    revalidatePath("/device");
+    return toDevice(data!);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      handleZodError(error);
+    }
+    throw error;
+  }
 }
 
 export async function deleteDevice(id: string): Promise<void> {

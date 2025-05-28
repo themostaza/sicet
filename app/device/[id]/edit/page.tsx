@@ -4,6 +4,7 @@ import DeviceForm from "@/components/device/form"
 import { Button } from "@/components/ui/button"
 import { DeviceDeleteDialog } from "@/components/device/device-delete-dialog"
 import { Card, CardHeader, CardContent, CardFooter, CardTitle } from "@/components/ui/card"
+
 export default async function Page(props: { params: { id: string } }) {
   const params = await props.params
   const device = await getDevice(params.id)
