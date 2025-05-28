@@ -42,7 +42,8 @@ export default function NavLinkWithLoading({ href, children, className }: NavLin
       href={href} 
       className={cn(
         className,
-        isActive && "bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
+        isActive && "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground font-medium",
+        !isActive && "hover:bg-accent hover:text-accent-foreground"
       )}
       onClick={() => {
         if (pathname !== href) {
