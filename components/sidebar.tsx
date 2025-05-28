@@ -1,5 +1,5 @@
-import Link from "next/link"
 import { LayoutGrid, Layers, ClipboardList, FileText } from "lucide-react"
+import NavLinkWithLoading from "./ui/NavLinkWithLoading"
 
 export default function Sidebar() {
   return (
@@ -8,26 +8,26 @@ export default function Sidebar() {
         <h1 className="text-xl font-bold">Sistema di Gestione</h1>
       </div>
       <nav className="flex-1 p-4 space-y-2">
-        <Link href="/dashboard" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100">
+        <NavLinkWithLoading href="/dashboard" className="flex items-center p-3 rounded-md hover:bg-gray-100 transition-colors">
           <LayoutGrid size={20} />
           <span>Dashboard</span>
-        </Link>
-        <Link href="/devices" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100">
+        </NavLinkWithLoading>
+        <NavLinkWithLoading href="/devices" className="flex items-center p-3 rounded-md hover:bg-gray-100 transition-colors">
           <Layers size={20} />
           <span>Punti di Controllo</span>
-        </Link>
-        <Link href="/kpis" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100">
+        </NavLinkWithLoading>
+        <NavLinkWithLoading href="/kpis" className="flex items-center p-3 rounded-md hover:bg-gray-100 transition-colors">
           <FileText size={20} />
           <span>Controlli</span>
-        </Link>
-        <Link href="/todolist" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100">
+        </NavLinkWithLoading>
+        <NavLinkWithLoading href="/todolist" className="flex items-center p-3 rounded-md hover:bg-gray-100 transition-colors">
           <ClipboardList size={20} />
           <span>Todolist</span>
-        </Link>
-        <Link href="/export" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100">
+        </NavLinkWithLoading>
+        <NavLinkWithLoading href="/export" className="flex items-center p-3 rounded-md hover:bg-gray-100 transition-colors">
           <FileText size={20} />
           <span>Esporta Dati</span>
-        </Link>
+        </NavLinkWithLoading>
       </nav>
     </div>
   )
