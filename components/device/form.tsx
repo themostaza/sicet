@@ -2,7 +2,7 @@
 import { useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Plus } from "lucide-react"
+import { Plus, Loader2 } from "lucide-react"
 import type { Device } from "@/lib/validation/device-schemas"
 import { DeviceFormSchema } from "@/lib/validation/device-schemas"
 import { Textarea } from "../ui/textarea"
@@ -25,6 +25,7 @@ interface Props {
 export default function DeviceForm({ device, mode, action, disabled, defaultId }: Props) {
   const [tags, setTags] = useState<string[]>(device?.tags ?? [])
   const [tagInput, setTagInput] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const form = useForm<DeviceFormValues>({
     resolver: zodResolver(DeviceFormSchema),
@@ -52,14 +53,19 @@ export default function DeviceForm({ device, mode, action, disabled, defaultId }
     form.setValue("tags", updatedTags)
   }
 
-  const onSubmit = (data: DeviceFormValues) => {
-    const formData = new FormData()
-    formData.append("id", data.id)
-    formData.append("name", data.name)
-    formData.append("location", data.location)
-    formData.append("description", data.description || "")
-    formData.append("tags", JSON.stringify(data.tags))
-    action(formData)
+  const onSubmit = async (data: DeviceFormValues) => {
+    setIsSubmitting(true)
+    try {
+      const formData = new FormData()
+      formData.append("id", data.id)
+      formData.append("name", data.name)
+      formData.append("location", data.location)
+      formData.append("description", data.description || "")
+      formData.append("tags", JSON.stringify(data.tags))
+      await action(formData)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -166,8 +172,19 @@ export default function DeviceForm({ device, mode, action, disabled, defaultId }
         />
 
         <div className="flex justify-end">
-          <Button type="submit" disabled={disabled} className="bg-black hover:bg-gray-800">
-            {mode === "create" ? "Crea" : "Salva"}
+          <Button 
+            type="submit" 
+            disabled={disabled || isSubmitting} 
+            className="bg-black hover:bg-gray-800"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {mode === "create" ? "Creazione..." : "Salvataggio..."}
+              </>
+            ) : (
+              mode === "create" ? "Crea" : "Salva"
+            )}
           </Button>
         </div>
       </form>

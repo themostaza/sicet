@@ -15,7 +15,7 @@ import { getKpis } from "@/app/actions/actions-kpi"
 import { getDevice } from "@/app/actions/actions-device"
 import type { Task } from "@/app/actions/actions-todolist"
 import type { Kpi } from "@/app/actions/actions-kpi"
-import { Check, AlertCircle, Info, Save } from "lucide-react"
+import { Check, AlertCircle, Info, Save, Loader2 } from "lucide-react"
 
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -171,6 +171,8 @@ export default function TodolistClient({
   const [hasMore, setHasMore] = useState(initialData.hasMore)
   const [offset, setOffset] = useState(initialData.tasks.length)
   const [isPending, startTransition] = useTransition()
+  const [savingTaskId, setSavingTaskId] = useState<string | null>(null)
+  const [isSavingAll, setIsSavingAll] = useState(false)
 
   const [kpis, setKpis] = useState<Kpi[]>(initialKpis)
   const [kpisLoading, setKpisLoading] = useState(initialKpis.length === 0)
@@ -217,86 +219,104 @@ export default function TodolistClient({
   /* ---------------- mutations ----------------- */
   const saveValue = async (taskId: string) => {
     if (!dirtyFields.has(taskId)) return
-    const value = localValues[taskId]
-    const updated = await updateTaskValue(taskId, value)
-    setTasks((p) => p.map((t) => (t.id === taskId ? updated : t)))
-    dirtyFields.delete(taskId)
-    if (dirtyFields.size === 0) clearDirty()
-    toast({ title: "Valore salvato", duration: 2000 })
+    setSavingTaskId(taskId)
+    try {
+      const value = localValues[taskId]
+      const updated = await updateTaskValue(taskId, value)
+      setTasks((p) => p.map((t) => (t.id === taskId ? updated : t)))
+      dirtyFields.delete(taskId)
+      if (dirtyFields.size === 0) clearDirty()
+      toast({ title: "Valore salvato", duration: 2000 })
+    } finally {
+      setSavingTaskId(null)
+    }
   }
 
   const saveAll = async () => {
     if (!dirtyFields.size) return
-    await Promise.all(
-      Array.from(dirtyFields).map((id) => updateTaskValue(id, localValues[id])),
-    )
-    setTasks((p) =>
-      p.map((t) =>
-        dirtyFields.has(t.id) ? { ...t, value: localValues[t.id] } : t,
-      ),
-    )
-    clearDirty()
-    toast({ title: "Tutti i valori salvati", duration: 2000 })
+    setIsSavingAll(true)
+    try {
+      await Promise.all(
+        Array.from(dirtyFields).map((id) => updateTaskValue(id, localValues[id])),
+      )
+      setTasks((p) =>
+        p.map((t) =>
+          dirtyFields.has(t.id) ? { ...t, value: localValues[t.id] } : t,
+        ),
+      )
+      clearDirty()
+      toast({ title: "Tutti i valori salvati", duration: 2000 })
+    } finally {
+      setIsSavingAll(false)
+    }
   }
 
   const toggleStatus = async (task: Task) => {
     const newStatus = task.status === "completed" ? "pending" : "completed"
+    setSavingTaskId(task.id)
     
-    // Validation before completing a task
-    if (newStatus === "completed") {
-      // Check for required fields
-      const kpi = kpis.find((k) => k.id === task.kpi_id)
-      if (kpi?.value) {
-        const fields = Array.isArray(kpi.value) ? kpi.value : [kpi.value]
-        const currentValue = dirtyFields.has(task.id) ? localValues[task.id] : task.value
-        
-        // Validation results
-        const validationErrors: string[] = []
-        
-        fields.forEach((field, idx) => {
-          const val = Array.isArray(currentValue)
-            ? currentValue[idx]?.value
-            : typeof currentValue === "object" && currentValue !== null
-            ? (currentValue as any).value
-            : currentValue
+    try {
+      // Validation before completing a task
+      if (newStatus === "completed") {
+        // Check for required fields
+        const kpi = kpis.find((k) => k.id === task.kpi_id)
+        if (kpi?.value) {
+          const fields = Array.isArray(kpi.value) ? kpi.value : [kpi.value]
+          const currentValue = dirtyFields.has(task.id) ? localValues[task.id] : task.value
           
-          // Required field validation
-          if (field.required && (val === undefined || val === null || val === "")) {
-            validationErrors.push(`Campo "${field.name || 'Campo ' + (idx + 1)}" obbligatorio`)
+          // Validation results
+          const validationErrors: string[] = []
+          
+          fields.forEach((field, idx) => {
+            const val = Array.isArray(currentValue)
+              ? currentValue[idx]?.value
+              : typeof currentValue === "object" && currentValue !== null
+              ? (currentValue as any).value
+              : currentValue
+            
+            // Required field validation
+            if (field.required && (val === undefined || val === null || val === "")) {
+              validationErrors.push(`Campo "${field.name || 'Campo ' + (idx + 1)}" obbligatorio`)
+              return
+            }
+            
+            // Type validation
+            const typeValidation = validateFieldValue(val, field)
+            if (!typeValidation.valid && typeValidation.message) {
+              validationErrors.push(`${field.name || 'Campo ' + (idx + 1)}: ${typeValidation.message}`)
+            }
+          })
+          
+          if (validationErrors.length > 0) {
+            toast({
+              title: "Completamento non possibile",
+              description: (
+                <div className="space-y-1">
+                  <p>Correggi i seguenti errori:</p>
+                  <ul className="list-disc pl-4 text-sm">
+                    {validationErrors.map((error, i) => (
+                      <li key={i}>{error}</li>
+                    ))}
+                  </ul>
+                </div>
+              ),
+              variant: "destructive"
+            })
             return
           }
           
-          // Type validation
-          const typeValidation = validateFieldValue(val, field)
-          if (!typeValidation.valid && typeValidation.message) {
-            validationErrors.push(`${field.name || 'Campo ' + (idx + 1)}: ${typeValidation.message}`)
-          }
-        })
-        
-        if (validationErrors.length > 0) {
-          toast({
-            title: "Completamento non possibile",
-            description: (
-              <div className="space-y-1">
-                <p>Correggi i seguenti errori:</p>
-                <ul className="list-disc pl-4 text-sm">
-                  {validationErrors.map((error, i) => (
-                    <li key={i}>{error}</li>
-                  ))}
-                </ul>
-              </div>
-            ),
-            variant: "destructive"
-          })
-          return
+          if (dirtyFields.has(task.id)) await saveValue(task.id)
         }
+        
+        const updated = await updateTaskStatus(task.id, newStatus)
+        setTasks((p) => p.map((t) => (t.id === task.id ? updated : t)))
       }
       
-      if (dirtyFields.has(task.id)) await saveValue(task.id)
+      const updated = await updateTaskStatus(task.id, newStatus)
+      setTasks((p) => p.map((t) => (t.id === task.id ? updated : t)))
+    } finally {
+      setSavingTaskId(null)
     }
-    
-    const updated = await updateTaskStatus(task.id, newStatus)
-    setTasks((p) => p.map((t) => (t.id === task.id ? updated : t)))
   }
 
   /* ---------- unload protection --------------- */
@@ -641,8 +661,22 @@ export default function TodolistClient({
           </div>
 
           {dirtyFields.size > 0 && (
-            <Button onClick={saveAll} disabled={isPending}>
-              <Save size={16} className="mr-2" /> Salva tutto ({dirtyFields.size})
+            <Button 
+              onClick={saveAll} 
+              disabled={isPending || isSavingAll}
+              className="relative"
+            >
+              {isSavingAll ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Salvataggio...
+                </>
+              ) : (
+                <>
+                  <Save size={16} className="mr-2" /> 
+                  Salva tutto ({dirtyFields.size})
+                </>
+              )}
             </Button>
           )}
         </div>
@@ -664,6 +698,7 @@ export default function TodolistClient({
                 .map((task) => {
                   const kpi = kpis.find((k) => k.id === task.kpi_id)
                   const dirty = dirtyFields.has(task.id)
+                  const isSaving = savingTaskId === task.id
                   return (
                     <Card key={task.id} className={dirty ? "ring-1 ring-amber-500" : ""}>
                       <CardHeader className="pb-3">
@@ -708,9 +743,19 @@ export default function TodolistClient({
                           <Button
                             size="sm"
                             onClick={() => startTransition(() => saveValue(task.id))}
-                            disabled={isPending}
+                            disabled={isPending || isSaving}
+                            className="relative"
                           >
-                            <Save size={16} className="mr-1" /> Salva
+                            {isSaving ? (
+                              <>
+                                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                                Salvataggio...
+                              </>
+                            ) : (
+                              <>
+                                <Save size={16} className="mr-1" /> Salva
+                              </>
+                            )}
                           </Button>
                         </CardFooter>
                       )}

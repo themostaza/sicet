@@ -5,7 +5,7 @@ import { Textarea } from "@/components/ui/textarea"
 import type { Kpi } from "@/lib/validation/kpi-schemas"
 import { KpiFormSchema } from "@/lib/validation/kpi-schemas"
 import { useState, useEffect, useId } from "react"
-import { Plus, Trash2 } from "lucide-react"
+import { Plus, Trash2, Loader2 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -70,6 +70,7 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
   });
   
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const form = useForm<z.infer<typeof KpiFormSchema>>({
     resolver: zodResolver(KpiFormSchema),
@@ -169,23 +170,28 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
     setFields((prevFields) => [...prevFields, emptyField(prevFields.length)])
   }
 
-  const onSubmit = (data: z.infer<typeof KpiFormSchema>) => {
+  const onSubmit = async (data: z.infer<typeof KpiFormSchema>) => {
     if (!validateFields()) {
       return;
     }
 
-    // Prepara i campi da inviare al server
-    const validFields = fields
-      .filter(f => f.name.trim() !== "")
-      .map(({ id, ...rest }) => rest);
+    setIsSubmitting(true)
+    try {
+      // Prepara i campi da inviare al server
+      const validFields = fields
+        .filter(f => f.name.trim() !== "")
+        .map(({ id, ...rest }) => rest);
 
-    const formData = new FormData();
-    formData.append("id", data.id);
-    formData.append("name", data.name);
-    formData.append("description", data.description || "");
-    formData.append("value", JSON.stringify(validFields));
-    
-    action(formData);
+      const formData = new FormData();
+      formData.append("id", data.id);
+      formData.append("name", data.name);
+      formData.append("description", data.description || "");
+      formData.append("value", JSON.stringify(validFields));
+      
+      await action(formData);
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -355,7 +361,7 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
               type="button"
               variant="outline"
               onClick={handleAddField}
-              disabled={disabled || fields.some((f) => f.name === "")}
+              disabled={disabled || isSubmitting}
               className="w-full"
             >
               <Plus className="h-4 w-4 mr-2" /> Aggiungi campo
@@ -363,9 +369,29 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
           </div>
         </div>
 
-        <div className="flex justify-end">
-          <Button type="submit" disabled={disabled} className="bg-black hover:bg-gray-800">
-            {mode === "create" ? "Crea" : "Salva"}
+        <div className="flex justify-end space-x-2">
+          <Button 
+            type="button" 
+            variant="outline" 
+            onClick={handleAddField}
+            disabled={disabled || isSubmitting}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Aggiungi campo
+          </Button>
+          <Button 
+            type="submit" 
+            disabled={disabled || isSubmitting}
+            className="bg-black hover:bg-gray-800"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {mode === "create" ? "Creazione..." : "Salvataggio..."}
+              </>
+            ) : (
+              mode === "create" ? "Crea" : "Salva"
+            )}
           </Button>
         </div>
       </form>

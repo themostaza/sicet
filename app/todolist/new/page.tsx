@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Loader2 } from "lucide-react"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { createTodolist, createMultipleTasks } from "@/app/actions/actions-todolist"
 import { format } from "date-fns"
@@ -64,42 +64,38 @@ function TodolistCreationForm() {
     
     // Creazione todolist
     setIsSubmitting(true)
-    
     try {
-      const promises = []
+      // Creiamo una todolist per ogni combinazione di device, kpi e data
+      const todolistPromises = []
       
       for (const deviceId of selectedDevices) {
-        const kpiIds = Array.from(selectedKpis)
-        
-        for (const entry of dateEntries) {
-          // Format the date as a string instead of passing a Date object
-          const formattedDate = format(entry.date, "yyyy-MM-dd")
-          
-          // Usa createMultipleTasks quando abbiamo più KPI
-          if (kpiIds.length > 1) {
-            promises.push(createMultipleTasks(deviceId, formattedDate, entry.timeSlot, kpiIds))
-          } 
-          // Usa createTodolist per un singolo KPI
-          else if (kpiIds.length === 1) {
-            promises.push(createTodolist(deviceId, formattedDate, entry.timeSlot, kpiIds[0]))
+        for (const kpiId of selectedKpis) {
+          for (const entry of dateEntries) {
+            todolistPromises.push(
+              createTodolist(
+                deviceId,
+                format(entry.date, "yyyy-MM-dd"),
+                entry.timeSlot,
+                kpiId
+              )
+            )
           }
         }
       }
-
-      await Promise.all(promises)
-
+      
+      await Promise.all(todolistPromises)
+      
       toast({
-        title: "Todolist create",
-        description: `${totalTodolistCount} todolist sono state create con successo.`,
-        variant: "default",
+        title: "Todolist create con successo",
+        description: `Sono state create ${totalTodolistCount} todolist`,
       })
-
+      
       router.push("/todolist")
     } catch (error) {
       console.error("Errore durante la creazione delle todolist:", error)
       toast({
-        title: "Errore",
-        description: "Si è verificato un errore durante la creazione delle todolist.",
+        title: "Errore durante la creazione",
+        description: "Si è verificato un errore durante la creazione delle todolist. Riprova più tardi.",
         variant: "destructive",
       })
     } finally {
@@ -111,7 +107,7 @@ function TodolistCreationForm() {
     <div className="container py-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center">
-          <Button variant="ghost" size="icon" asChild className="mr-2">
+          <Button variant="ghost" size="icon" asChild className="mr-2" disabled={isSubmitting}>
             <Link href="/todolist">
               <ArrowLeft className="h-5 w-5" />
             </Link>
@@ -124,8 +120,16 @@ function TodolistCreationForm() {
             type="submit" 
             onClick={handleSubmit}
             disabled={isSubmitting}
+            className="relative"
           >
-            Crea {totalTodolistCount} todolist
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Creazione in corso...
+              </>
+            ) : (
+              `Crea ${totalTodolistCount} todolist`
+            )}
           </Button>
         )}
       </div>
