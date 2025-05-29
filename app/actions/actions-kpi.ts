@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { createServerSupabaseClient } from "../../lib/supabase";
+import { createServerSupabaseClient } from "@/lib/supabase";
 import type { Database } from "@/supabase/database.types";
 import type { SupabaseClient, PostgrestError } from "@supabase/supabase-js";
 import {
@@ -31,8 +31,9 @@ const supabase = (): SupabaseClient<Database> =>
 const toKpi = (row: KpisRow): Kpi => ({
   id: row.id,
   name: row.name,
-  description: row.description ?? "",
+  description: row.description,
   value: row.value,
+  created_at: row.created_at
 });
 
 const toInsertRow = (k: z.infer<typeof KpiInsertSchema>): KpisInsertRow => {
@@ -48,8 +49,11 @@ const toInsertRow = (k: z.infer<typeof KpiInsertSchema>): KpisInsertRow => {
     }
   }
   
+  // Generate a unique ID if one isn't provided
+  const id = k.id || crypto.randomUUID();
+  
   return {
-    id: k.id,
+    id,
     name: k.name,
     description: k.description ?? null,
     value: processedValue,

@@ -14,14 +14,25 @@ export const TaskSchema = z.object({
 
 export type Task = z.infer<typeof TaskSchema>;
 
-// Schema per i parametri di ricerca delle todolist
+// Schema per i parametri della todolist
 export const TodolistParamsSchema = z.object({
-  deviceId: z.string({ message: "ID dispositivo richiesto" }),
-  date: z.string({ message: "Data richiesta" }), // formato YYYY-MM-DD
-  timeSlot: z.string({ message: "Fascia oraria richiesta" }),
-  offset: z.coerce.number().int().min(0).default(0),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
+  deviceId: z.string(),
+  date: z.string(),
+  timeSlot: z.string(),
+  offset: z.number().int().min(0),
+  limit: z.number().int().min(1).max(100),
 });
+
+// Type per gli slot temporali
+export type TimeSlot = "mattina" | "pomeriggio" | "sera" | "notte";
+
+// Costante per l'ordine degli slot
+export const timeSlotOrder: Record<string, number> = {
+  mattina: 1,
+  pomeriggio: 2,
+  sera: 3,
+  notte: 4,
+};
 
 // Schema per creazione todolist
 export const CreateTodolistSchema = z.object({

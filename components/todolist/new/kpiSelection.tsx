@@ -5,11 +5,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button"
 import { AlertCircle, Plus, Settings, BellRing } from "lucide-react"
 import { useTodolist } from "./context"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/sheet"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { createAlert } from "@/app/actions/actions-alerts"
+import { toast } from "@/components/ui/use-toast"
 
 // Define types for KPI and field
 interface KpiField {
@@ -32,17 +34,34 @@ interface Kpi {
   value?: any;
 }
 
+// Define types for alert conditions
+interface AlertCondition {
+  field_id: string;
+  type: 'numeric' | 'text' | 'boolean';
+  min?: number;
+  max?: number;
+  match_text?: string;
+  boolean_value?: boolean;
+}
+
 export function KpiSelection() {
   const { 
     selectedKpisArray, 
     selectedKpis, 
     isKpiSheetOpen, 
     setIsKpiSheetOpen,
-    errors 
+    errors,
+    deviceId,
+    alertConditions,
+    setAlertConditions,
+    alertEmail,
+    setAlertEmail
   } = useTodolist()
   
   const [isAlertSheetOpen, setIsAlertSheetOpen] = useState(false)
   const [selectedKpiForAlert, setSelectedKpiForAlert] = useState<Kpi | null>(null)
+  // Add state to track conditions per KPI
+  const [kpiAlertConditions, setKpiAlertConditions] = useState<Record<string, { email: string, conditions: AlertCondition[] }>>({})
 
   // Create fields from KPI value data
   const getKpiFields = (kpi: Kpi): KpiField[] => {
@@ -58,7 +77,7 @@ export function KpiSelection() {
       // Handle array of fields
       if (Array.isArray(kpi.value)) {
         return kpi.value.map((field: any) => ({
-          id: field.id || `${kpi.id}-${field.name}`,
+          id: field.id || `${kpi.id}-${field.name.toLowerCase().replace(/\s+/g, '_')}`,
           name: field.name,
           description: field.description,
           type: mapFieldType(field.type),
@@ -71,7 +90,7 @@ export function KpiSelection() {
       // Handle single field object
       else if (typeof kpi.value === 'object' && kpi.value !== null) {
         return [{
-          id: kpi.value.id || `${kpi.id}-value`,
+          id: kpi.value.id || `${kpi.id}-${(kpi.value.name || 'value').toLowerCase().replace(/\s+/g, '_')}`,
           name: kpi.value.name || 'Valore',
           description: kpi.value.description,
           type: mapFieldType(kpi.value.type),
@@ -122,7 +141,92 @@ export function KpiSelection() {
 
   const handleOpenAlertSheet = (kpi: Kpi) => {
     setSelectedKpiForAlert(kpi)
+    // Load existing conditions for this KPI if any
+    if (kpiAlertConditions[kpi.id]) {
+      setAlertEmail(kpiAlertConditions[kpi.id].email)
+      setAlertConditions(kpiAlertConditions[kpi.id].conditions)
+    } else {
+      setAlertEmail("")
+      setAlertConditions([])
+    }
     setIsAlertSheetOpen(true)
+  }
+
+  const handleCloseAlertSheet = () => {
+    if (!selectedKpiForAlert) return
+
+    // Validate before closing
+    if (alertConditions.length > 0 && !alertEmail) {
+      toast({
+        title: "Errore",
+        description: "Inserisci un indirizzo email per ricevere le notifiche",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (alertEmail && alertConditions.length === 0) {
+      toast({
+        title: "Errore",
+        description: "Configura almeno una condizione per l'alert",
+        variant: "destructive"
+      })
+      return
+    }
+
+    // If we have both email and conditions, save them for this KPI
+    if (alertEmail && alertConditions.length > 0) {
+      setKpiAlertConditions(prev => ({
+        ...prev,
+        [selectedKpiForAlert.id]: {
+          email: alertEmail,
+          conditions: alertConditions
+        }
+      }))
+      toast({
+        title: "Alert configurato",
+        description: "Le condizioni dell'alert sono state salvate"
+      })
+    } else {
+      // If no conditions or email, remove any existing conditions for this KPI
+      setKpiAlertConditions(prev => {
+        const { [selectedKpiForAlert.id]: _, ...rest } = prev
+        return rest
+      })
+    }
+
+    setIsAlertSheetOpen(false)
+  }
+
+  // Update the context with all KPI alert conditions when creating todolist
+  useEffect(() => {
+    // Combine all conditions from all KPIs
+    const allConditions = Object.values(kpiAlertConditions).flatMap(kpi => kpi.conditions)
+    const allEmails = [...new Set(Object.values(kpiAlertConditions).map(kpi => kpi.email))]
+    
+    if (allConditions.length > 0 && allEmails.length === 1) {
+      setAlertConditions(allConditions)
+      setAlertEmail(allEmails[0])
+    } else {
+      setAlertConditions([])
+      setAlertEmail("")
+    }
+  }, [kpiAlertConditions, setAlertConditions, setAlertEmail])
+
+  const handleConditionChange = (
+    fieldId: string,
+    type: 'numeric' | 'text' | 'boolean',
+    value: Partial<AlertCondition>
+  ) => {
+    setAlertConditions((prev: AlertCondition[]) => {
+      const existing = prev.findIndex((c: AlertCondition) => c.field_id === fieldId)
+      if (existing >= 0) {
+        const updated = [...prev]
+        updated[existing] = { ...updated[existing], ...value }
+        return updated
+      }
+      return [...prev, { field_id: fieldId, type, ...value } as AlertCondition]
+    })
   }
 
   return (
@@ -172,7 +276,7 @@ export function KpiSelection() {
                         onClick={() => handleOpenAlertSheet(kpi)}
                       >
                         <BellRing className="h-4 w-4 mr-2" />
-                        Set Alert
+                        Imposta Alert
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -196,7 +300,11 @@ export function KpiSelection() {
       </CardContent>
 
       {/* Alert Sheet */}
-      <Sheet open={isAlertSheetOpen} onOpenChange={setIsAlertSheetOpen}>
+      <Sheet open={isAlertSheetOpen} onOpenChange={(open) => {
+        if (!open) {
+          handleCloseAlertSheet()
+        }
+      }}>
         <SheetContent className="sm:max-w-md">
           <SheetHeader>
             <SheetTitle>
@@ -205,14 +313,15 @@ export function KpiSelection() {
           </SheetHeader>
           
           <div className="space-y-4 py-4">
-            <div className="flex items-center space-x-2">
-              <Switch id="activate-alert" />
-              <Label htmlFor="activate-alert">Activate Alert</Label>
-            </div>
-
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="Enter email for notifications" />
+              <Input 
+                id="email" 
+                type="email" 
+                placeholder="Enter email for notifications"
+                value={alertEmail}
+                onChange={(e) => setAlertEmail(e.target.value)}
+              />
             </div>
 
             {selectedKpiForAlert && getKpiFields(selectedKpiForAlert).map((field) => (
@@ -233,7 +342,12 @@ export function KpiSelection() {
                         <Input 
                           id={`${field.id}-min`} 
                           type="number" 
-                          placeholder="Minimum value" 
+                          placeholder="Minimum value"
+                          onChange={(e) => handleConditionChange(
+                            field.id,
+                            'numeric',
+                            { min: e.target.value ? Number(e.target.value) : undefined }
+                          )}
                         />
                       </div>
                       <div>
@@ -241,7 +355,12 @@ export function KpiSelection() {
                         <Input 
                           id={`${field.id}-max`} 
                           type="number" 
-                          placeholder="Maximum value" 
+                          placeholder="Maximum value"
+                          onChange={(e) => handleConditionChange(
+                            field.id,
+                            'numeric',
+                            { max: e.target.value ? Number(e.target.value) : undefined }
+                          )}
                         />
                       </div>
                     </div>
@@ -251,7 +370,12 @@ export function KpiSelection() {
                     <Label htmlFor={`${field.id}-match`}>Alert when text matches:</Label>
                     <Input 
                       id={`${field.id}-match`} 
-                      placeholder="Text to match" 
+                      placeholder="Text to match"
+                      onChange={(e) => handleConditionChange(
+                        field.id,
+                        'text',
+                        { match_text: e.target.value }
+                      )}
                     />
                   </div>
                 ) : field.type === 'boolean' ? (
@@ -263,7 +387,12 @@ export function KpiSelection() {
                           type="radio" 
                           id={`${field.id}-boolean-si`} 
                           name={`${field.id}-boolean`} 
-                          value="si" 
+                          value="si"
+                          onChange={() => handleConditionChange(
+                            field.id,
+                            'boolean',
+                            { boolean_value: true }
+                          )}
                         />
                         <Label htmlFor={`${field.id}-boolean-si`}>Sì</Label>
                       </div>
@@ -272,7 +401,12 @@ export function KpiSelection() {
                           type="radio" 
                           id={`${field.id}-boolean-no`} 
                           name={`${field.id}-boolean`} 
-                          value="no" 
+                          value="no"
+                          onChange={() => handleConditionChange(
+                            field.id,
+                            'boolean',
+                            { boolean_value: false }
+                          )}
                         />
                         <Label htmlFor={`${field.id}-boolean-no`}>No</Label>
                       </div>
@@ -284,7 +418,12 @@ export function KpiSelection() {
           </div>
 
           <div className="flex justify-end mt-6">
-            <Button type="button">Save</Button>
+            <Button 
+              type="button"
+              onClick={handleCloseAlertSheet}
+            >
+              Salva e Chiudi
+            </Button>
           </div>
         </SheetContent>
       </Sheet>

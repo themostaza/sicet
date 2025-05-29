@@ -1,6 +1,6 @@
 "use client"
 
-import { LayoutGrid, Layers, ClipboardList, FileText, Menu } from "lucide-react"
+import { LayoutGrid, Layers, ClipboardList, FileText, Menu, BellRing, AlertCircle } from "lucide-react"
 import NavLinkWithLoading from "./ui/NavLinkWithLoading"
 import { Button } from "./ui/button"
 import {
@@ -40,6 +40,16 @@ export default function Sidebar() {
       href: "/export",
       icon: <FileText size={20} />,
       label: "Esporta Dati"
+    },
+    {
+      title: "Alert",
+      href: "/alerts",
+      icon: <BellRing size={20} />,
+    },
+    {
+      title: "Log Alert",
+      href: "/alerts/logs",
+      icon: <AlertCircle size={20} />
     }
   ]
 

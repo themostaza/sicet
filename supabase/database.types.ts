@@ -71,34 +71,40 @@ export type Database = {
       }
       tasks: {
         Row: {
-          completion_date: string | null
-          created_at: string | null
-          device_id: string
           id: string
+          todolist_id: string
           kpi_id: string
-          scheduled_execution: string
+          device_id: string
           status: string
-          value: Json | null
+          value: any
+          completion_date: string | null
+          alert_checked: boolean
+          created_at: string
+          updated_at: string
         }
         Insert: {
-          completion_date?: string | null
-          created_at?: string | null
-          device_id: string
-          id: string
+          id?: string
+          todolist_id: string
           kpi_id: string
-          scheduled_execution: string
-          status: string
-          value?: Json | null
+          device_id: string
+          status?: string
+          value?: any
+          completion_date?: string | null
+          alert_checked?: boolean
+          created_at?: string
+          updated_at?: string
         }
         Update: {
-          completion_date?: string | null
-          created_at?: string | null
-          device_id?: string
           id?: string
+          todolist_id?: string
           kpi_id?: string
-          scheduled_execution?: string
+          device_id?: string
           status?: string
-          value?: Json | null
+          value?: any
+          completion_date?: string | null
+          alert_checked?: boolean
+          created_at?: string
+          updated_at?: string
         }
         Relationships: [
           {
@@ -129,6 +135,112 @@ export type Database = {
             referencedRelation: "kpis"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      kpi_alerts: {
+        Row: {
+          id: string
+          kpi_id: string
+          device_id: string
+          is_active: boolean
+          email: string
+          conditions: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          kpi_id: string
+          device_id: string
+          is_active?: boolean
+          email: string
+          conditions: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          kpi_id?: string
+          device_id?: string
+          is_active?: boolean
+          email?: string
+          conditions?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kpi_alerts_kpi_id_fkey"
+            columns: ["kpi_id"]
+            isOneToOne: false
+            referencedRelation: "kpis"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kpi_alerts_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      kpi_alert_logs: {
+        Row: {
+          id: string
+          alert_id: string
+          kpi_id: string
+          device_id: string
+          triggered_value: Json
+          triggered_at: string
+          email_sent: boolean
+          email_sent_at: string | null
+          error_message: string | null
+        }
+        Insert: {
+          id?: string
+          alert_id: string
+          kpi_id: string
+          device_id: string
+          triggered_value: Json
+          triggered_at?: string
+          email_sent?: boolean
+          email_sent_at?: string | null
+          error_message?: string | null
+        }
+        Update: {
+          id?: string
+          alert_id?: string
+          kpi_id?: string
+          device_id?: string
+          triggered_value?: Json
+          triggered_at?: string
+          email_sent?: boolean
+          email_sent_at?: string | null
+          error_message?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kpi_alert_logs_alert_id_fkey"
+            columns: ["alert_id"]
+            isOneToOne: false
+            referencedRelation: "kpi_alerts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kpi_alert_logs_kpi_id_fkey"
+            columns: ["kpi_id"]
+            isOneToOne: false
+            referencedRelation: "kpis"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kpi_alert_logs_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          }
         ]
       }
     }

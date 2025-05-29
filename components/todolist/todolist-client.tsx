@@ -14,7 +14,7 @@ import {
 import { getKpis } from "@/app/actions/actions-kpi"
 import { getDevice } from "@/app/actions/actions-device"
 import type { Task } from "@/app/actions/actions-todolist"
-import type { Kpi } from "@/app/actions/actions-kpi"
+import type { Kpi } from "@/lib/validation/kpi-schemas"
 import { Check, AlertCircle, Info, Save, Loader2 } from "lucide-react"
 
 import { Input } from "@/components/ui/input"
@@ -35,6 +35,17 @@ interface Props {
   timeSlot: string
   initialKpis?: Kpi[]
   deviceInfo?: { name: string; location: string } | null
+}
+
+// Define types for KPI field
+interface KpiField {
+  id?: string;
+  name: string;
+  description?: string;
+  type: string;
+  required?: boolean;
+  min?: number;
+  max?: number;
 }
 
 /* --------------------------------------------------------------
@@ -365,13 +376,19 @@ export default function TodolistClient({
     return (
       <div className="space-y-4">
         {fields.map((field, idx) => {
-          const setVal = (val: any) => {
+          const setVal = (val: any, field: KpiField, idx: number) => {
             let newValue
             if (fields.length === 1) {
-              newValue = val
+              newValue = { 
+                id: field.id || `${kpi.id}-${field.name.toLowerCase().replace(/\s+/g, '_')}`,
+                value: val 
+              }
             } else {
               newValue = [...(Array.isArray(current) ? current : Array(fields.length).fill(null))]
-              newValue[idx] = { ...(newValue[idx] || {}), value: val }
+              newValue[idx] = { 
+                id: field.id || `${kpi.id}-${field.name.toLowerCase().replace(/\s+/g, '_')}`,
+                value: val 
+              }
             }
             setLocalValue(task.id, newValue)
           }
@@ -395,7 +412,7 @@ export default function TodolistClient({
                   </div>
                   <Input
                     value={val ?? ""}
-                    onChange={(e) => setVal(e.target.value)}
+                    onChange={(e) => setVal(e.target.value, field, idx)}
                     disabled={isPending}
                     placeholder="Inserisci testo"
                     required={field.required}
@@ -418,7 +435,7 @@ export default function TodolistClient({
                   </div>
                   <Input
                     value={val ?? ""}
-                    onChange={(e) => setVal(e.target.value)}
+                    onChange={(e) => setVal(e.target.value, field, idx)}
                     disabled={isPending}
                     placeholder="Inserisci descrizione"
                     required={field.required}
@@ -447,7 +464,7 @@ export default function TodolistClient({
                     value={val ?? ""}
                     onChange={(e) => {
                       const value = e.target.value === "" ? "" : parseInt(e.target.value, 10);
-                      setVal(value);
+                      setVal(value, field, idx);
                     }}
                     onBlur={(e) => {
                       if (e.target.value !== "") {
@@ -493,7 +510,7 @@ export default function TodolistClient({
                     value={val ?? ""}
                     onChange={(e) => {
                       const value = e.target.value === "" ? "" : parseFloat(e.target.value);
-                      setVal(value);
+                      setVal(value, field, idx);
                     }}
                     onBlur={(e) => {
                       if (e.target.value !== "") {
@@ -535,7 +552,7 @@ export default function TodolistClient({
                     type="date"
                     value={val ?? ""}
                     onChange={(e) => {
-                      setVal(e.target.value);
+                      setVal(e.target.value, field, idx);
                     }}
                     onBlur={(e) => {
                       if (e.target.value) {
@@ -572,7 +589,7 @@ export default function TodolistClient({
                     <Button
                       type="button"
                       variant={val === true ? "default" : "outline"}
-                      onClick={() => setVal(true)}
+                      onClick={() => setVal(true, field, idx)}
                       disabled={isPending}
                       className={val === true ? "bg-green-600 hover:bg-green-700" : ""}
                     >
@@ -581,7 +598,7 @@ export default function TodolistClient({
                     <Button
                       type="button"
                       variant={val === false ? "default" : "outline"}
-                      onClick={() => setVal(false)}
+                      onClick={() => setVal(false, field, idx)}
                       disabled={isPending}
                       className={val === false ? "bg-red-600 hover:bg-red-700" : ""}
                     >
@@ -607,7 +624,7 @@ export default function TodolistClient({
                   <Select 
                     value={val ?? ""} 
                     onValueChange={(newVal) => {
-                      setVal(newVal);
+                      setVal(newVal, field, idx);
                     }} 
                     disabled={isPending}
                   >
@@ -788,7 +805,7 @@ export default function TodolistClient({
                                   {/* For array values */}
                                   {Array.isArray(task.value) && (
                                     <div className="space-y-2">
-                                      {task.value.map((item, idx) => {
+                                      {task.value.map((item: { id?: string; value: any }, idx: number) => {
                                         const fieldDef = Array.isArray(kpi?.value) ? kpi.value[idx] : null;
                                         return (
                                           <div key={idx}>

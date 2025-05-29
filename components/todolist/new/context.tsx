@@ -11,6 +11,16 @@ import {
 import { toggle, areEqual } from "./helpers"
 import { format } from "date-fns"
 
+// Define types for alert conditions
+interface AlertCondition {
+  field_id: string;
+  type: 'numeric' | 'text' | 'boolean';
+  min?: number;
+  max?: number;
+  match_text?: string;
+  boolean_value?: boolean;
+}
+
 // Definizione dell'interfaccia del context
 interface TodolistContextType {
   // Stati base
@@ -18,6 +28,7 @@ interface TodolistContextType {
   kpis: KPI[]
   isLoading: boolean
   isSubmitting: boolean
+  deviceId: string | null
   
   // Selezioni utente
   selectedTags: Set<string>
@@ -84,6 +95,12 @@ interface TodolistContextType {
   removeDateEntry: (index: number) => void
   applyIntervalSelection: () => void
   updateExistingDateEntry: (index: number, newDate: Date, newTimeSlot: TimeSlot) => void
+  
+  // New fields
+  alertConditions: AlertCondition[]
+  setAlertConditions: (conditions: AlertCondition[]) => void
+  alertEmail: string
+  setAlertEmail: (email: string) => void
 }
 
 // Creazione del context
@@ -98,6 +115,7 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
   const [kpis, setKpis] = useState<KPI[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [deviceId, setDeviceId] = useState<string | null>(null)
   
   // Selezioni utente
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set())
@@ -119,6 +137,10 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
   const [kpiSearchTerm, setKpiSearchTerm] = useState("")
   const [errors, setErrors] = useState<ValidationErrors>({})
   const [selectedDates, setSelectedDates] = useState<Date[]>([])
+  
+  // New fields
+  const [alertConditions, setAlertConditions] = useState<AlertCondition[]>([])
+  const [alertEmail, setAlertEmail] = useState("")
 
   // Fetch Dati Iniziale
   useEffect(() => {
@@ -520,9 +542,19 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
     })
   }, [selectedDates])
 
+  // Aggiorna deviceId quando viene selezionato un device
+  useEffect(() => {
+    if (selectedDevices.size === 1) {
+      const [id] = selectedDevices
+      setDeviceId(id)
+    } else {
+      setDeviceId(null)
+    }
+  }, [selectedDevices])
+
   const contextValue = {
     // Stati
-    devices, kpis, isLoading, isSubmitting,
+    devices, kpis, isLoading, isSubmitting, deviceId,
     selectedTags, manualSelectedDevices, selectedKpis, dateEntries,
     defaultTimeSlot, intervalDays, startDate, monthsToRepeat,
     isDeviceSheetOpen, isKpiSheetOpen, isDateSheetOpen,
@@ -544,6 +576,9 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
     // Handlers
     handleTagClick, clearAllTags, handleToggleAllDevices, handleToggleAllKpis,
     updateDateEntry, removeDateEntry, applyIntervalSelection, updateExistingDateEntry,
+    
+    // New fields
+    alertConditions, setAlertConditions, alertEmail, setAlertEmail
   }
 
   return <TodolistContext.Provider value={contextValue}>{children}</TodolistContext.Provider>

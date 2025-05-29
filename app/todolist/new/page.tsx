@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useToast } from "@/components/ui/use-toast"
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { ArrowLeft, Loader2 } from "lucide-react"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { createTodolist, createMultipleTasks } from "@/app/actions/actions-todolist"
+import { createAlert } from "@/app/actions/actions-alerts"
 import { format } from "date-fns"
 import { timeSlotToScheduledTime } from "@/components/todolist/new/types"
 
@@ -35,11 +36,23 @@ function TodolistCreationForm() {
     isSubmitting,
     setErrors,
     setIsSubmitting,
-    totalTodolistCount
+    totalTodolistCount,
+    alertConditions,
+    alertEmail
   } = useTodolist()
+
+  // Add a ref to track if submission is in progress
+  const isSubmittingRef = useRef(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Prevent double submission
+    if (isSubmittingRef.current) {
+      console.log('Preventing double submission')
+      return
+    }
+    isSubmittingRef.current = true
     
     // Validazione
     const newErrors: {[key: string]: string} = {}
@@ -59,17 +72,49 @@ function TodolistCreationForm() {
     setErrors(newErrors)
     
     if (Object.keys(newErrors).length > 0) {
+      isSubmittingRef.current = false
       return
     }
     
     // Creazione todolist
     setIsSubmitting(true)
     try {
+      // Log alert conditions
+      console.log('Starting todolist creation with alerts:', {
+        hasAlertConditions: alertConditions.length > 0,
+        alertConditionsCount: alertConditions.length,
+        alertEmail,
+        selectedDevicesCount: selectedDevices.size,
+        selectedKpisCount: selectedKpis.size,
+        dateEntriesCount: dateEntries.length,
+        totalTodolistCount
+      })
+
       // Creiamo una todolist per ogni combinazione di device, kpi e data
       const todolistPromises = []
+      const alertPromises = []
       
       for (const deviceId of selectedDevices) {
         for (const kpiId of selectedKpis) {
+          // Create alerts if conditions are set
+          if (alertConditions.length > 0 && alertEmail) {
+            console.log(`Queueing alert creation for KPI ${kpiId} and device ${deviceId}`)
+            alertPromises.push(
+              createAlert(kpiId, deviceId, alertEmail, alertConditions)
+                .then(() => {
+                  console.log(`Successfully created alert for KPI ${kpiId} and device ${deviceId}`)
+                })
+                .catch(error => {
+                  console.error(`Error creating alert for KPI ${kpiId} and device ${deviceId}:`, error)
+                  toast({
+                    title: "Errore nella creazione dell'alert",
+                    description: `Impossibile creare l'alert per il controllo ${kpiId}. Riprova più tardi.`,
+                    variant: "destructive",
+                  })
+                })
+            )
+          }
+
           for (const entry of dateEntries) {
             todolistPromises.push(
               createTodolist(
@@ -83,7 +128,16 @@ function TodolistCreationForm() {
         }
       }
       
+      // First create all alerts, then create all todolists
+      if (alertPromises.length > 0) {
+        console.log(`Waiting for ${alertPromises.length} alerts to be created...`)
+        await Promise.all(alertPromises)
+        console.log('All alerts created successfully')
+      }
+      
+      console.log(`Creating ${todolistPromises.length} todolists...`)
       await Promise.all(todolistPromises)
+      console.log('All todolists created successfully')
       
       toast({
         title: "Todolist create con successo",
@@ -100,6 +154,7 @@ function TodolistCreationForm() {
       })
     } finally {
       setIsSubmitting(false)
+      isSubmittingRef.current = false
     }
   }
 
@@ -116,21 +171,22 @@ function TodolistCreationForm() {
         </div>
         
         {totalTodolistCount > 0 && (
-          <Button 
-            type="submit" 
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-            className="relative"
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creazione in corso...
-              </>
-            ) : (
-              `Crea ${totalTodolistCount} todolist`
-            )}
-          </Button>
+          <form onSubmit={handleSubmit}>
+            <Button 
+              type="submit" 
+              disabled={isSubmitting}
+              className="relative"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creazione in corso...
+                </>
+              ) : (
+                `Crea ${totalTodolistCount} todolist`
+              )}
+            </Button>
+          </form>
         )}
       </div>
       

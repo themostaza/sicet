@@ -15,36 +15,38 @@ export const JsonSchema: z.ZodType<
 );
 
 // Schema base per KPI
-export const KpiFormSchema = z.object({
-  id: z.string().uuid({ message: "ID deve essere un UUID v4 valido" }),
-  name: z.string().min(2, { message: "Il nome deve contenere almeno 2 caratteri" }).max(80, { message: "Il nome non può superare gli 80 caratteri" }),
-  description: z.string().max(250, { message: "La descrizione non può superare i 250 caratteri" }).optional().or(z.literal("")),
-  value: z.union([
-    // Supporta array di campi (dal client)
-    z.array(z.object({
-      name: z.string().min(1, { message: "Il nome del campo è obbligatorio" }),
-      type: z.string(),
-      description: z.string().optional(),
-      required: z.boolean().optional().default(false),
-      min: z.union([z.string(), z.number()]).optional(),
-      max: z.union([z.string(), z.number()]).optional(),
-    })).nonempty({ message: "Aggiungi almeno un campo" }),
-    // Supporta anche altri formati JSON validi (per retrocompatibilità)
-    JsonSchema
-  ]),
+export const KpiSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  value: z.any(),
+  created_at: z.string().nullable()
 });
 
-export type Kpi = z.infer<typeof KpiFormSchema>;
+export type Kpi = z.infer<typeof KpiSchema>;
 
-export const KpiInsertSchema = KpiFormSchema.extend({
-  description: z.string().max(250).nullish().optional(),
-});
-
-export const KpiUpdateSchema = KpiFormSchema.partial().extend({
-  id: z.string().uuid({ message: "ID deve essere un UUID v4 valido" }),
-});
-
+// Schema per i parametri di lista
 export const ListParamsSchema = z.object({
-  offset: z.coerce.number().int().min(0).default(0),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-}); 
+  offset: z.number().int().min(0).default(0),
+  limit: z.number().int().min(1).max(100).default(20),
+});
+
+// Schema per creazione KPI
+export const KpiInsertSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1, { message: "Nome richiesto" }),
+  description: z.string().optional(),
+  value: z.any().optional(),
+});
+
+// Schema per aggiornamento KPI
+export const KpiUpdateSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1, { message: "Nome richiesto" }).optional(),
+  description: z.string().optional(),
+  value: z.any().optional(),
+});
+
+export type ListParams = z.infer<typeof ListParamsSchema>;
+export type KpiInsert = z.infer<typeof KpiInsertSchema>;
+export type KpiUpdate = z.infer<typeof KpiUpdateSchema>; 
