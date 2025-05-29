@@ -72,7 +72,7 @@ export type Database = {
       tasks: {
         Row: {
           id: string
-          todolist_id: string
+          scheduled_execution: string
           kpi_id: string
           device_id: string
           status: string
@@ -84,7 +84,7 @@ export type Database = {
         }
         Insert: {
           id?: string
-          todolist_id: string
+          scheduled_execution: string
           kpi_id: string
           device_id: string
           status?: string
@@ -96,7 +96,7 @@ export type Database = {
         }
         Update: {
           id?: string
-          todolist_id?: string
+          scheduled_execution?: string
           kpi_id?: string
           device_id?: string
           status?: string

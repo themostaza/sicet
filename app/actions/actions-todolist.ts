@@ -238,6 +238,7 @@ export async function getTodolistsGrouped() {
   // Raggruppa per device_id, data, time_slot
   const todolistGroups: Record<string, any> = {}
   for (const task of data ?? []) {
+    if (!task.scheduled_execution) continue // Skip tasks without scheduled_execution
     const executionDate = task.scheduled_execution.split("T")[0]
     const timeSlot = getTimeSlotFromDateTime(task.scheduled_execution)
     const key = `${task.device_id}_${executionDate}_${timeSlot}`
@@ -384,4 +385,26 @@ export async function createMultipleTasks(deviceId: string, date: string, timeSl
   if (error) handlePostgrestError(error)
   
   revalidatePath("/todolist")
+}
+
+// Check for existing tasks with the same date-device-KPI tuple
+export async function checkExistingTasks(deviceId: string, date: string, timeSlot: string, kpiIds: string[]): Promise<{ exists: boolean; existingTasks: Task[] }> {
+  const { startTime, endTime } = getTimeRangeFromSlot(date, timeSlot)
+  
+  const { data, error } = await supabase()
+    .from("tasks")
+    .select("id, device_id, kpi_id, scheduled_execution, status, value, completion_date, created_at")
+    .eq("device_id", deviceId)
+    .gte("scheduled_execution", startTime)
+    .lte("scheduled_execution", endTime)
+    .in("kpi_id", kpiIds)
+  
+  if (error) handlePostgrestError(error)
+  
+  const existingTasks = (data ?? []).map(toTask)
+  
+  return {
+    exists: existingTasks.length > 0,
+    existingTasks
+  }
 }
