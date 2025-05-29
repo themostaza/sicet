@@ -17,6 +17,7 @@ import {
 import { Search, TagIcon, X } from "lucide-react"
 import { useTodolist } from "./context"
 import { Device } from "./types"
+import { cn } from "@/lib/utils"
 
 export function DeviceSelectionSheet() {
   const {
@@ -53,16 +54,14 @@ export function DeviceSelectionSheet() {
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium">Tags</label>
-              {selectedTags.size > 0 && (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-6 px-2 text-xs"
-                  onClick={clearAllTags}
-                >
-                  Cancella tutti
-                </Button>
-              )}
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className={cn("h-6 px-2 text-xs", selectedTags.size === 0 && "invisible")}
+                onClick={clearAllTags}
+              >
+                Cancella tutti
+              </Button>
             </div>
             <div className="flex flex-wrap gap-2">
               {availableTags.map(tag => (
@@ -96,13 +95,7 @@ export function DeviceSelectionSheet() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10">
-                    <Checkbox
-                      checked={allRowsSelected}
-                      onCheckedChange={handleToggleAllDevices}
-                      aria-label="Select all Punti di controllo"
-                    />
-                  </TableHead>
+                  <TableHead className="w-10"></TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead className="hidden md:table-cell">Posizione</TableHead>
                   <TableHead className="hidden lg:table-cell">Tag</TableHead>

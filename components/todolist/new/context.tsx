@@ -280,8 +280,38 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
   
   // Handler per click su tag
   const handleTagClick = useCallback((tag: string) => {
-    setSelectedTags(prev => toggle(prev, tag))
-  }, [])
+    setSelectedTags(prev => {
+      const next = toggle(prev, tag)
+      // When adding a tag, select all devices with that tag
+      // When removing a tag, deselect devices that are only selected by that tag
+      setManualSelectedDevices(prevDevices => {
+        const nextDevices = new Set(prevDevices)
+        if (next.has(tag)) {
+          // Add all devices with this tag
+          if (devicesByTag[tag]) {
+            for (const deviceId of devicesByTag[tag]) {
+              nextDevices.add(deviceId)
+            }
+          }
+        } else {
+          // Remove devices that are only selected by this tag
+          if (devicesByTag[tag]) {
+            for (const deviceId of devicesByTag[tag]) {
+              // Check if device is selected by any other tag
+              const isSelectedByOtherTag = [...next].some(otherTag => 
+                otherTag !== tag && devicesByTag[otherTag]?.has(deviceId)
+              )
+              if (!isSelectedByOtherTag) {
+                nextDevices.delete(deviceId)
+              }
+            }
+          }
+        }
+        return nextDevices
+      })
+      return next
+    })
+  }, [devicesByTag])
   
   // Cancella tutti i tags selezionati
   const clearAllTags = useCallback(() => {
