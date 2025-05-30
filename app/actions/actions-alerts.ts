@@ -5,6 +5,7 @@ import type { Database } from "@/supabase/database.types"
 import type { SupabaseClient, PostgrestError } from "@supabase/supabase-js"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
+import { sendAlertEmail } from '../lib/email'
 
 // Helper function to handle Postgrest errors
 const handlePostgrestError = (error: PostgrestError) => {
@@ -93,7 +94,7 @@ export async function getKpiAlerts(kpiId: string): Promise<Alert[]> {
   return alerts
 }
 
-// Log an alert trigger
+// Log an alert trigger and send email
 async function logAlertTrigger(
   alert: Alert,
   kpiId: string,
@@ -101,20 +102,87 @@ async function logAlertTrigger(
   triggeredValue: any,
   errorMessage?: string
 ): Promise<void> {
+  // First get the KPI and device details for the email
+  const { data: kpiData, error: kpiError } = await supabase()
+    .from('kpis')
+    .select('name, description')
+    .eq('id', kpiId)
+    .single()
+
+  if (kpiError) {
+    console.error('Error getting KPI details:', kpiError)
+    throw kpiError
+  }
+
+  const { data: deviceData, error: deviceError } = await supabase()
+    .from('devices')
+    .select('name, location')
+    .eq('id', deviceId)
+    .single()
+
+  if (deviceError) {
+    console.error('Error getting device details:', deviceError)
+    throw deviceError
+  }
+
+  // Create the log entry
   const log: Database['public']['Tables']['kpi_alert_logs']['Insert'] = {
     alert_id: alert.id,
     kpi_id: kpiId,
     device_id: deviceId,
     triggered_value: triggeredValue,
-    error_message: errorMessage
+    error_message: errorMessage,
+    email_sent: false // Will be updated after sending email
   }
 
-  const { error } = await supabase()
+  const { data: logData, error: logError } = await supabase()
     .from('kpi_alert_logs')
     .insert(log)
+    .select()
+    .single()
 
-  if (error) {
-    console.error('Error logging alert trigger:', error)
+  if (logError) {
+    console.error('Error logging alert trigger:', logError)
+    throw logError
+  }
+
+  // Send the email
+  try {
+    await sendAlertEmail(alert.email, {
+      kpiName: kpiData.name,
+      kpiDescription: kpiData.description,
+      deviceName: deviceData.name,
+      deviceLocation: deviceData.location,
+      triggeredValue,
+      conditions: alert.conditions
+    })
+
+    // Update the log to mark email as sent
+    const { error: updateError } = await supabase()
+      .from('kpi_alert_logs')
+      .update({
+        email_sent: true,
+        email_sent_at: new Date().toISOString()
+      })
+      .eq('id', logData.id)
+
+    if (updateError) {
+      console.error('Error updating email sent status:', updateError)
+    }
+  } catch (emailError) {
+    console.error('Error sending alert email:', emailError)
+    // Update the log with the email error
+    const { error: updateError } = await supabase()
+      .from('kpi_alert_logs')
+      .update({
+        error_message: emailError instanceof Error ? emailError.message : 'Failed to send email'
+      })
+      .eq('id', logData.id)
+
+    if (updateError) {
+      console.error('Error updating email error status:', updateError)
+    }
+    throw emailError
   }
 }
 
@@ -304,7 +372,8 @@ export async function checkKpiAlerts(
           await logAlertTrigger(alert, kpiId, deviceId, triggeredValue)
         } catch (error) {
           console.error('Error logging alert trigger:', error)
-          await logAlertTrigger(alert, kpiId, deviceId, triggeredValue, error instanceof Error ? error.message : 'Unknown error')
+          // Non chiamiamo nuovamente logAlertTrigger per evitare il doppio log
+          // L'errore verrà comunque registrato nel log dell'applicazione
         }
         
         break
