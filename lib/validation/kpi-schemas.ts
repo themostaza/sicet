@@ -47,6 +47,22 @@ export const KpiUpdateSchema = z.object({
   value: z.any().optional(),
 });
 
+// Schema per il form KPI
+export const KpiFormSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1, { message: "Nome richiesto" }),
+  description: z.string().optional(),
+  value: z.array(z.object({
+    name: z.string().min(1, { message: "Nome campo richiesto" }),
+    type: z.string(),
+    description: z.string().optional(),
+    required: z.boolean().optional(),
+    min: z.union([z.string(), z.number()]).optional(),
+    max: z.union([z.string(), z.number()]).optional()
+  }))
+});
+
 export type ListParams = z.infer<typeof ListParamsSchema>;
 export type KpiInsert = z.infer<typeof KpiInsertSchema>;
-export type KpiUpdate = z.infer<typeof KpiUpdateSchema>; 
+export type KpiUpdate = z.infer<typeof KpiUpdateSchema>;
+export type KpiForm = z.infer<typeof KpiFormSchema>; 

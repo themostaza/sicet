@@ -45,11 +45,7 @@ export default function Sidebar() {
       title: "Alert",
       href: "/alerts",
       icon: <BellRing size={20} />,
-    },
-    {
-      title: "Log Alert",
-      href: "/alerts/logs",
-      icon: <AlertCircle size={20} />
+      label: "Alert"
     }
   ]
 
