@@ -27,7 +27,7 @@ export const TodolistParamsSchema = z.object({
 export type TimeSlot = "mattina" | "pomeriggio" | "sera" | "notte";
 
 // Costante per l'ordine degli slot
-export const timeSlotOrder: Record<string, number> = {
+export const timeSlotOrder: Record<TimeSlot, number> = {
   mattina: 1,
   pomeriggio: 2,
   sera: 3,
@@ -43,4 +43,19 @@ export const CreateTodolistSchema = z.object({
 });
 
 export type TodolistParams = z.infer<typeof TodolistParamsSchema>;
-export type CreateTodolistParams = z.infer<typeof CreateTodolistSchema>; 
+export type CreateTodolistParams = z.infer<typeof CreateTodolistSchema>;
+
+// Get the current time slot based on the current time
+export function getCurrentTimeSlot(date: Date): TimeSlot {
+  const hour = date.getHours();
+  
+  if (hour >= 6 && hour < 14) {
+    return "mattina";
+  } else if (hour >= 14 && hour < 22) {
+    return "pomeriggio";
+  } else if (hour >= 22 || hour < 6) {
+    return "notte";
+  } else {
+    return "sera"; // This should never happen due to the conditions above
+  }
+} 

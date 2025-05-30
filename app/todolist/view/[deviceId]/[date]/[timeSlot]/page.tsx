@@ -6,6 +6,7 @@ import { getTodolistTasks } from "@/app/actions/actions-todolist"
 import TodolistClient from "@/components/todolist/todolist-client"
 import { getKpis } from "@/app/actions/actions-kpi"
 import { getDevice } from "@/app/actions/actions-device"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 interface FieldErrorTooltipProps {
   message: string
@@ -48,6 +49,25 @@ async function TodolistContent({ params }: { params: { deviceId: string; date: s
     offset: 0,
     limit: 20,
   })
+
+  // If no tasks are found, show a message
+  if (initialData.tasks.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <AlertCircle className="h-5 w-5 text-amber-500" />
+            Nessuna attività programmata
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground">
+            Non ci sono attività programmate per questo punto di controllo nella fascia oraria attuale.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <TodolistClient

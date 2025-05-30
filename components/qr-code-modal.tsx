@@ -4,6 +4,8 @@ import { useState, useRef } from "react"
 import { X, Download, Copy, Check } from "lucide-react"
 import { QRCodeSVG } from "qrcode.react"
 import { Button } from "@/components/ui/button"
+import Link from "next/link"
+import { getCurrentTimeSlot } from "@/lib/validation/todolist-schemas"
 
 interface QRCodeModalProps {
   isOpen: boolean
@@ -106,16 +108,12 @@ export function QRCodeModal({ isOpen, onClose, deviceId, deviceName }: QRCodeMod
 
         <div className="text-center text-sm font-medium">{deviceId}</div>
         <div className="mt-1 text-center text-xs">
-          <a
+          <Link
             href={scanUrl}
             className="text-blue-500 hover:underline"
-            onClick={(e) => {
-              e.preventDefault()
-              window.location.href = scanUrl
-            }}
           >
             {scanUrl}
-          </a>
+          </Link>
         </div>
 
         <div className="mt-4 flex flex-col gap-2">
