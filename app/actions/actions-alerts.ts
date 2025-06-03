@@ -380,4 +380,30 @@ export async function checkKpiAlerts(
       }
     }
   }
+}
+
+// Toggle alert active status
+export async function toggleAlertActive(alertId: string, isActive: boolean): Promise<void> {
+  const { error } = await supabase()
+    .from('kpi_alerts')
+    .update({ is_active: isActive })
+    .eq('id', alertId)
+
+  if (error) {
+    console.error('Error toggling alert status:', error)
+    handlePostgrestError(error)
+  }
+}
+
+// Delete an alert
+export async function deleteAlert(alertId: string): Promise<void> {
+  const { error } = await supabase()
+    .from('kpi_alerts')
+    .delete()
+    .eq('id', alertId)
+
+  if (error) {
+    console.error('Error deleting alert:', error)
+    handlePostgrestError(error)
+  }
 } 
