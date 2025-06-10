@@ -243,6 +243,33 @@ export type Database = {
           }
         ]
       }
+      profiles: {
+        Row: {
+          id: string
+          email: string
+          role: 'operator' | 'admin' | 'referrer'
+          status: 'registered' | 'activated'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          email: string
+          role: 'operator' | 'admin' | 'referrer'
+          status?: 'registered' | 'activated'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          email?: string
+          role?: 'operator' | 'admin' | 'referrer'
+          status?: 'registered' | 'activated'
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

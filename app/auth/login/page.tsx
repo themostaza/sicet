@@ -23,19 +23,40 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      console.log("LoginPage: Attempting login for:", email);
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
+      console.log("LoginPage: Login response:", { data, error });
+
       if (error) {
+        console.error("LoginPage: Login error:", error);
         toast.error('Credenziali non valide');
         return;
       }
 
+      console.log("LoginPage: Login successful, getting profile...");
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('email', email)
+        .single();
+
+      console.log("LoginPage: Profile response:", { profile, profileError });
+
+      if (profileError) {
+        console.error("LoginPage: Error getting profile:", profileError);
+        toast.error('Errore nel recupero del profilo');
+        return;
+      }
+
+      console.log("LoginPage: Redirecting to dashboard...");
       router.push('/dashboard');
       router.refresh();
     } catch (error) {
+      console.error("LoginPage: Unexpected error:", error);
       toast.error('Si è verificato un errore durante il login');
     } finally {
       setLoading(false);

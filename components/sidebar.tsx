@@ -95,87 +95,62 @@ export default function Sidebar() {
   )
 
   useEffect(() => {
+    let initialSessionChecked = false;
+    setLoading(true);
+
     const getUserRole = async () => {
-      try {
-        setLoading(true)
-        setError(null)
-        
-        const { data: { user }, error: authError } = await supabase.auth.getUser()
-        
-        if (!user) {
-          setRole(null)
-          setLoading(false)
-          return
-        }
-        
-        if (authError && authError.message !== 'JWT expired') {
-          throw new Error("Errore di autenticazione")
-        }
-        
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("email", user.email)
-          .single()
-        
-        if (profileError) {
-          throw new Error("Errore nel recupero del profilo")
-        }
-        
-        if (!profile) {
-          throw new Error("Profilo non trovato")
-        }
-
-        setRole(profile.role as Role)
-      } catch (error) {
-        console.error("Error getting user role:", error)
-        if (error instanceof Error && error.message !== "JWT expired") {
-          setError(error.message)
-        }
-        setRole(null)
-      } finally {
-        setLoading(false)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setRole(null);
+        setLoading(false);
+        return;
       }
-    }
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("email", user.email)
+        .single();
+      setRole(profile?.role ?? null);
+      setLoading(false);
+    };
 
-    getUserRole()
+    getUserRole();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        try {
-          const { data: profile, error: profileError } = await supabase
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "INITIAL_SESSION") {
+        initialSessionChecked = true;
+        if (session?.user) {
+          supabase
             .from("profiles")
             .select("role")
             .eq("email", session.user.email)
             .single()
-          
-          if (profileError) {
-            throw new Error("Errore nel recupero del profilo")
-          }
-          
-          if (!profile) {
-            throw new Error("Profilo non trovato")
-          }
-
-          setRole(profile.role as Role)
-          setError(null)
-        } catch (error) {
-          console.error("Error updating user role:", error)
-          if (error instanceof Error) {
-            setError(error.message)
-          }
-          setRole(null)
+            .then(({ data: profile }) => {
+              setRole(profile?.role ?? null);
+              setLoading(false);
+            });
+        } else {
+          setRole(null);
+          setLoading(false);
         }
+      } else if (session?.user) {
+        supabase
+          .from("profiles")
+          .select("role")
+          .eq("email", session.user.email)
+          .single()
+          .then(({ data: profile }) => {
+            setRole(profile?.role ?? null);
+          });
       } else {
-        setRole(null)
-        setError(null)
+        setRole(null);
       }
-    })
+    });
 
     return () => {
-      subscription.unsubscribe()
-    }
-  }, [supabase])
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
 
   // Get menu items based on role
   const menuItems = role ? menuItemsByRole[role] : []

@@ -20,22 +20,41 @@ export function UserBox() {
   )
 
   useEffect(() => {
+    let initialSessionChecked = false;
+    setLoading(true);
+
     const getUser = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
+        console.log("UserBox: Getting user...")
+        const { data: { user }, error } = await supabase.auth.getUser()
+        console.log("UserBox: getUser response:", { user, error })
+        
+        if (error) {
+          console.error("UserBox: Error getting user:", error)
+          return
+        }
+
         setUser(user)
 
         if (user) {
-          const { data: profile } = await supabase
+          console.log("UserBox: Getting profile for user:", user.email)
+          const { data: profile, error: profileError } = await supabase
             .from("profiles")
             .select("role")
             .eq("email", user.email)
             .single()
           
+          console.log("UserBox: Profile response:", { profile, profileError })
+          
+          if (profileError) {
+            console.error("UserBox: Error getting profile:", profileError)
+            return
+          }
+
           setRole(profile?.role ?? null)
         }
       } catch (error) {
-        console.error("Error getting user:", error)
+        console.error("UserBox: Unexpected error:", error)
       } finally {
         setLoading(false)
       }
@@ -43,29 +62,31 @@ export function UserBox() {
 
     getUser()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        supabase
-          .from("profiles")
-          .select("role")
-          .eq("email", session.user.email)
-          .single()
-          .then(({ data: profile }) => {
-            setRole(profile?.role ?? null)
-          })
+    console.log("UserBox: Setting up auth state change listener")
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "INITIAL_SESSION") {
+        initialSessionChecked = true;
+        setUser(session?.user ?? null);
+        setLoading(false);
       } else {
-        setRole(null)
+        setUser(session?.user ?? null);
       }
     })
 
     return () => {
+      console.log("UserBox: Cleaning up auth state change listener")
       subscription.unsubscribe()
     }
   }, [supabase])
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
+    console.log("UserBox: Logging out...")
+    const { error } = await supabase.auth.signOut()
+    if (error) {
+      console.error("UserBox: Error during logout:", error)
+      return
+    }
+    console.log("UserBox: Logout successful")
     router.push("/auth/login")
     router.refresh()
   }
