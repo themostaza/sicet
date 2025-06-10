@@ -8,9 +8,14 @@ import { SidebarProvider } from "@/components/ui/sidebar"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata = {
-  title: "Sistema di Gestione",
+  title: "Sicet - Sistema di Gestione",
   description: "Sistema di Gestione per punti di controllo e attività",
-    generator: 'v0.dev'
+  generator: 'v0.dev',
+  icons: {
+    icon: '/logo.webp',
+    shortcut: '/logo.webp',
+    apple: '/logo.webp',
+  }
 }
 
 export default function RootLayout({

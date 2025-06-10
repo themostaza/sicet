@@ -14,6 +14,7 @@ import {
 } from "./ui/sidebar"
 import { UserBox } from "./ui/user-box"
 import { createBrowserClient } from "@supabase/ssr"
+import Image from "next/image"
 
 type Role = "admin" | "operator" | "referrer"
 
@@ -185,7 +186,16 @@ export default function Sidebar() {
       <UISidebar>
         <SidebarHeader>
           <div className="flex items-center justify-between px-4">
-            <h1 className="text-lg font-semibold">SICET</h1>
+            <div className="flex items-center gap-2">
+              <Image
+                src="/logo.webp"
+                alt="Sicet Logo"
+                width={32}
+                height={32}
+                className="rounded-sm"
+              />
+              <h1 className="text-lg font-semibold">SICET</h1>
+            </div>
             {isMobile && (
               <Button variant="ghost" size="icon" onClick={toggleSidebar}>
                 <Menu className="h-5 w-5" />
@@ -207,7 +217,16 @@ export default function Sidebar() {
     <UISidebar>
       <SidebarHeader>
         <div className="flex items-center justify-between px-4">
-          <h1 className="text-lg font-semibold">SICET</h1>
+          <div className="flex items-center gap-2">
+            <Image
+              src="/logo.webp"
+              alt="Sicet Logo"
+              width={32}
+              height={32}
+              className="rounded-sm"
+            />
+            <h1 className="text-lg font-semibold">SICET</h1>
+          </div>
           {isMobile && (
             <Button variant="ghost" size="icon" onClick={toggleSidebar}>
               <Menu className="h-5 w-5" />
