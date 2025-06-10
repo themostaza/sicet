@@ -31,6 +31,11 @@ const menuItemsByRole: Record<Role, Array<{
       label: "Dashboard"
     },
     {
+      href: "/summary",
+      icon: <LayoutGrid size={20} />,
+      label: "Statistiche"
+    },
+    {
       href: "/devices",
       icon: <Layers size={20} />,
       label: "Punti di Controllo"
@@ -70,14 +75,9 @@ const menuItemsByRole: Record<Role, Array<{
   ],
   referrer: [
     {
-      href: "/devices",
-      icon: <Layers size={20} />,
-      label: "Punti di Controllo"
-    },
-    {
-      href: "/todolist",
-      icon: <ClipboardList size={20} />,
-      label: "Todolist"
+      href: "/summary",
+      icon: <LayoutGrid size={20} />,
+      label: "Statistiche"
     }
   ]
 }
@@ -86,6 +86,7 @@ export default function Sidebar() {
   const { isMobile, toggleSidebar, isOpen } = useSidebar()
   const [role, setRole] = useState<Role | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -95,18 +96,42 @@ export default function Sidebar() {
   useEffect(() => {
     const getUserRole = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("role")
-            .eq("email", user.email)
-            .single()
-          
-          setRole(profile?.role as Role ?? null)
+        setLoading(true)
+        setError(null)
+        
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
+        
+        if (!user) {
+          setRole(null)
+          setLoading(false)
+          return
         }
+        
+        if (authError && authError.message !== 'JWT expired') {
+          throw new Error("Errore di autenticazione")
+        }
+        
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("email", user.email)
+          .single()
+        
+        if (profileError) {
+          throw new Error("Errore nel recupero del profilo")
+        }
+        
+        if (!profile) {
+          throw new Error("Profilo non trovato")
+        }
+
+        setRole(profile.role as Role)
       } catch (error) {
         console.error("Error getting user role:", error)
+        if (error instanceof Error && error.message !== "JWT expired") {
+          setError(error.message)
+        }
+        setRole(null)
       } finally {
         setLoading(false)
       }
@@ -114,18 +139,35 @@ export default function Sidebar() {
 
     getUserRole()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
-        supabase
-          .from("profiles")
-          .select("role")
-          .eq("email", session.user.email)
-          .single()
-          .then(({ data: profile }) => {
-            setRole(profile?.role as Role ?? null)
-          })
+        try {
+          const { data: profile, error: profileError } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("email", session.user.email)
+            .single()
+          
+          if (profileError) {
+            throw new Error("Errore nel recupero del profilo")
+          }
+          
+          if (!profile) {
+            throw new Error("Profilo non trovato")
+          }
+
+          setRole(profile.role as Role)
+          setError(null)
+        } catch (error) {
+          console.error("Error updating user role:", error)
+          if (error instanceof Error) {
+            setError(error.message)
+          }
+          setRole(null)
+        }
       } else {
         setRole(null)
+        setError(null)
       }
     })
 
@@ -136,6 +178,30 @@ export default function Sidebar() {
 
   // Get menu items based on role
   const menuItems = role ? menuItemsByRole[role] : []
+
+  // If there's an error and we have a role, show the error
+  if (error && role) {
+    return (
+      <UISidebar>
+        <SidebarHeader>
+          <div className="flex items-center justify-between px-4">
+            <h1 className="text-lg font-semibold">SICET</h1>
+            {isMobile && (
+              <Button variant="ghost" size="icon" onClick={toggleSidebar}>
+                <Menu className="h-5 w-5" />
+              </Button>
+            )}
+          </div>
+        </SidebarHeader>
+        <SidebarContent>
+          <div className="p-4 text-red-500">
+            <AlertCircle className="h-5 w-5 inline mr-2" />
+            {error}
+          </div>
+        </SidebarContent>
+      </UISidebar>
+    )
+  }
 
   return (
     <UISidebar>

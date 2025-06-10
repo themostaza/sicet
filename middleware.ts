@@ -11,7 +11,7 @@ const rolePermissions = {
     '/device/*/scan',  // Allow access to scan route
     '/todolist/view/*/*/*'  // Allow access to todolist view when redirected from scan
   ],
-  referrer: ['/devices', '/device/*', '/todolist/*'] // Referrer has limited access
+  referrer: ['/summary'] // Referrer can only access summary page
 } as const
 
 type Role = keyof typeof rolePermissions
@@ -34,6 +34,11 @@ function hasAccess(role: Role, path: string, referer?: string): boolean {
   if (role === 'operator' && path.startsWith('/todolist/view/')) {
     // Only allow access if coming from a device scan page
     return (referer?.includes('/device/') && referer?.includes('/scan')) ?? false
+  }
+
+  // Special case for referrer accessing todolist
+  if (role === 'referrer' && path.startsWith('/todolist/')) {
+    return true // Allow referrers to access all todolist routes
   }
   
   return allowedPaths.some(pattern => pathMatches(pattern, path))
@@ -81,7 +86,7 @@ export async function middleware(req: NextRequest) {
   const referer = req.headers.get('referer')
 
   // Define public routes that don't require authentication
-  const publicRoutes = ['/auth/login', '/register']
+  const publicRoutes = ['/auth/login', '/register', '/auth/reset-password']
 
   // Check if the path is public
   if (publicRoutes.includes(path)) {
@@ -90,8 +95,18 @@ export async function middleware(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     
     if (user) {
-      // If user is authenticated and trying to access login/register, redirect to devices
-      const redirectUrl = new URL('/devices', req.url)
+      // Get user role to determine where to redirect
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('email', user.email)
+        .single()
+
+      // If user is authenticated and trying to access login/register, redirect based on role
+      const redirectUrl = new URL(
+        profile?.role === 'referrer' ? '/summary' : '/devices',
+        req.url
+      )
       return NextResponse.redirect(redirectUrl)
     }
     
@@ -104,23 +119,34 @@ export async function middleware(req: NextRequest) {
   
   if (error || !user) {
     // If not authenticated, redirect to login
+    // but preserve the original URL to redirect back after login
     const redirectUrl = new URL('/auth/login', req.url)
+    redirectUrl.searchParams.set('redirectTo', req.nextUrl.pathname)
     return NextResponse.redirect(redirectUrl)
   }
 
   // If authenticated, check role-based permissions
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('role')
     .eq('email', user.email)
     .single()
 
-  const role = profile?.role as Role | undefined
+  if (profileError || !profile) {
+    // If profile not found, redirect to login
+    const redirectUrl = new URL('/auth/login', req.url)
+    return NextResponse.redirect(redirectUrl)
+  }
+
+  const role = profile.role as Role | undefined
 
   // If role is not found or user doesn't have access to the path
   if (!role || !hasAccess(role, path, referer ?? undefined)) {
-    // Redirect to devices page if access is denied
-    const redirectUrl = new URL('/devices', req.url)
+    // Redirect based on role
+    const redirectUrl = new URL(
+      role === 'referrer' ? '/summary' : '/devices',
+      req.url
+    )
     return NextResponse.redirect(redirectUrl)
   }
 
