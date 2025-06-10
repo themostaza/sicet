@@ -1,5 +1,6 @@
 "use client"
 
+import React, { useEffect, useState } from "react"
 import { LayoutGrid, Layers, ClipboardList, FileText, Menu, BellRing, AlertCircle, Users } from "lucide-react"
 import NavLinkWithLoading from "./ui/NavLinkWithLoading"
 import { Button } from "./ui/button"
@@ -12,11 +13,18 @@ import {
   useSidebar
 } from "./ui/sidebar"
 import { UserBox } from "./ui/user-box"
+import { createBrowserClient } from "@supabase/ssr"
 
-export default function Sidebar() {
-  const { isMobile, toggleSidebar, isOpen } = useSidebar()
+type Role = "admin" | "operator" | "referrer"
 
-  const menuItems = [
+// Define menu items for each role
+const menuItemsByRole: Record<Role, Array<{
+  href: string
+  icon: JSX.Element
+  label: string
+  title?: string
+}>> = {
+  admin: [
     {
       href: "/dashboard",
       icon: <LayoutGrid size={20} />,
@@ -43,59 +51,120 @@ export default function Sidebar() {
       label: "Esporta Dati"
     },
     {
-      title: "Alert",
       href: "/alerts",
       icon: <BellRing size={20} />,
       label: "Alert"
     },
     {
-      title: "Admin",
       href: "/admin/preregister",
       icon: <Users size={20} />,
       label: "Pre-registra Utenti"
     }
+  ],
+  operator: [
+    {
+      href: "/devices",
+      icon: <Layers size={20} />,
+      label: "Punti di Controllo"
+    }
+  ],
+  referrer: [
+    {
+      href: "/devices",
+      icon: <Layers size={20} />,
+      label: "Punti di Controllo"
+    },
+    {
+      href: "/todolist",
+      icon: <ClipboardList size={20} />,
+      label: "Todolist"
+    }
   ]
+}
+
+export default function Sidebar() {
+  const { isMobile, toggleSidebar, isOpen } = useSidebar()
+  const [role, setRole] = useState<Role | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+
+  useEffect(() => {
+    const getUserRole = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("email", user.email)
+            .single()
+          
+          setRole(profile?.role as Role ?? null)
+        }
+      } catch (error) {
+        console.error("Error getting user role:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    getUserRole()
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        supabase
+          .from("profiles")
+          .select("role")
+          .eq("email", session.user.email)
+          .single()
+          .then(({ data: profile }) => {
+            setRole(profile?.role as Role ?? null)
+          })
+      } else {
+        setRole(null)
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [supabase])
+
+  // Get menu items based on role
+  const menuItems = role ? menuItemsByRole[role] : []
 
   return (
-    <>
-      {/* Mobile menu button - only show when menu is closed */}
-      {isMobile && !isOpen && (
-        <div className="fixed top-1 right-1 z-[100] md:hidden">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 bg-background/80 backdrop-blur-sm hover:bg-background"
-            onClick={toggleSidebar}
-            aria-label="Toggle Menu"
-          >
-            <Menu className="h-4 w-4" />
-          </Button>
+    <UISidebar>
+      <SidebarHeader>
+        <div className="flex items-center justify-between px-4">
+          <h1 className="text-lg font-semibold">SICET</h1>
+          {isMobile && (
+            <Button variant="ghost" size="icon" onClick={toggleSidebar}>
+              <Menu className="h-5 w-5" />
+            </Button>
+          )}
         </div>
-      )}
+      </SidebarHeader>
 
-      <UISidebar>
-        <SidebarHeader>
-          <h1 className="text-xl font-bold">Sistema di Gestione</h1>
-        </SidebarHeader>
-        <SidebarContent>
+      <SidebarContent>
+        <UserBox />
+        {!loading && (
           <SidebarMenu>
             {menuItems.map((item) => (
               <SidebarMenuItem key={item.href}>
-                <NavLinkWithLoading
-                  href={item.href}
-                  className="flex items-center p-2 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
-                >
+                <NavLinkWithLoading href={item.href}>
                   {item.icon}
-                  <span className="ml-2">{item.label}</span>
+                  <span>{item.label}</span>
                 </NavLinkWithLoading>
               </SidebarMenuItem>
             ))}
           </SidebarMenu>
-          <div className="mt-auto p-4">
-            <UserBox />
-          </div>
-        </SidebarContent>
-      </UISidebar>
-    </>
+        )}
+      </SidebarContent>
+    </UISidebar>
   )
 }
