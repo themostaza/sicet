@@ -16,7 +16,7 @@ export default function NavLinkWithLoading({ href, children, className }: NavLin
   const pathname = usePathname()
   const [isLoading, setIsLoading] = useState(false)
   
-  // Controlla se il link è attivo (pagina corrente)
+  // Check if the link is active (current page)
   const isActive = pathname === href
   
   // Reset loading state when path changes (navigation completes)
@@ -24,7 +24,7 @@ export default function NavLinkWithLoading({ href, children, className }: NavLin
     let timeoutId: NodeJS.Timeout;
     
     if (isLoading && pathname !== href) {
-      // Mantiene lo spinner visibile per almeno 500ms per assicurarsi che sia visibile all'utente
+      // Keep spinner visible for at least 500ms to ensure it's visible to the user
       timeoutId = setTimeout(() => {
         setIsLoading(false)
       }, 500)
@@ -41,9 +41,11 @@ export default function NavLinkWithLoading({ href, children, className }: NavLin
     <Link 
       href={href} 
       className={cn(
-        className,
-        isActive && "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground font-medium",
-        !isActive && "hover:bg-accent hover:text-accent-foreground"
+        "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+        isActive 
+          ? "bg-primary/10 text-primary font-medium hover:bg-primary/15" 
+          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+        className
       )}
       onClick={() => {
         if (pathname !== href) {

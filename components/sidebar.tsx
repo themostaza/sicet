@@ -17,10 +17,10 @@ import { createBrowserClient } from "@supabase/ssr"
 
 type Role = "admin" | "operator" | "referrer"
 
-// Define menu items for each role
+// Define menu items for each role based on middleware permissions
 const menuItemsByRole: Record<Role, Array<{
   href: string
-  icon: JSX.Element
+  icon: React.ReactNode
   label: string
   title?: string
 }>> = {

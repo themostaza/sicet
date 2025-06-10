@@ -82,15 +82,15 @@ export function Sidebar({ children }: { children: React.ReactNode }) {
 }
 
 export function SidebarHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("p-6", className)} {...props} />
+  return <div className={cn("p-4 border-b", className)} {...props} />
 }
 
 export function SidebarContent({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex-1 overflow-auto", className)} {...props} />
+  return <div className={cn("flex-1 overflow-auto py-4", className)} {...props} />
 }
 
 export function SidebarMenu({ className, ...props }: React.HTMLAttributes<HTMLUListElement>) {
-  return <ul className={cn("space-y-1 p-2", className)} {...props} />
+  return <ul className={cn("space-y-1 px-2", className)} {...props} />
 }
 
 export function SidebarMenuItem({ children }: { children: React.ReactNode }) {
@@ -103,7 +103,7 @@ export function SidebarMenuItem({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div onClick={handleClick}>
+    <div onClick={handleClick} className="px-2">
       {children}
     </div>
   )

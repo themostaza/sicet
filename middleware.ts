@@ -5,7 +5,12 @@ import type { NextRequest } from 'next/server'
 // Define route permissions for each role
 const rolePermissions = {
   admin: ['*'], // Admin can access everything
-  operator: ['/devices', '/device/*'], // Operator can only access devices and related routes
+  operator: [
+    '/devices', 
+    '/device/*', 
+    '/device/*/scan',  // Allow access to scan route
+    '/todolist/view/*/*/*'  // Allow access to todolist view when redirected from scan
+  ],
   referrer: ['/devices', '/device/*', '/todolist/*'] // Referrer has limited access
 } as const
 
@@ -22,8 +27,15 @@ function pathMatches(pattern: string, path: string): boolean {
 }
 
 // Helper function to check if a role has access to a path
-function hasAccess(role: Role, path: string): boolean {
+function hasAccess(role: Role, path: string, referer?: string): boolean {
   const allowedPaths = rolePermissions[role]
+  
+  // Special case for operator accessing todolist
+  if (role === 'operator' && path.startsWith('/todolist/view/')) {
+    // Only allow access if coming from a device scan page
+    return (referer?.includes('/device/') && referer?.includes('/scan')) ?? false
+  }
+  
   return allowedPaths.some(pattern => pathMatches(pattern, path))
 }
 
@@ -64,8 +76,9 @@ export async function middleware(req: NextRequest) {
     }
   )
 
-  // Get the current path
+  // Get the current path and referer
   const path = req.nextUrl.pathname
+  const referer = req.headers.get('referer')
 
   // Define public routes that don't require authentication
   const publicRoutes = ['/auth/login', '/register']
@@ -105,7 +118,7 @@ export async function middleware(req: NextRequest) {
   const role = profile?.role as Role | undefined
 
   // If role is not found or user doesn't have access to the path
-  if (!role || !hasAccess(role, path)) {
+  if (!role || !hasAccess(role, path, referer ?? undefined)) {
     // Redirect to devices page if access is denied
     const redirectUrl = new URL('/devices', req.url)
     return NextResponse.redirect(redirectUrl)
