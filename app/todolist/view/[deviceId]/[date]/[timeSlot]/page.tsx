@@ -79,10 +79,13 @@ async function TodolistContent({ params }: { params: { deviceId: string; date: s
   )
 }
 
-export default async function Page({ params }: { params: { deviceId: string; date: string; timeSlot: string } }) {
+export default async function Page(
+  props: { params: Promise<{ deviceId: string; date: string; timeSlot: string }> }
+) {
+  const params = await props.params;
   // Awaiting params to ensure they're fully available
   const { deviceId, date, timeSlot } = await Promise.resolve(params);
-  
+
   // Carica in parallelo tutti i dati necessari
   const [initialData, kpisData, device] = await Promise.all([
     getTodolistTasks({
