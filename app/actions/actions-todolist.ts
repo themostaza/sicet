@@ -38,6 +38,8 @@ const toTask = (row: TasksRow): Task => ({
   value: row.value,
   completion_date: row.completion_date ?? undefined,
   created_at: row.created_at ?? undefined,
+  alert_checked: row.alert_checked ?? false,
+  updated_at: row.updated_at ?? row.created_at ?? new Date().toISOString()
 })
 
 /** -------------------------------------------------------------------------
@@ -401,7 +403,7 @@ export async function checkExistingTasks(deviceId: string, date: string, timeSlo
   
   const { data, error } = await supabase()
     .from("tasks")
-    .select("id, device_id, kpi_id, scheduled_execution, status, value, completion_date, created_at")
+    .select("id, device_id, kpi_id, scheduled_execution, status, value, completion_date, created_at, alert_checked, updated_at")
     .eq("device_id", deviceId)
     .gte("scheduled_execution", startTime)
     .lte("scheduled_execution", endTime)

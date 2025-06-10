@@ -10,6 +10,8 @@ export const TaskSchema = z.object({
   value: z.any().optional(),
   completion_date: z.string().optional().nullable(),
   created_at: z.string().optional().nullable(),
+  alert_checked: z.boolean().optional().default(false),
+  updated_at: z.string().optional().nullable()
 });
 
 export type Task = z.infer<typeof TaskSchema>;
