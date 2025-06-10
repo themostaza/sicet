@@ -11,6 +11,7 @@ import {
   SidebarMenuItem,
   useSidebar
 } from "./ui/sidebar"
+import { UserBox } from "./ui/user-box"
 
 export default function Sidebar() {
   const { isMobile, toggleSidebar, isOpen } = useSidebar()
@@ -90,6 +91,9 @@ export default function Sidebar() {
               </SidebarMenuItem>
             ))}
           </SidebarMenu>
+          <div className="mt-auto p-4">
+            <UserBox />
+          </div>
         </SidebarContent>
       </UISidebar>
     </>
