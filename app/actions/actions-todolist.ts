@@ -294,12 +294,20 @@ function getCurrentTimeSlot(dateObj: Date): TimeSlot {
   return "notte";
 }
 
+// Helper function to get time slot with delay
+function getTimeSlotWithDelay(dateObj: Date, delayHours: number = 3): TimeSlot {
+  const delayedDate = new Date(dateObj);
+  delayedDate.setHours(delayedDate.getHours() - delayHours);
+  return getCurrentTimeSlot(delayedDate);
+}
+
 export async function getTodolistsGroupedWithFilters() {
   const todolists = await getTodolistsGrouped();
 
   const now = new Date();
   const today = now.toISOString().split("T")[0];
   const currentTimeSlot = getCurrentTimeSlot(now);
+  const delayedTimeSlot = getTimeSlotWithDelay(now);
 
   const filtered = {
     all: todolists,
@@ -307,19 +315,19 @@ export async function getTodolistsGroupedWithFilters() {
       (item) =>
         item.date === today &&
         item.status !== "completed" &&
-        !(timeSlotOrder[item.time_slot as TimeSlot] < timeSlotOrder[currentTimeSlot])
+        !(timeSlotOrder[item.time_slot as TimeSlot] < timeSlotOrder[delayedTimeSlot])
     ),
     overdue: todolists.filter(
       (item) =>
         item.status !== "completed" &&
         (new Date(item.date) < new Date(today) ||
-          (item.date === today && timeSlotOrder[item.time_slot as TimeSlot] < timeSlotOrder[currentTimeSlot]))
+          (item.date === today && timeSlotOrder[item.time_slot as TimeSlot] < timeSlotOrder[delayedTimeSlot]))
     ),
     future: todolists.filter(
       (item) =>
         item.status !== "completed" &&
         (new Date(item.date) > new Date(today) ||
-          (item.date === today && timeSlotOrder[item.time_slot as TimeSlot] > timeSlotOrder[currentTimeSlot]))
+          (item.date === today && timeSlotOrder[item.time_slot as TimeSlot] > timeSlotOrder[delayedTimeSlot]))
     ),
     completed: todolists.filter((item) => item.status === "completed"),
   };
