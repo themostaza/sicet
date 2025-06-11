@@ -87,7 +87,7 @@ export default function PreRegisterPage() {
 
       /* 3. invia mail reset-password con redirect + email */
       const { error: resetErr } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/register?email=${encodeURIComponent(email)}`
+        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/register?email=${encodeURIComponent(email)}`
       });
 
       if (resetErr) { toast.error('Invio mail fallito'); return; }
