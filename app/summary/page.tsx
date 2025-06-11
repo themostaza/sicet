@@ -3,448 +3,412 @@
 import { useEffect, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowUp, Calendar, Activity, BarChart2, PieChart as PieChartIcon, TrendingUp } from 'lucide-react';
-import {
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar,
-  ComposedChart,
-  Scatter
-} from 'recharts';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Activity, Clock, User, Search, Filter } from 'lucide-react';
+import { format } from 'date-fns';
+import { it } from 'date-fns/locale';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
+import { CalendarIcon } from 'lucide-react';
+import type { Database } from '@/supabase/database.types';
+import type { PostgrestError } from '@supabase/supabase-js';
 
-// Chart colors
-const chartColors = {
-  primary: '#2563eb',
-  secondary: '#7c3aed',
-  completed: '#16a34a',
-  pending: '#dc2626',
-  neutral: '#6b7280'
+type UserActivity = Database['public']['Tables']['user_activities']['Row'] & {
+  profile?: {
+    email: string;
+    role: 'operator' | 'admin' | 'referrer';
+  };
 };
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+type ActionType = Database['public']['Enums']['user_action_type'];
+type EntityType = Database['public']['Enums']['entity_type'];
 
-// Define types for the chart data
-type WeeklyTrendData = {
-  date: string;
-  completati: number;
-  pendenti: number;
+// Semplifichiamo i tipi di azione
+type SimplifiedActionType = 'create' | 'update' | 'delete';
+type SelectValue = SimplifiedActionType | EntityType | 'all';
+
+const simplifiedActionTypeMap: Record<ActionType, SimplifiedActionType> = {
+  create_device: 'create',
+  create_kpi: 'create',
+  create_todolist: 'create',
+  complete_task: 'update',
+  update_device: 'update',
+  update_kpi: 'update',
+  update_todolist: 'update',
+  delete_device: 'delete',
+  delete_kpi: 'delete',
+  delete_todolist: 'delete'
 };
 
-type DevicePerformanceData = {
-  name: string;
-  completati: number;
-  pendenti: number;
-  efficienza: number;
+const simplifiedActionLabels: Record<SimplifiedActionType, string> = {
+  create: 'Creazione',
+  update: 'Modifica',
+  delete: 'Eliminazione'
 };
 
-type TodolistDistributionData = {
-  name: string;
-  value: number;
+const simplifiedActionColors: Record<SimplifiedActionType, string> = {
+  create: 'bg-green-100 text-green-800',
+  update: 'bg-yellow-100 text-yellow-800',
+  delete: 'bg-red-100 text-red-800'
 };
 
-type CompletionTrendData = {
-  mese: string;
-  completati: number;
-  pendenti: number;
-  tasso: number;
+const entityTypeLabels: Record<EntityType, string> = {
+  device: 'Punto di Controllo',
+  kpi: 'Device',
+  todolist: 'Todo',
+  task: 'Task'
 };
 
-export default function SummaryPage() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [stats, setStats] = useState({
-    devices: 0,
-    todolist: {
-      all: 0,
-      today: 0,
-      overdue: 0,
-      completed: 0,
-      pending: 0
-    }
-  });
+const getMetadataLabel = (key: string): string => {
+  const labelMap: Record<string, string> = {
+    device_name: 'Nome',
+    device_location: 'Posizione',
+    kpi_name: 'Nome',
+    kpi_description: 'Descrizione',
+    device_id: 'ID',
+    kpi_id: 'ID',
+    scheduled_execution: 'Data Programmata',
+    time_slot: 'Fascia Oraria'
+  };
+  return labelMap[key] || key;
+};
 
-  const [statsData, setStatsData] = useState<{
-    weeklyTrend: WeeklyTrendData[];
-    devicePerformance: DevicePerformanceData[];
-    todolistDistribution: TodolistDistributionData[];
-    completionTrend: CompletionTrendData[];
-  }>({
-    weeklyTrend: [],
-    devicePerformance: [],
-    todolistDistribution: [],
-    completionTrend: []
-  });
-
+export default function ActivityDashboard() {
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
+  const [activities, setActivities] = useState<UserActivity[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [selectedActions, setSelectedActions] = useState<SelectValue[]>([]);
+  const [selectedEntities, setSelectedEntities] = useState<SelectValue[]>([]);
+  const [dateRange, setDateRange] = useState<{
+    from: Date | undefined;
+    to: Date | undefined;
+  }>({
+    from: undefined,
+    to: undefined,
+  });
+  const [users, setUsers] = useState<Array<{ id: string; email: string; role: string }>>([]);
 
+  // Carica utenti all'avvio
   useEffect(() => {
-    async function loadSummaryData() {
+    async function loadUsers() {
+      const { data: profiles } = await supabase.from('profiles').select('id, email, role');
+      setUsers(profiles || []);
+    }
+    loadUsers();
+  }, []);
+
+  // Carica attività SOLO quando la lista utenti è pronta
+  useEffect(() => {
+    if (users.length === 0) return; // aspetta che gli utenti siano caricati
+
+    async function loadActivities() {
       try {
-        // Load data in parallel
-        const [todolistsData, devicesData] = await Promise.all([
-          supabase
-            .from('todolists')
-            .select('*', { count: 'exact' })
-            .eq('status', 'pending'),
-          supabase
-            .from('devices')
-            .select('*', { count: 'exact' })
-        ]);
+        setIsLoading(true);
+        setError(null);
 
-        // Calculate todolist statistics
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        // Recupera la sessione utente dal client SSR
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw new Error('Errore di autenticazione: ' + sessionError.message);
+        if (!session || !session.user) throw new Error('Utente non autenticato');
+        const user = session.user;
+
+        // Recupera il profilo
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('email', user.email)
+          .single();
+        if (profileError) throw new Error('Errore nel recupero del profilo: ' + profileError.message);
+        if (!profile || !['referrer', 'admin'].includes(profile.role)) {
+          throw new Error('Accesso non autorizzato: solo i referenti e gli amministratori possono visualizzare questa pagina');
+        }
         
-        const todolists = todolistsData.data || [];
-        const overdue = todolists.filter(t => new Date(t.due_date) < today).length;
-        const todayTasks = todolists.filter(t => {
-          const dueDate = new Date(t.due_date);
-          return dueDate.toDateString() === today.toDateString();
-        }).length;
-        const completed = todolists.filter(t => t.status === 'completed').length;
+        let query = supabase
+          .from('user_activities')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-        setStats({
-          devices: devicesData.count || 0,
-          todolist: {
-            all: todolists.length,
-            today: todayTasks,
-            overdue: overdue,
-            completed: completed,
-            pending: todolists.length - completed
-          }
-        });
+        // Applica il filtro per intervallo di date
+        if (dateRange.from) {
+          query = query.gte('created_at', dateRange.from.toISOString());
+        }
+        if (dateRange.to) {
+          const endDate = new Date(dateRange.to);
+          endDate.setHours(23, 59, 59, 999);
+          query = query.lte('created_at', endDate.toISOString());
+        }
 
-        // Simulated data for charts
-        setStatsData({
-          weeklyTrend: [
-            { date: 'Lun', completati: 14, pendenti: 7 },
-            { date: 'Mar', completati: 13, pendenti: 8 },
-            { date: 'Mer', completati: 15, pendenti: 5 },
-            { date: 'Gio', completati: 12, pendenti: 9 },
-            { date: 'Ven', completati: 18, pendenti: 6 },
-            { date: 'Sab', completati: 10, pendenti: 4 },
-            { date: 'Dom', completati: 6, pendenti: 3 },
-          ],
-          devicePerformance: [
-            { name: 'Device A', completati: 42, pendenti: 8, efficienza: 92 },
-            { name: 'Device B', completati: 38, pendenti: 12, efficienza: 87 },
-            { name: 'Device C', completati: 55, pendenti: 5, efficienza: 95 },
-          ],
-          todolistDistribution: [
-            { name: 'Completati', value: 65 },
-            { name: 'In Scadenza', value: 20 },
-            { name: 'Scaduti', value: 15 },
-          ],
-          completionTrend: [
-            { mese: 'Gen', completati: 120, pendenti: 30, tasso: 80 },
-            { mese: 'Feb', completati: 150, pendenti: 25, tasso: 85 },
-            { mese: 'Mar', completati: 180, pendenti: 20, tasso: 90 },
-            { mese: 'Apr', completati: 160, pendenti: 35, tasso: 82 },
-            { mese: 'Mag', completati: 200, pendenti: 15, tasso: 93 },
-            { mese: 'Giu', completati: 170, pendenti: 25, tasso: 87 },
-          ]
-        });
+        const { data: activitiesData, error: activitiesError } = await query;
 
-      } catch (error) {
-        console.error('Error loading summary data:', error);
+        if (activitiesError) throw new Error('Errore nel recupero delle attività: ' + activitiesError.message);
+
+        // Combina i dati
+        const activities = activitiesData?.map(activity => {
+          const profile = users.find(p => p.id === activity.user_id);
+          return {
+            ...activity,
+            profile: profile ? {
+              email: profile.email,
+              role: profile.role
+            } : undefined
+          };
+        }) || [];
+
+        setActivities(activities);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Errore sconosciuto');
+        console.error('Error:', err);
       } finally {
         setIsLoading(false);
       }
     }
+    loadActivities();
+  }, [users]);
 
-    loadSummaryData();
-  }, [supabase]);
+  // Filtra le attività
+  const filteredActivities = activities.filter((activity) => {
+    const matchesUser = selectedUsers.length === 0 || 
+      (activity.profile?.email && selectedUsers.includes(activity.profile.email));
+
+    const matchesAction = selectedActions.length === 0 || 
+      selectedActions.includes('all') ||
+      selectedActions.includes(simplifiedActionTypeMap[activity.action_type]);
+
+    const matchesEntity = selectedEntities.length === 0 || 
+      selectedEntities.includes('all') ||
+      selectedEntities.includes(activity.entity_type);
+
+    return matchesUser && matchesAction && matchesEntity;
+  });
+
+  const handleSelectChange = (
+    value: string,
+    setter: React.Dispatch<React.SetStateAction<SelectValue[]>>,
+    type: 'action' | 'entity'
+  ) => {
+    if (value === 'all') {
+      setter([]);
+    } else {
+      const values = value.split(',') as SelectValue[];
+      setter(values);
+    }
+  };
 
   return (
-    <div className="flex-1 space-y-6">
+    <div className="flex-1 space-y-6 p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Dashboard Referente</h1>
-        <div className="text-sm text-muted-foreground">
-          Ultimo aggiornamento: {new Date().toLocaleString('it-IT')}
-        </div>
+        <h1 className="text-3xl font-bold">Dashboard Attività</h1>
       </div>
 
-      {/* Metriche principali */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-blue-700 flex items-center">
-              <Calendar className="h-4 w-4 mr-2" />
-              Attività Oggi
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-700">{isLoading ? "..." : stats.todolist.today}</div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              {stats.todolist.overdue} attività scadute
+      {/* Filtri */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Filtri</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Selezione Utenti */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Utenti</label>
+              <Select
+                value={selectedUsers.length === 0 ? 'all' : selectedUsers.join(',')}
+                onValueChange={(value) => setSelectedUsers(value === 'all' ? [] : value.split(','))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleziona utenti" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tutti gli utenti</SelectItem>
+                  {users.map((user) => (
+                    <SelectItem key={user.id} value={user.email}>
+                      {user.email} ({user.role})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-100">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-green-700 flex items-center">
-              <Activity className="h-4 w-4 mr-2" />
-              Completamento
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-700">
-              {isLoading ? "..." : `${Math.round((stats.todolist.completed / stats.todolist.all) * 100)}%`}
+            {/* Selezione Azioni */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Azioni</label>
+              <Select
+                value={selectedActions.length === 0 ? 'all' : selectedActions.join(',')}
+                onValueChange={(value) => handleSelectChange(value, setSelectedActions, 'action')}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleziona azioni" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tutte le azioni</SelectItem>
+                  {Object.entries(simplifiedActionLabels).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              {stats.todolist.completed} completate su {stats.todolist.all} totali
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card className="bg-gradient-to-br from-purple-50 to-violet-50 border-purple-100">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-purple-700 flex items-center">
-              <BarChart2 className="h-4 w-4 mr-2" />
-              Punti di Controllo
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-purple-700">{isLoading ? "..." : stats.devices}</div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              Totale dispositivi monitorati
+            {/* Selezione Entità */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Entità</label>
+              <Select
+                value={selectedEntities.length === 0 ? 'all' : selectedEntities.join(',')}
+                onValueChange={(value) => handleSelectChange(value, setSelectedEntities, 'entity')}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleziona entità" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tutte le entità</SelectItem>
+                  {Object.entries(entityTypeLabels).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </CardContent>
-        </Card>
-      </div>
 
-      <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="overview">Panoramica</TabsTrigger>
-          <TabsTrigger value="performance">Performance</TabsTrigger>
-          <TabsTrigger value="trends">Trend</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="overview">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <BarChart2 className="h-5 w-5 mr-2 text-primary" />
-                  Stato Attività
-                </CardTitle>
-                <CardDescription>
-                  Distribuzione delle attività per stato
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="h-[400px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={statsData.todolistDistribution}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={true}
-                        label={({name, percent}) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                        outerRadius={120}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        {statsData.todolistDistribution.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <TrendingUp className="h-5 w-5 mr-2 text-primary" />
-                  Performance Dispositivi
-                </CardTitle>
-                <CardDescription>
-                  Efficienza per punto di controllo
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="h-[400px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={statsData.devicePerformance}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+            {/* Selezione Intervallo Date */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Intervallo Date</label>
+              <div className="grid gap-2">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !dateRange.from && "text-muted-foreground"
+                      )}
                     >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis domain={[0, 100]} />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="efficienza" name="Efficienza %" fill={chartColors.primary} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateRange.from ? (
+                        dateRange.to ? (
+                          <>
+                            {format(dateRange.from, "d MMM yyyy", { locale: it })} -{" "}
+                            {format(dateRange.to, "d MMM yyyy", { locale: it })}
+                          </>
+                        ) : (
+                          format(dateRange.from, "d MMM yyyy", { locale: it })
+                        )
+                      ) : (
+                        <span>Seleziona intervallo date</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      initialFocus
+                      mode="range"
+                      defaultMonth={dateRange.from}
+                      selected={{
+                        from: dateRange.from,
+                        to: dateRange.to
+                      }}
+                      onSelect={(range) => {
+                        if (range) {
+                          setDateRange({
+                            from: range.from,
+                            to: range.to
+                          });
+                        } else {
+                          setDateRange({
+                            from: undefined,
+                            to: undefined
+                          });
+                        }
+                      }}
+                      numberOfMonths={2}
+                      locale={it}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
           </div>
-        </TabsContent>
-        
-        <TabsContent value="performance">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Activity className="h-5 w-5 mr-2 text-primary" />
-                  Trend Completamento
-                </CardTitle>
-                <CardDescription>
-                  Andamento mensile delle attività
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="h-[400px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart
-                      data={statsData.completionTrend}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="mese" />
-                      <YAxis yAxisId="left" />
-                      <YAxis yAxisId="right" orientation="right" domain={[0, 100]} />
-                      <Tooltip />
-                      <Legend />
-                      <Bar yAxisId="left" dataKey="completati" name="Completati" fill={chartColors.completed} />
-                      <Bar yAxisId="left" dataKey="pendenti" name="Pendenti" fill={chartColors.pending} />
-                      <Line yAxisId="right" type="monotone" dataKey="tasso" name="Tasso Completamento %" stroke={chartColors.primary} strokeWidth={2} />
-                    </ComposedChart>
-                  </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* Timeline delle attività */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Activity className="h-5 w-5 mr-2" />
+            Timeline Attività
+          </CardTitle>
+          <CardDescription>
+            Visualizza tutte le attività degli utenti nel sistema
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ScrollArea className="h-[600px] pr-4">
+            <div className="space-y-4">
+              {isLoading ? (
+                <div className="flex items-center justify-center h-32">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Calendar className="h-5 w-5 mr-2 text-primary" />
-                  Distribuzione Settimanale
-                </CardTitle>
-                <CardDescription>
-                  Attività per giorno della settimana
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="h-[400px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={statsData.weeklyTrend}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="completati" name="Completati" fill={chartColors.completed} />
-                      <Bar dataKey="pendenti" name="Pendenti" fill={chartColors.pending} />
-                    </BarChart>
-                  </ResponsiveContainer>
+              ) : error ? (
+                <div className="text-center text-red-500 py-8">{error}</div>
+              ) : filteredActivities.length === 0 ? (
+                <div className="text-center text-muted-foreground py-8">
+                  Nessuna attività trovata
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-        
-        <TabsContent value="trends">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <TrendingUp className="h-5 w-5 mr-2 text-primary" />
-                  Trend Attività
-                </CardTitle>
-                <CardDescription>
-                  Andamento delle attività nel tempo
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="h-[400px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart
-                      data={statsData.completionTrend}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-                    >
-                      <defs>
-                        <linearGradient id="colorCompletati" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor={chartColors.completed} stopOpacity={0.8}/>
-                          <stop offset="95%" stopColor={chartColors.completed} stopOpacity={0.1}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="mese" />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Area type="monotone" dataKey="completati" name="Attività Completate" stroke={chartColors.completed} fillOpacity={1} fill="url(#colorCompletati)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Activity className="h-5 w-5 mr-2 text-primary" />
-                  Correlazione Attività
-                </CardTitle>
-                <CardDescription>
-                  Relazione tra volume e completamento
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="h-[400px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart
-                      data={statsData.completionTrend}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="mese" />
-                      <YAxis yAxisId="left" />
-                      <YAxis yAxisId="right" orientation="right" domain={[0, 100]} />
-                      <Tooltip />
-                      <Legend />
-                      <Bar yAxisId="left" dataKey="completati" name="Volume Attività" fill={chartColors.primary} />
-                      <Line yAxisId="right" type="monotone" dataKey="tasso" name="Tasso Completamento %" stroke={chartColors.secondary} strokeWidth={2} />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-      </Tabs>
+              ) : (
+                filteredActivities.map((activity) => (
+                  <div key={activity.id} className="flex gap-4 p-4 rounded-lg border bg-card">
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Badge 
+                          variant="outline" 
+                          className={simplifiedActionColors[simplifiedActionTypeMap[activity.action_type]]}
+                        >
+                          {simplifiedActionLabels[simplifiedActionTypeMap[activity.action_type]]}
+                        </Badge>
+                        <span className="text-sm text-muted-foreground">
+                          {entityTypeLabels[activity.entity_type]}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{activity.profile?.email}</span>
+                        <span className="text-muted-foreground">•</span>
+                        <span className="text-muted-foreground">{activity.profile?.role}</span>
+                      </div>
+                      {activity.metadata && Object.keys(activity.metadata).length > 0 && (
+                        <div className="text-sm text-muted-foreground">
+                          {Object.entries(activity.metadata).map(([key, value]) => (
+                            <span key={key} className="mr-2">
+                              {getMetadataLabel(key)}: {typeof value === 'object' ? JSON.stringify(value) : value}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                      <Clock className="h-4 w-4" />
+                      <time dateTime={activity.created_at}>
+                        {format(new Date(activity.created_at), "d MMM yyyy 'alle' HH:mm", { locale: it })}
+                      </time>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </ScrollArea>
+        </CardContent>
+      </Card>
     </div>
   );
 } 

@@ -49,6 +49,17 @@ create policy "Users can view their own activities"
     on public.user_activities for select
     using (auth.uid() = user_id);
 
+-- Policy to allow referrers and admins to view all activities
+create policy "Referrers and admins can view all activities"
+    on public.user_activities for select
+    using (
+        exists (
+            select 1 from public.profiles
+            where profiles.email = auth.jwt()->>'email'
+            and profiles.role in ('referrer', 'admin')
+        )
+    );
+
 -- Policy to allow system to insert activities
 create policy "System can insert activities"
     on public.user_activities for insert
