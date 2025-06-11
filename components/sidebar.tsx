@@ -15,6 +15,7 @@ import {
 import { UserBox } from "./ui/user-box"
 import { createBrowserClient } from "@supabase/ssr"
 import Image from "next/image"
+import { Avatar, AvatarImage, AvatarFallback } from "./ui/avatar"
 
 type Role = "admin" | "operator" | "referrer"
 
@@ -162,14 +163,16 @@ export default function Sidebar() {
         <SidebarHeader>
           <div className="flex items-center justify-between px-4">
             <div className="flex items-center gap-2">
-              <Image
-                src="/logo.webp"
-                alt="Sicet Logo"
-                width={32}
-                height={32}
-                style={{ height: 'auto', width: 'auto' }}
-                className="rounded-sm"
-              />
+              <Avatar className="h-8 w-8 rounded-sm">
+                <AvatarImage
+                  src="/logo.webp"
+                  alt="Sicet Logo"
+                  className="rounded-sm"
+                />
+                <AvatarFallback className="rounded-sm bg-muted">
+                  <LayoutGrid className="h-4 w-4" />
+                </AvatarFallback>
+              </Avatar>
               <h1 className="text-lg font-semibold">Sistema di gestione</h1>
             </div>
             {isMobile && (
@@ -194,14 +197,16 @@ export default function Sidebar() {
       <SidebarHeader>
         <div className="flex items-center justify-between px-4">
           <div className="flex items-center gap-2">
-            <Image
-              src="/logo.webp"
-              alt="Sicet Logo"
-              width={32}
-              height={32}
-              style={{ height: 'auto', width: 'auto' }}
-              className="rounded-sm"
-            />
+            <Avatar className="h-8 w-8 rounded-sm">
+              <AvatarImage
+                src="/logo.webp"
+                alt="Sicet Logo"
+                className="rounded-sm"
+              />
+              <AvatarFallback className="rounded-sm bg-muted">
+                <LayoutGrid className="h-4 w-4" />
+              </AvatarFallback>
+            </Avatar>
             <h1 className="text-lg font-semibold">Sistema di gestione</h1>
           </div>
           {isMobile && (
