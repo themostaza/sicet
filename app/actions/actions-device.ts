@@ -11,6 +11,7 @@ import {
   DeviceUpdateSchema, 
   ListParamsSchema 
 } from "@/lib/validation/device-schemas";
+import { logCurrentUserActivity } from "./actions-activity";
 
 /** -------------------------------------------------------------------------
  * 1 · SUPABASE CLIENT TIPIZZATO
@@ -22,8 +23,8 @@ export type DevicesRow = DevicesTable["Row"];
 type DevicesInsertRow = DevicesTable["Insert"];
 type DevicesUpdateRow = DevicesTable["Update"];
 
-const supabase = (): SupabaseClient<Database> =>
-  createServerSupabaseClient() as SupabaseClient<Database>;
+const supabase = async (): Promise<SupabaseClient<Database>> =>
+  await createServerSupabaseClient();
 
 /** -------------------------------------------------------------------------
  * 2 · MAPPERS camelCase ⇆ snake_case
@@ -109,7 +110,7 @@ export async function getDevices(
 ): Promise<{ devices: Device[]; hasMore: boolean }> {
   const { offset, limit } = ListParamsSchema.parse(params);
 
-  const { data, count, error } = await supabase()
+  const { data, count, error } = await (await supabase())
     .from("devices")
     .select("*", { count: "exact" })
     .order("created_at", { ascending: false })
@@ -123,7 +124,7 @@ export async function getDevices(
 }
 
 export async function getDevice(id: string): Promise<Device | null> {
-  const { data, error } = await supabase()
+  const { data, error } = await (await supabase())
     .from("devices")
     .select("*")
     .eq("id", id)
@@ -137,13 +138,19 @@ export async function createDevice(raw: unknown): Promise<Device> {
   try {
     const d = DeviceInsertSchema.parse(raw);
 
-    const { data, error } = await supabase()
+    const { data, error } = await (await supabase())
       .from("devices")
       .insert(toInsertRow(d))
       .select()
       .single();
 
     if (error) handlePostgrestError(error);
+
+    // Log the activity
+    await logCurrentUserActivity('create_device', 'device', data!.id, {
+      device_name: data!.name,
+      device_location: data!.location
+    });
 
     revalidatePath("/device");
     return toDevice(data!);
@@ -159,7 +166,7 @@ export async function updateDevice(raw: unknown): Promise<Device> {
   try {
     const d = DeviceUpdateSchema.parse(raw);
 
-    const { data, error } = await supabase()
+    const { data, error } = await (await supabase())
       .from("devices")
       .update(toUpdateRow(d))
       .eq("id", d.id)
@@ -167,6 +174,12 @@ export async function updateDevice(raw: unknown): Promise<Device> {
       .single();
 
     if (error) handlePostgrestError(error);
+
+    // Log the activity
+    await logCurrentUserActivity('update_device', 'device', data!.id, {
+      device_name: data!.name,
+      device_location: data!.location
+    });
 
     revalidatePath("/device");
     return toDevice(data!);
@@ -179,11 +192,27 @@ export async function updateDevice(raw: unknown): Promise<Device> {
 }
 
 export async function deleteDevice(id: string): Promise<void> {
-  const { error } = await supabase()
+  // Get device info before deleting for logging
+  const { data: deviceData } = await (await supabase())
+    .from("devices")
+    .select("name, location")
+    .eq("id", id)
+    .single();
+
+  const { error } = await (await supabase())
     .from("devices")
     .delete()
     .eq("id", id);
 
   if (error) handlePostgrestError(error);
+
+  // Log the activity
+  if (deviceData) {
+    await logCurrentUserActivity('delete_device', 'device', id, {
+      device_name: deviceData.name,
+      device_location: deviceData.location
+    });
+  }
+
   revalidatePath("/device");
 }

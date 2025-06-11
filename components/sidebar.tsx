@@ -167,9 +167,10 @@ export default function Sidebar() {
                 alt="Sicet Logo"
                 width={32}
                 height={32}
+                style={{ height: 'auto', width: 'auto' }}
                 className="rounded-sm"
               />
-              <h1 className="text-lg font-semibold">SICET</h1>
+              <h1 className="text-lg font-semibold">Sistema di gestione</h1>
             </div>
             {isMobile && (
               <Button variant="ghost" size="icon" onClick={toggleSidebar}>
@@ -198,9 +199,10 @@ export default function Sidebar() {
               alt="Sicet Logo"
               width={32}
               height={32}
+              style={{ height: 'auto', width: 'auto' }}
               className="rounded-sm"
             />
-            <h1 className="text-lg font-semibold">SICET</h1>
+            <h1 className="text-lg font-semibold">Sistema di gestione</h1>
           </div>
           {isMobile && (
             <Button variant="ghost" size="icon" onClick={toggleSidebar}>

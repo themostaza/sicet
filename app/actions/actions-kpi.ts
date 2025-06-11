@@ -11,6 +11,7 @@ import {
   KpiUpdateSchema,
   ListParamsSchema
 } from "@/lib/validation/kpi-schemas";
+import { logCurrentUserActivity } from "./actions-activity";
 
 /** -------------------------------------------------------------------------
  * 1 · SUPABASE CLIENT TIPIZZATO
@@ -21,8 +22,8 @@ export type KpisRow = KpisTable["Row"];
 type KpisInsertRow = KpisTable["Insert"];
 type KpisUpdateRow = KpisTable["Update"];
 
-const supabase = (): SupabaseClient<Database> =>
-  createServerSupabaseClient() as SupabaseClient<Database>;
+const supabase = async (): Promise<SupabaseClient<Database>> =>
+  await createServerSupabaseClient();
 
 /** -------------------------------------------------------------------------
  * 2 · MAPPERS camelCase ⇆ snake_case
@@ -127,7 +128,7 @@ export async function getKpis(
 ): Promise<{ kpis: Kpi[]; hasMore: boolean }> {
   const { offset, limit } = ListParamsSchema.parse(params);
 
-  const { data, count, error } = await supabase()
+  const { data, count, error } = await (await supabase())
     .from("kpis")
     .select("*", { count: "exact" })
     .order("created_at", { ascending: false })
@@ -141,7 +142,7 @@ export async function getKpis(
 }
 
 export async function getKpi(id: string): Promise<Kpi | null> {
-  const { data, error } = await supabase()
+  const { data, error } = await (await supabase())
     .from("kpis")
     .select("*")
     .eq("id", id)
@@ -153,21 +154,23 @@ export async function getKpi(id: string): Promise<Kpi | null> {
 
 export async function createKpi(raw: unknown): Promise<Kpi> {
   try {
-    // Log per debug
-    console.log("Raw data:", JSON.stringify(raw));
-    
     const k = KpiInsertSchema.parse(raw);
     
     const insertRow = toInsertRow(k);
-    console.log("Processed data:", JSON.stringify(insertRow));
 
-    const { data, error } = await supabase()
+    const { data, error } = await (await supabase())
       .from("kpis")
       .insert(insertRow)
       .select()
       .single();
 
     if (error) handlePostgrestError(error);
+
+    // Log the activity
+    await logCurrentUserActivity('create_kpi', 'kpi', data!.id, {
+      kpi_name: data!.name,
+      kpi_description: data!.description
+    });
 
     revalidatePath("/kpi");
     return toKpi(data!);
@@ -184,7 +187,7 @@ export async function updateKpi(raw: unknown): Promise<Kpi> {
   try {
     const k = KpiUpdateSchema.parse(raw);
 
-    const { data, error } = await supabase()
+    const { data, error } = await (await supabase())
       .from("kpis")
       .update(toUpdateRow(k))
       .eq("id", k.id)
@@ -192,6 +195,12 @@ export async function updateKpi(raw: unknown): Promise<Kpi> {
       .single();
 
     if (error) handlePostgrestError(error);
+
+    // Log the activity
+    await logCurrentUserActivity('update_kpi', 'kpi', data!.id, {
+      kpi_name: data!.name,
+      kpi_description: data!.description
+    });
 
     revalidatePath("/kpi");
     return toKpi(data!);
@@ -204,11 +213,27 @@ export async function updateKpi(raw: unknown): Promise<Kpi> {
 }
 
 export async function deleteKpi(id: string): Promise<void> {
-  const { error } = await supabase()
+  // Get KPI info before deleting for logging
+  const { data: kpiData } = await (await supabase())
+    .from("kpis")
+    .select("name, description")
+    .eq("id", id)
+    .single();
+
+  const { error } = await (await supabase())
     .from("kpis")
     .delete()
     .eq("id", id);
 
   if (error) handlePostgrestError(error);
+
+  // Log the activity
+  if (kpiData) {
+    await logCurrentUserActivity('delete_kpi', 'kpi', id, {
+      kpi_name: kpiData.name,
+      kpi_description: kpiData.description
+    });
+  }
+
   revalidatePath("/kpi");
 }

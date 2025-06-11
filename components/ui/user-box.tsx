@@ -93,16 +93,16 @@ export function UserBox() {
 
   if (loading) {
     return (
-      <Card className="p-4 animate-pulse">
+      <div className="p-4">
         <div className="h-4 bg-muted rounded w-3/4 mb-2"></div>
         <div className="h-4 bg-muted rounded w-1/2"></div>
-      </Card>
+      </div>
     )
   }
 
   if (!user) {
     return (
-      <Card className="p-4">
+      <div className="p-4">
         <Button
           variant="outline"
           className="w-full"
@@ -111,7 +111,7 @@ export function UserBox() {
           <User className="mr-2 h-4 w-4" />
           Accedi
         </Button>
-      </Card>
+      </div>
     )
   }
 
@@ -122,8 +122,7 @@ export function UserBox() {
   }
 
   return (
-    <Card className="p-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between p-4">
         <div>
           <p className="text-sm font-medium">{user.email}</p>
           <p className="text-xs text-muted-foreground">{role ? roleLabels[role] : "Utente"}</p>
@@ -137,6 +136,5 @@ export function UserBox() {
           <LogOut className="h-4 w-4" />
         </Button>
       </div>
-    </Card>
   )
 } 

@@ -6,7 +6,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export type Database = {
+export interface Database {
   public: {
     Tables: {
       devices: {
@@ -51,194 +51,141 @@ export type Database = {
           description: string | null
           id: string
           name: string
-          value: Json
+          value: Json | null
         }
         Insert: {
           created_at?: string | null
           description?: string | null
           id: string
           name: string
-          value: Json
+          value?: Json | null
         }
         Update: {
           created_at?: string | null
           description?: string | null
           id?: string
           name?: string
-          value?: Json
+          value?: Json | null
         }
         Relationships: []
       }
       tasks: {
         Row: {
-          id: string
-          scheduled_execution: string
-          kpi_id: string
-          device_id: string
-          status: string
-          value: any
+          alert_checked: boolean | null
           completion_date: string | null
-          alert_checked: boolean
-          created_at: string
-          updated_at: string
+          created_at: string | null
+          device_id: string
+          id: string
+          kpi_id: string
+          scheduled_execution: string | null
+          status: string
+          updated_at: string | null
+          value: Json | null
         }
         Insert: {
-          id?: string
-          scheduled_execution: string
-          kpi_id: string
-          device_id: string
-          status?: string
-          value?: any
+          alert_checked?: boolean | null
           completion_date?: string | null
-          alert_checked?: boolean
-          created_at?: string
-          updated_at?: string
+          created_at?: string | null
+          device_id: string
+          id: string
+          kpi_id: string
+          scheduled_execution?: string | null
+          status: string
+          updated_at?: string | null
+          value?: Json | null
         }
         Update: {
-          id?: string
-          scheduled_execution?: string
-          kpi_id?: string
-          device_id?: string
-          status?: string
-          value?: any
+          alert_checked?: boolean | null
           completion_date?: string | null
-          alert_checked?: boolean
-          created_at?: string
-          updated_at?: string
+          created_at?: string | null
+          device_id?: string
+          id?: string
+          kpi_id?: string
+          scheduled_execution?: string | null
+          status?: string
+          updated_at?: string | null
+          value?: Json | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "fk_device"
-            columns: ["device_id"]
-            isOneToOne: false
-            referencedRelation: "devices"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_kpi"
-            columns: ["kpi_id"]
-            isOneToOne: false
-            referencedRelation: "kpis"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_device_id_fkey"
-            columns: ["device_id"]
-            isOneToOne: false
-            referencedRelation: "devices"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_kpi_id_fkey"
-            columns: ["kpi_id"]
-            isOneToOne: false
-            referencedRelation: "kpis"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       kpi_alerts: {
         Row: {
+          created_at: string | null
           id: string
           kpi_id: string
-          device_id: string
-          is_active: boolean
-          email: string
-          conditions: Json
-          created_at: string
-          updated_at: string
+          threshold: Json
         }
         Insert: {
-          id?: string
+          created_at?: string | null
+          id: string
           kpi_id: string
-          device_id: string
-          is_active?: boolean
-          email: string
-          conditions: Json
-          created_at?: string
-          updated_at?: string
+          threshold: Json
         }
         Update: {
+          created_at?: string | null
           id?: string
           kpi_id?: string
-          device_id?: string
-          is_active?: boolean
-          email?: string
-          conditions?: Json
-          created_at?: string
-          updated_at?: string
+          threshold?: Json
         }
-        Relationships: [
-          {
-            foreignKeyName: "kpi_alerts_kpi_id_fkey"
-            columns: ["kpi_id"]
-            isOneToOne: false
-            referencedRelation: "kpis"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "kpi_alerts_device_id_fkey"
-            columns: ["device_id"]
-            isOneToOne: false
-            referencedRelation: "devices"
-            referencedColumns: ["id"]
-          }
-        ]
+        Relationships: []
       }
       kpi_alert_logs: {
         Row: {
+          created_at: string | null
           id: string
-          alert_id: string
-          kpi_id: string
-          device_id: string
-          triggered_value: Json
-          triggered_at: string
-          email_sent: boolean
-          email_sent_at: string | null
-          error_message: string | null
+          kpi_alert_id: string
+          task_id: string
+          value: Json
+        }
+        Insert: {
+          created_at?: string | null
+          id: string
+          kpi_alert_id: string
+          task_id: string
+          value: Json
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          kpi_alert_id?: string
+          task_id?: string
+          value?: Json
+        }
+        Relationships: []
+      }
+      user_activities: {
+        Row: {
+          id: string
+          user_id: string
+          action_type: Database['public']['Enums']['user_action_type']
+          entity_type: Database['public']['Enums']['entity_type']
+          entity_id: string
+          metadata: Json
+          created_at: string
         }
         Insert: {
           id?: string
-          alert_id: string
-          kpi_id: string
-          device_id: string
-          triggered_value: Json
-          triggered_at?: string
-          email_sent?: boolean
-          email_sent_at?: string | null
-          error_message?: string | null
+          user_id: string
+          action_type: Database['public']['Enums']['user_action_type']
+          entity_type: Database['public']['Enums']['entity_type']
+          entity_id: string
+          metadata?: Json
+          created_at?: string
         }
         Update: {
           id?: string
-          alert_id?: string
-          kpi_id?: string
-          device_id?: string
-          triggered_value?: Json
-          triggered_at?: string
-          email_sent?: boolean
-          email_sent_at?: string | null
-          error_message?: string | null
+          user_id?: string
+          action_type?: Database['public']['Enums']['user_action_type']
+          entity_type?: Database['public']['Enums']['entity_type']
+          entity_id?: string
+          metadata?: Json
+          created_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "kpi_alert_logs_alert_id_fkey"
-            columns: ["alert_id"]
-            isOneToOne: false
-            referencedRelation: "kpi_alerts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "kpi_alert_logs_kpi_id_fkey"
-            columns: ["kpi_id"]
-            isOneToOne: false
-            referencedRelation: "kpis"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "kpi_alert_logs_device_id_fkey"
-            columns: ["device_id"]
-            isOneToOne: false
-            referencedRelation: "devices"
+            foreignKeyName: "user_activities_user_id_fkey"
+            columns: ["user_id"]
+            referencedRelation: "users"
             referencedColumns: ["id"]
           }
         ]
@@ -275,10 +222,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      log_user_activity: {
+        Args: {
+          p_user_id: string
+          p_action_type: Database['public']['Enums']['user_action_type']
+          p_entity_type: Database['public']['Enums']['entity_type']
+          p_entity_id: string
+          p_metadata?: Json
+        }
+        Returns: string
+      }
     }
     Enums: {
-      [_ in never]: never
+      user_action_type: 'create_device' | 'create_kpi' | 'create_todolist' | 'complete_task' | 
+                       'update_device' | 'update_kpi' | 'update_todolist' | 
+                       'delete_device' | 'delete_kpi' | 'delete_todolist'
+      entity_type: 'device' | 'kpi' | 'todolist' | 'task'
     }
     CompositeTypes: {
       [_ in never]: never
