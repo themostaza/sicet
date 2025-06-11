@@ -19,7 +19,7 @@ interface KpiMapEntry {
 }
 
 export async function exportTodolistData(config: ExportConfig): Promise<Blob> {
-  const supabase = createServerSupabaseClient()
+  const supabase = await createServerSupabaseClient()
   
   // Build query for tasks
   let query = supabase
@@ -102,6 +102,7 @@ export async function exportTodolistData(config: ExportConfig): Promise<Blob> {
   
   // Process each task
   for (const task of tasks) {
+    if (!task.scheduled_execution) continue;
     const date = format(parseISO(task.scheduled_execution), 'dd/MM/yyyy')
     const deviceName = escapeCSV(deviceMap[task.device_id] || 'Punto di controllo sconosciuto')
     const kpiName = escapeCSV(kpiMap[task.kpi_id]?.name || 'Controllo sconosciuto')
@@ -190,7 +191,7 @@ export async function getKpisByDevice(config: {
   endDate: string;
   deviceId: string;
 }): Promise<{ id: string; name: string }[]> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   
   // Query tasks to find unique KPI IDs that have tasks for the specific device and date range
   const { data, error } = await supabase
