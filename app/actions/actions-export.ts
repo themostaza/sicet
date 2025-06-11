@@ -1,6 +1,6 @@
 'use server'
 
-import { createServerSupabaseClient } from "@/lib/supabase"
+import { createServerSupabaseClient } from "@/lib/supabase-server"
 import { format, parseISO } from "date-fns"
 import { getKpi } from "./actions-kpi"
 import { getDevice } from "./actions-device"

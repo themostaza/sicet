@@ -110,48 +110,104 @@ export interface Database {
       }
       kpi_alerts: {
         Row: {
-          created_at: string | null
           id: string
           kpi_id: string
-          threshold: Json
+          device_id: string
+          is_active: boolean
+          email: string
+          conditions: Json
+          created_at: string | null
+          updated_at: string | null
         }
         Insert: {
-          created_at?: string | null
-          id: string
+          id?: string
           kpi_id: string
-          threshold: Json
+          device_id: string
+          is_active?: boolean
+          email: string
+          conditions: Json
+          created_at?: string | null
+          updated_at?: string | null
         }
         Update: {
-          created_at?: string | null
           id?: string
           kpi_id?: string
-          threshold?: Json
+          device_id?: string
+          is_active?: boolean
+          email?: string
+          conditions?: Json
+          created_at?: string | null
+          updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "kpi_alerts_kpi_id_fkey"
+            columns: ["kpi_id"]
+            referencedRelation: "kpis"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kpi_alerts_device_id_fkey"
+            columns: ["device_id"]
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       kpi_alert_logs: {
         Row: {
-          created_at: string | null
           id: string
-          kpi_alert_id: string
-          task_id: string
-          value: Json
+          alert_id: string
+          kpi_id: string
+          device_id: string
+          triggered_value: Json
+          triggered_at: string
+          email_sent: boolean
+          email_sent_at: string | null
+          error_message: string | null
         }
         Insert: {
-          created_at?: string | null
-          id: string
-          kpi_alert_id: string
-          task_id: string
-          value: Json
+          id?: string
+          alert_id: string
+          kpi_id: string
+          device_id: string
+          triggered_value: Json
+          triggered_at?: string
+          email_sent?: boolean
+          email_sent_at?: string | null
+          error_message?: string | null
         }
         Update: {
-          created_at?: string | null
           id?: string
-          kpi_alert_id?: string
-          task_id?: string
-          value?: Json
+          alert_id?: string
+          kpi_id?: string
+          device_id?: string
+          triggered_value?: Json
+          triggered_at?: string
+          email_sent?: boolean
+          email_sent_at?: string | null
+          error_message?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "kpi_alert_logs_alert_id_fkey"
+            columns: ["alert_id"]
+            referencedRelation: "kpi_alerts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kpi_alert_logs_kpi_id_fkey"
+            columns: ["kpi_id"]
+            referencedRelation: "kpis"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kpi_alert_logs_device_id_fkey"
+            columns: ["device_id"]
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       user_activities: {
         Row: {
