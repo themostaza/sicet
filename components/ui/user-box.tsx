@@ -30,6 +30,13 @@ export function UserBox() {
         console.log("UserBox: getUser response:", { user, error })
         
         if (error) {
+          if (error.name === 'AuthSessionMissingError') {
+            console.log("UserBox: No active session")
+            setUser(null)
+            setRole(null)
+            setLoading(false)
+            return
+          }
           console.error("UserBox: Error getting user:", error)
           return
         }
@@ -53,8 +60,14 @@ export function UserBox() {
 
           setRole(profile?.role ?? null)
         }
-      } catch (error) {
-        console.error("UserBox: Unexpected error:", error)
+      } catch (error: any) {
+        if (error?.name === 'AuthSessionMissingError') {
+          console.log("UserBox: No active session (caught)")
+          setUser(null)
+          setRole(null)
+        } else {
+          console.error("UserBox: Unexpected error:", error)
+        }
       } finally {
         setLoading(false)
       }

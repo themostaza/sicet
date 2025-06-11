@@ -26,6 +26,27 @@ export default function RegisterPage() {
       return;
     }
 
+    // --- PATCH: Gestione token da hash URL per reset password ---
+    if (typeof window !== 'undefined' && window.location.hash) {
+      const hash = window.location.hash.substring(1); // rimuove il #
+      const params = new URLSearchParams(hash.replace(/&/g, '&'));
+      const access_token = params.get('access_token');
+      const refresh_token = params.get('refresh_token');
+      if (access_token && refresh_token) {
+        supabase.auth.setSession({ access_token, refresh_token })
+          .then(({ error }) => {
+            if (error) {
+              console.error('Errore nel setSession Supabase:', error);
+              toast.error('Errore di autenticazione. Riprova dal link email.');
+            } else {
+              // Opzionale: pulisci l'hash dall'URL
+              window.location.hash = '';
+            }
+          });
+      }
+    }
+    // --- FINE PATCH ---
+
     // Check if user is already activated
     const checkStatus = async () => {
       const { data } = await supabase
@@ -45,30 +66,63 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email) {
+      console.error("RegisterPage: No email provided");
+      toast.error('Email non valida');
+      return;
+    }
     setLoading(true);
+    console.log("RegisterPage: Starting password update process for email:", email);
 
     try {
       // Validate passwords
       if (password !== confirmPassword) {
+        console.log("RegisterPage: Passwords do not match");
         toast.error('Le password non coincidono');
+        setLoading(false);
         return;
       }
 
       if (password.length < 8) {
+        console.log("RegisterPage: Password too short");
         toast.error('La password deve essere di almeno 8 caratteri');
+        setLoading(false);
         return;
       }
 
+      // Check current session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      console.log("RegisterPage: Current session:", session ? "exists" : "none", "Error:", sessionError);
+
+      if (!session) {
+        console.log("RegisterPage: No active session, attempting to sign in with email");
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+        
+        if (signInError) {
+          console.error("RegisterPage: Sign in error:", signInError);
+          toast.error('Errore durante l\'accesso. Riprova più tardi.');
+          setLoading(false);
+          return;
+        }
+      }
+
       // Update password
+      console.log("RegisterPage: Attempting to update password");
       const { error: updateError } = await supabase.auth.updateUser({
         password: password
       });
 
       if (updateError) {
-        toast.error('Errore nell\'aggiornamento della password');
+        console.error("RegisterPage: Password update error:", updateError);
+        toast.error(`Errore nell'aggiornamento della password: ${updateError.message}`);
+        setLoading(false);
         return;
       }
 
+      console.log("RegisterPage: Password updated successfully, updating profile status");
       // Update profile status to activated
       const { error: profileError } = await supabase
         .from('profiles')
@@ -76,19 +130,30 @@ export default function RegisterPage() {
         .eq('email', email);
 
       if (profileError) {
-        toast.error('Errore nell\'attivazione del profilo');
+        console.error("RegisterPage: Profile update error:", profileError);
+        toast.error(`Errore nell'attivazione del profilo: ${profileError.message}`);
+        setLoading(false);
         return;
       }
 
       toast.success('Password impostata con successo!');
       
       // Get user role to redirect appropriately
-      const { data: profile } = await supabase
+      console.log("RegisterPage: Getting user role for redirect");
+      const { data: profile, error: roleError } = await supabase
         .from('profiles')
         .select('role')
         .eq('email', email)
         .single();
 
+      if (roleError) {
+        console.error("RegisterPage: Error getting role:", roleError);
+        toast.error('Errore nel recupero del ruolo utente');
+        setLoading(false);
+        return;
+      }
+
+      console.log("RegisterPage: Redirecting to role-specific page:", profile?.role);
       // Redirect based on role
       if (profile?.role === 'admin') {
         router.push('/admin');
@@ -99,7 +164,8 @@ export default function RegisterPage() {
       }
 
     } catch (error) {
-      toast.error('Si è verificato un errore');
+      console.error("RegisterPage: Unexpected error:", error);
+      toast.error('Si è verificato un errore imprevisto');
     } finally {
       setLoading(false);
     }
