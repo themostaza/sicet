@@ -27,6 +27,7 @@ const fieldTypes = [
   { value: "date", label: "Data" },
   { value: "boolean", label: "Sì/No" },
   { value: "select", label: "Selezione" },
+  { value: "image", label: "Immagine" },
 ]
 
 // Interface for a field

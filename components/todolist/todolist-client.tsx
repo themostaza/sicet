@@ -17,8 +17,10 @@ import { getKpis } from "@/app/actions/actions-kpi"
 import { getDevice } from "@/app/actions/actions-device"
 import type { Task } from "@/lib/validation/todolist-schemas"
 import type { Kpi } from "@/lib/validation/kpi-schemas"
-import { Check, AlertCircle, Info, Save, Loader2 } from "lucide-react"
+import { Check, AlertCircle, Info, Save, Loader2, Upload, X } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import Image from "next/image"
 
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -184,6 +186,7 @@ export default function TodolistClient({
   deviceInfo: initialDeviceInfo = null,
 }: Props) {
   const router = useRouter()
+  const supabase = createClientComponentClient()
   const [tasks, setTasks] = useState<Task[]>(initialData.tasks)
   const [hasMore, setHasMore] = useState(initialData.hasMore)
   const [offset, setOffset] = useState(initialData.tasks.length)
@@ -191,6 +194,7 @@ export default function TodolistClient({
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null)
   const [isSavingAll, setIsSavingAll] = useState(false)
   const [isCompleting, setIsCompleting] = useState(false)
+  const [uploadingImages, setUploadingImages] = useState<Record<string, boolean>>({})
 
   const [kpis, setKpis] = useState<Kpi[]>(initialKpis)
   const [kpisLoading, setKpisLoading] = useState(initialKpis.length === 0)
@@ -260,9 +264,25 @@ export default function TodolistClient({
   const handleCompleteTodolist = async () => {
     setIsCompleting(true)
     try {
+      // Salva tutti i valori locali (inclusi quelli non dirty)
+      const savePromises = Object.entries(localValues).map(async ([taskId, value]) => {
+        if (value !== undefined && value !== null) {
+          await updateTaskValue(taskId, value)
+        }
+      })
+      await Promise.all(savePromises)
+
+      // Poi completa la todolist
       await completeTodolist(todolistId)
-      // Update local state
-      setTasks(tasks.map(task => ({ ...task, status: "completed" })))
+      
+      // Aggiorna lo stato locale
+      setTasks(tasks.map(task => ({ 
+        ...task, 
+        status: "completed",
+        value: localValues[task.id] !== undefined ? localValues[task.id] : task.value 
+      })))
+      clearDirty()
+      
       toast({
         title: "Todolist completata",
         description: "Tutte le attività sono state completate con successo.",
@@ -292,6 +312,70 @@ export default function TodolistClient({
     window.addEventListener("beforeunload", handler)
     return () => window.removeEventListener("beforeunload", handler)
   }, [dirtyFields])
+
+  const handleImageUpload = async (file: File, taskId: string, field: KpiField, idx: number) => {
+    try {
+      setUploadingImages(prev => ({ ...prev, [taskId]: true }))
+      
+      // Find the task from the tasks array
+      const currentTask = tasks.find(t => t.id === taskId)
+      if (!currentTask) {
+        throw new Error('Task not found')
+      }
+      
+      // Generate a unique filename
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${taskId}-${Date.now()}.${fileExt}`
+      const filePath = `${fileName}`
+
+      // Upload to Supabase Storage
+      const { error: uploadError, data } = await supabase.storage
+        .from('images')
+        .upload(filePath, file)
+
+      if (uploadError) {
+        throw uploadError
+      }
+
+      // Get the public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('images')
+        .getPublicUrl(filePath)
+
+      // Update the task value with the image URL
+      const fields = Array.isArray(kpis.find(k => k.id === currentTask.kpi_id)?.value) 
+        ? kpis.find(k => k.id === currentTask.kpi_id)?.value 
+        : [kpis.find(k => k.id === currentTask.kpi_id)?.value]
+
+      if (!fields) return
+
+      let newValue
+      if (fields.length === 1) {
+        newValue = { 
+          id: field.id || `${currentTask.kpi_id}-${field.name.toLowerCase().replace(/\s+/g, '_')}`,
+          value: publicUrl 
+        }
+      } else {
+        const current = localValues[taskId] || currentTask.value
+        newValue = [...(Array.isArray(current) ? current : Array(fields.length).fill(null))]
+        newValue[idx] = { 
+          id: field.id || `${currentTask.kpi_id}-${field.name.toLowerCase().replace(/\s+/g, '_')}`,
+          value: publicUrl 
+        }
+      }
+
+      setLocalValue(taskId, newValue)
+    } catch (error) {
+      console.error('Error uploading image:', error)
+      toast({
+        title: "Errore",
+        description: "Errore durante il caricamento dell'immagine",
+        variant: "destructive"
+      })
+    } finally {
+      setUploadingImages(prev => ({ ...prev, [taskId]: false }))
+    }
+  }
 
   /* ---------------- render utils -------------- */
   const renderInput = (task: Task, kpi?: Kpi) => {
@@ -594,6 +678,78 @@ export default function TodolistClient({
                 </div>
               )
 
+            case "image":
+              return (
+                <div key={idx} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">
+                      {field.name || "Immagine"}
+                      {field.required && <span className="text-red-500 ml-1">*</span>}
+                    </label>
+                    <span className="text-xs text-muted-foreground">Immagine</span>
+                  </div>
+                  <div className="space-y-2">
+                    {val && (
+                      <div className="relative w-full aspect-video rounded-md overflow-hidden border">
+                        <Image 
+                          src={val} 
+                          alt={field.name || "Immagine caricata"} 
+                          fill
+                          className="object-contain"
+                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon"
+                          className="absolute top-2 right-2 h-6 w-6"
+                          onClick={() => setVal("", field, idx)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) {
+                            handleImageUpload(file, task.id, field, idx)
+                          }
+                        }}
+                        disabled={isPending || uploadingImages[task.id]}
+                        className="hidden"
+                        id={`image-upload-${task.id}-${idx}`}
+                      />
+                      <label
+                        htmlFor={`image-upload-${task.id}-${idx}`}
+                        className={`flex items-center justify-center gap-2 px-4 py-2 rounded-md border cursor-pointer
+                          ${isPending || uploadingImages[task.id] 
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                            : 'bg-white hover:bg-gray-50'}`}
+                      >
+                        {uploadingImages[task.id] ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Caricamento...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="h-4 w-4" />
+                            {val ? 'Cambia immagine' : 'Carica immagine'}
+                          </>
+                        )}
+                      </label>
+                    </div>
+                  </div>
+                  {field.description && (
+                    <p className="text-xs text-muted-foreground">{field.description}</p>
+                  )}
+                </div>
+              )
+
             default:
               return simpleInput
           }
@@ -718,11 +874,25 @@ export default function TodolistClient({
                                     <div className="space-y-2">
                                       {task.value.map((item: { id?: string; value: any }, idx: number) => {
                                         const fieldDef = Array.isArray(kpi?.value) ? kpi.value[idx] : null;
+                                        const isImageField = fieldDef?.type === 'image';
+                                        
                                         return (
                                           <div key={idx}>
                                             <div>
                                               <span className="font-medium text-xs">{fieldDef?.name || `Campo ${idx + 1}`}: </span>
-                                              <span>{item?.value !== undefined ? String(item.value) : "N/A"}</span>
+                                              {isImageField && item?.value ? (
+                                                <div className="mt-2 w-full rounded-md overflow-hidden border relative" style={{ height: 200 }}>
+                                                  <Image
+                                                    src={item.value}
+                                                    alt={fieldDef?.name || "Immagine"}
+                                                    fill
+                                                    className="object-contain"
+                                                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                                                  />
+                                                </div>
+                                              ) : (
+                                                <span>{item?.value !== undefined ? String(item.value) : "N/A"}</span>
+                                              )}
                                             </div>
                                             {fieldDef?.description && (
                                               <p className="text-xs text-muted-foreground">{fieldDef.description}</p>
@@ -734,47 +904,17 @@ export default function TodolistClient({
                                   )}
                                   
                                   {/* For object value */}
-                                  {!Array.isArray(task.value) && typeof task.value === 'object' && task.value !== null && (
-                                    <div>
-                                      <div>
-                                        <span className="font-medium text-xs">
-                                          {typeof kpi?.value === 'object' && kpi?.value !== null && 'name' in kpi?.value 
-                                            ? kpi.value.name as string 
-                                            : "Valore"}: 
-                                        </span>
-                                        <span>
-                                          {task.value && 'value' in task.value ? String(task.value.value ?? "N/A") : "N/A"}
-                                        </span>
-                                      </div>
-                                      {typeof kpi?.value === 'object' && kpi?.value !== null && 'description' in kpi?.value && (
-                                        <p className="text-xs text-muted-foreground">{kpi.value.description as string}</p>
-                                      )}
+                                  {!Array.isArray(task.value) && typeof task.value === 'object' && task.value !== null && kpi?.value?.[0]?.type === 'image' && task.value.value ? (
+                                    <div className="mt-2 w-full rounded-md overflow-hidden border relative" style={{ height: 200 }}>
+                                      <Image
+                                        src={task.value.value}
+                                        alt={kpi?.value?.[0]?.name || "Immagine"}
+                                        fill
+                                        className="object-contain"
+                                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                                      />
                                     </div>
-                                  )}
-                                  
-                                  {/* For primitive values (string, number, boolean) */}
-                                  {!Array.isArray(task.value) && typeof task.value !== 'object' && (
-                                    <div>
-                                      <div>
-                                        <span className="font-medium text-xs">
-                                          {typeof kpi?.value === 'object' && kpi?.value !== null && 'name' in kpi?.value 
-                                            ? kpi.value.name as string 
-                                            : "Valore"}: 
-                                        </span>
-                                        <span>
-                                          {typeof task.value === 'boolean' 
-                                            ? (task.value ? "Sì" : "No") 
-                                            : task.value !== undefined ? String(task.value) : "N/A"}
-                                        </span>
-                                      </div>
-                                      {kpi?.description && (
-                                        <p className="text-xs text-muted-foreground">{kpi.description}</p>
-                                      )}
-                                      {typeof kpi?.value === 'object' && kpi?.value !== null && 'description' in kpi?.value && (
-                                        <p className="text-xs text-muted-foreground">{kpi.value.description as string}</p>
-                                      )}
-                                    </div>
-                                  )}
+                                  ) : null}
                                 </div>
                               </div>
                             </div>
