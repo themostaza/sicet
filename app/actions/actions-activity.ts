@@ -5,7 +5,7 @@ import type { Database } from "@/supabase/database.types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 // Define the types manually since they might not be in the database types yet
-type UserActionType = 'create_device' | 'create_kpi' | 'create_todolist' | 'complete_task' | 
+type UserActionType = 'create_device' | 'create_kpi' | 'create_todolist' | 'complete_task' | 'complete_todolist' | 
                      'update_device' | 'update_kpi' | 'update_todolist' | 
                      'delete_device' | 'delete_kpi' | 'delete_todolist';
 type EntityType = 'device' | 'kpi' | 'todolist' | 'task';

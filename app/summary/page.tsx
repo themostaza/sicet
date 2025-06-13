@@ -37,6 +37,7 @@ const simplifiedActionTypeMap: Record<ActionType, SimplifiedActionType> = {
   create_kpi: 'create',
   create_todolist: 'create',
   complete_task: 'update',
+  complete_todolist: 'update',
   update_device: 'update',
   update_kpi: 'update',
   update_todolist: 'update',

@@ -1,130 +1,183 @@
--- Create todolist table
-CREATE TABLE todolist (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
-    scheduled_execution TIMESTAMP WITH TIME ZONE NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed')),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    UNIQUE(device_id, scheduled_execution)
+-- Create todolist table if it doesn't exist
+create table if not exists public.todolist (
+    id uuid default gen_random_uuid() primary key,
+    device_id uuid references public.devices(id) on delete cascade not null,
+    scheduled_execution timestamptz not null,
+    status text default 'pending'::text not null check (status in ('pending', 'in_progress', 'completed')),
+    completion_date timestamptz,
+    created_at timestamptz default now() not null,
+    updated_at timestamptz default now() not null,
+    constraint todolist_device_id_scheduled_execution_key unique (device_id, scheduled_execution)
 );
 
--- Add todolist_id to tasks table
-ALTER TABLE tasks ADD COLUMN todolist_id UUID REFERENCES todolist(id) ON DELETE CASCADE;
+-- Add completion_date column if it doesn't exist
+do $$ 
+begin
+    if not exists (
+        select 1 
+        from information_schema.columns 
+        where table_name = 'todolist' 
+        and column_name = 'completion_date'
+    ) then
+        alter table public.todolist add column completion_date timestamptz;
+    end if;
+end $$;
 
--- Create index on todolist_id for better performance
-CREATE INDEX idx_tasks_todolist_id ON tasks(todolist_id);
+-- Modify tasks table to use todolist_id
+do $$ 
+begin
+    -- First check if todolist_id column exists
+    if not exists (
+        select 1 
+        from information_schema.columns 
+        where table_name = 'tasks' 
+        and column_name = 'todolist_id'
+    ) then
+        -- Add todolist_id column
+        alter table public.tasks add column todolist_id uuid references public.todolist(id) on delete cascade;
+        
+        -- Migrate existing data
+        update public.tasks t
+        set todolist_id = tl.id
+        from public.todolist tl
+        where t.device_id = tl.device_id 
+        and t.scheduled_execution = tl.scheduled_execution;
+        
+        -- Make todolist_id not null after migration
+        alter table public.tasks alter column todolist_id set not null;
+        
+        -- Drop old columns
+        alter table public.tasks drop column if exists device_id;
+        alter table public.tasks drop column if exists scheduled_execution;
+        alter table public.tasks drop column if exists completion_date;
+    end if;
+end $$;
 
--- Migrate existing data
-WITH todolist_data AS (
-    SELECT DISTINCT 
-        device_id,
-        date_trunc('hour', scheduled_execution) as scheduled_execution
-    FROM tasks
-    WHERE todolist_id IS NULL
-)
-INSERT INTO todolist (id, device_id, scheduled_execution, status)
-SELECT 
-    gen_random_uuid(),
-    device_id,
-    scheduled_execution,
-    CASE 
-        WHEN EXISTS (
-            SELECT 1 FROM tasks t2 
-            WHERE t2.device_id = todolist_data.device_id 
-            AND date_trunc('hour', t2.scheduled_execution) = todolist_data.scheduled_execution
-            AND t2.status = 'completed'
-        ) AND NOT EXISTS (
-            SELECT 1 FROM tasks t2 
-            WHERE t2.device_id = todolist_data.device_id 
-            AND date_trunc('hour', t2.scheduled_execution) = todolist_data.scheduled_execution
-            AND t2.status != 'completed'
-        ) THEN 'completed'
-        WHEN EXISTS (
-            SELECT 1 FROM tasks t2 
-            WHERE t2.device_id = todolist_data.device_id 
-            AND date_trunc('hour', t2.scheduled_execution) = todolist_data.scheduled_execution
-            AND t2.status = 'completed'
-        ) THEN 'in_progress'
-        ELSE 'pending'
-    END
-FROM todolist_data;
+-- Create tasks table if it doesn't exist with the correct structure
+create table if not exists public.tasks (
+    id uuid default gen_random_uuid() primary key,
+    todolist_id uuid references public.todolist(id) on delete cascade not null,
+    kpi_id uuid references public.kpis(id) on delete cascade not null,
+    status text default 'pending'::text not null check (status in ('pending', 'in_progress', 'completed')),
+    value jsonb,
+    created_at timestamptz default now() not null,
+    updated_at timestamptz default now() not null,
+    alert_checked boolean default false not null
+);
 
--- Update tasks with todolist_id
-UPDATE tasks t
-SET todolist_id = tl.id
-FROM todolist tl
-WHERE t.device_id = tl.device_id
-AND date_trunc('hour', t.scheduled_execution) = tl.scheduled_execution
-AND t.todolist_id IS NULL;
+-- Add RLS policies for tasks
+alter table public.tasks enable row level security;
 
--- Make todolist_id NOT NULL after migration
-ALTER TABLE tasks ALTER COLUMN todolist_id SET NOT NULL;
+-- Drop existing policies if they exist
+drop policy if exists "Users can view tasks" on public.tasks;
+drop policy if exists "Users can insert tasks" on public.tasks;
+drop policy if exists "Users can update tasks" on public.tasks;
+drop policy if exists "Users can delete tasks" on public.tasks;
 
--- Add trigger to update todolist status when task status changes
-CREATE OR REPLACE FUNCTION update_todolist_status()
-RETURNS TRIGGER AS $$
-BEGIN
-    UPDATE todolist
-    SET 
-        status = CASE 
-            WHEN EXISTS (
-                SELECT 1 FROM tasks t2 
-                WHERE t2.todolist_id = NEW.todolist_id 
-                AND t2.status = 'completed'
-            ) AND NOT EXISTS (
-                SELECT 1 FROM tasks t2 
-                WHERE t2.todolist_id = NEW.todolist_id 
-                AND t2.status != 'completed'
-            ) THEN 'completed'
-            WHEN EXISTS (
-                SELECT 1 FROM tasks t2 
-                WHERE t2.todolist_id = NEW.todolist_id 
-                AND t2.status = 'completed'
-            ) THEN 'in_progress'
-            ELSE 'pending'
-        END,
-        updated_at = now()
-    WHERE id = NEW.todolist_id;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+-- Create new policies
+create policy "Users can view tasks"
+    on public.tasks for select
+    using (auth.role() = 'authenticated');
 
-CREATE TRIGGER update_todolist_status_trigger
-AFTER UPDATE OF status ON tasks
-FOR EACH ROW
-EXECUTE FUNCTION update_todolist_status();
+create policy "Users can insert tasks"
+    on public.tasks for insert
+    with check (auth.role() = 'authenticated');
 
--- Add trigger to update todolist status when task is inserted
-CREATE OR REPLACE FUNCTION update_todolist_status_on_insert()
-RETURNS TRIGGER AS $$
-BEGIN
-    UPDATE todolist
-    SET 
-        status = CASE 
-            WHEN EXISTS (
-                SELECT 1 FROM tasks t2 
-                WHERE t2.todolist_id = NEW.todolist_id 
-                AND t2.status = 'completed'
-            ) AND NOT EXISTS (
-                SELECT 1 FROM tasks t2 
-                WHERE t2.todolist_id = NEW.todolist_id 
-                AND t2.status != 'completed'
-            ) THEN 'completed'
-            WHEN EXISTS (
-                SELECT 1 FROM tasks t2 
-                WHERE t2.todolist_id = NEW.todolist_id 
-                AND t2.status = 'completed'
-            ) THEN 'in_progress'
-            ELSE 'pending'
-        END,
-        updated_at = now()
-    WHERE id = NEW.todolist_id;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+create policy "Users can update tasks"
+    on public.tasks for update
+    using (auth.role() = 'authenticated');
 
-CREATE TRIGGER update_todolist_status_on_insert_trigger
-AFTER INSERT ON tasks
-FOR EACH ROW
-EXECUTE FUNCTION update_todolist_status_on_insert(); 
+create policy "Users can delete tasks"
+    on public.tasks for delete
+    using (auth.role() = 'authenticated');
+
+-- Create trigger to update todolist status
+create or replace function public.update_todolist_status()
+returns trigger as $$
+begin
+    -- If all tasks are completed, mark todolist as completed
+    if not exists (
+        select 1 
+        from public.tasks 
+        where todolist_id = new.todolist_id 
+        and status != 'completed'
+    ) then
+        update public.todolist 
+        set status = 'completed',
+            completion_date = now(),
+            updated_at = now()
+        where id = new.todolist_id;
+    -- If any task is in progress, mark todolist as in progress
+    elsif exists (
+        select 1 
+        from public.tasks 
+        where todolist_id = new.todolist_id 
+        and status = 'in_progress'
+    ) then
+        update public.todolist 
+        set status = 'in_progress',
+            updated_at = now()
+        where id = new.todolist_id;
+    -- Otherwise mark as pending
+    else
+        update public.todolist 
+        set status = 'pending',
+            updated_at = now()
+        where id = new.todolist_id;
+    end if;
+    return new;
+end;
+$$ language plpgsql security definer;
+
+-- Drop trigger if exists
+drop trigger if exists update_todolist_status_trigger on public.tasks;
+
+-- Create trigger
+create trigger update_todolist_status_trigger
+    after insert or update of status
+    on public.tasks
+    for each row
+    execute function public.update_todolist_status();
+
+-- Add RLS policies
+alter table public.todolist enable row level security;
+
+-- Drop existing policies if they exist
+drop policy if exists "Users can view todolists" on public.todolist;
+drop policy if exists "Users can insert todolists" on public.todolist;
+drop policy if exists "Users can update todolists" on public.todolist;
+drop policy if exists "Users can delete todolists" on public.todolist;
+drop policy if exists "Users can view todolists for their devices" on public.todolist;
+drop policy if exists "Referrers and admins can view all todolists" on public.todolist;
+drop policy if exists "Users can insert todolists for their devices" on public.todolist;
+drop policy if exists "Referrers and admins can insert todolists" on public.todolist;
+drop policy if exists "Users can update todolists for their devices" on public.todolist;
+drop policy if exists "Referrers and admins can update todolists" on public.todolist;
+drop policy if exists "Users can delete todolists for their devices" on public.todolist;
+drop policy if exists "Referrers and admins can delete todolists" on public.todolist;
+
+-- Create new policies
+create policy "Users can view todolists"
+    on public.todolist for select
+    using (auth.role() = 'authenticated');
+
+create policy "Users can insert todolists"
+    on public.todolist for insert
+    with check (auth.role() = 'authenticated');
+
+create policy "Users can update todolists"
+    on public.todolist for update
+    using (auth.role() = 'authenticated');
+
+create policy "Users can delete todolists"
+    on public.todolist for delete
+    using (auth.role() = 'authenticated');
+
+-- Grant necessary permissions
+grant usage on type public.user_action_type to authenticated;
+grant usage on type public.entity_type to authenticated;
+grant select, insert, update, delete on public.todolist to authenticated;
+grant select, insert, update, delete on public.tasks to authenticated;
+
+-- Add a comment to verify the table was created
+comment on table public.todolist is 'Table for storing todolists'; 

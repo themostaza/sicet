@@ -9,6 +9,7 @@ create type public.user_action_type as enum (
     'create_kpi',
     'create_todolist',
     'complete_task',
+    'complete_todolist',
     'update_device',
     'update_kpi',
     'update_todolist',

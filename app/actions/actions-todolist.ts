@@ -1,25 +1,26 @@
 'use server'
 
+import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { handlePostgrestError } from "@/lib/supabase/error"
+import { logCurrentUserActivity } from "./actions-activity"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
-import type { Database } from "@/lib/database.types"
-import type { SupabaseClient, PostgrestError } from "@supabase/supabase-js"
-import type { TablesInsert } from "@/lib/database.types"
+import { generateUUID } from "@/lib/utils"
+import type { TablesInsert } from "@/supabase/database.types"
+import type { Database } from "@/supabase/database.types"
+import type { PostgrestError } from "@supabase/supabase-js"
 import {
   Task,
   TaskSchema,
   TodolistParamsSchema,
-  TimeSlot,
+  CreateTodolistSchema,
+  type Todolist,
+  type TimeSlot,
   timeSlotOrder,
   getTimeRangeFromSlot,
   getTimeSlotFromDateTime
 } from "@/lib/validation/todolist-schemas"
 import { checkKpiAlerts } from "./actions-alerts"
-import { logCurrentUserActivity } from "@/app/actions/actions-activity"
-import { handlePostgrestError } from "@/lib/supabase/error"
-import { generateUUID } from "@/lib/utils"
-import { TodolistParamsSchema as NewTodolistParamsSchema, CreateTodolistSchema, type Todolist } from "@/lib/validation/todolist-schemas"
 
 /** -------------------------------------------------------------------------
  * 1 · TYPES
@@ -28,12 +29,9 @@ import { TodolistParamsSchema as NewTodolistParamsSchema, CreateTodolistSchema, 
 type TasksRow = {
   id: string
   todolist_id: string
-  device_id: string
   kpi_id: string
-  scheduled_execution: string
   status: string
   value: any
-  completion_date: string | null
   created_at: string | null
   alert_checked: boolean
   updated_at: string | null
@@ -57,21 +55,20 @@ type TodolistWithTasks = TodolistRow & {
 }
 
 /** -------------------------------------------------------------------------
- * 2 · MAPPERS
+ * 2 · HELPERS
  * ------------------------------------------------------------------------*/
+
+const supabase = async () => createServerSupabaseClient()
 
 const toTask = (row: TasksRow): Task => ({
   id: row.id,
   todolist_id: row.todolist_id,
-  device_id: row.device_id,
   kpi_id: row.kpi_id,
-  scheduled_execution: row.scheduled_execution,
-  status: row.status,
+  status: row.status as "pending" | "in_progress" | "completed",
   value: row.value,
-  completion_date: row.completion_date ?? undefined,
   created_at: row.created_at ?? undefined,
-  alert_checked: row.alert_checked ?? false,
-  updated_at: row.updated_at ?? row.created_at ?? new Date().toISOString()
+  updated_at: row.updated_at ?? row.created_at ?? new Date().toISOString(),
+  alert_checked: row.alert_checked
 })
 
 const toTodolist = (row: TodolistRow): Todolist => ({
@@ -154,7 +151,7 @@ export async function getTodolistTasks(params: unknown): Promise<{ tasks: Task[]
     .from("tasks")
     .select("*", { count: "exact" })
     .eq("todolist_id", todolist.id)
-    .order("scheduled_execution", { ascending: true })
+    .order("created_at", { ascending: true })
     .range(offset, offset + limit - 1)
 
   if (error) handlePostgrestError(error)
@@ -170,7 +167,7 @@ export async function updateTaskStatus(taskId: string, status: string): Promise<
   // First get the task to get its todolist_id
   const { data: taskData, error: taskError } = await (await supabase())
     .from("tasks")
-    .select("todolist_id, kpi_id, device_id, value, alert_checked")
+    .select("todolist_id, kpi_id, value, alert_checked")
     .eq("id", taskId)
     .single()
 
@@ -187,7 +184,6 @@ export async function updateTaskStatus(taskId: string, status: string): Promise<
     taskId,
     todolistId: taskData.todolist_id,
     kpiId: taskData.kpi_id,
-    deviceId: taskData.device_id,
     hasValue: !!taskData.value,
     alertChecked: taskData.alert_checked,
     status
@@ -198,7 +194,6 @@ export async function updateTaskStatus(taskId: string, status: string): Promise<
     .from("tasks")
     .update({ 
       status, 
-      completion_date: status === "completed" ? new Date().toISOString() : null,
       alert_checked: status === "completed" ? true : taskData.alert_checked
     })
     .eq("id", taskId)
@@ -248,7 +243,7 @@ export async function deleteTodolist(deviceId: string, date: string, timeSlot: s
   // Get tasks info before deleting for logging
   const { data: tasksData } = await (await supabase())
     .from("tasks")
-    .select("id, kpi_id, scheduled_execution")
+    .select("id, kpi_id")
     .eq("todolist_id", todolistData.id)
   
   // Delete the todolist (this will cascade delete all tasks)
@@ -265,7 +260,7 @@ export async function deleteTodolist(deviceId: string, date: string, timeSlot: s
       logCurrentUserActivity('delete_todolist', 'task', task.id, {
         device_id: deviceId,
         kpi_id: task.kpi_id,
-        scheduled_execution: task.scheduled_execution,
+        scheduled_execution: startTime,
         time_slot: timeSlot
       })
     ));
@@ -398,9 +393,7 @@ export async function createTodolist(deviceId: string, date: string, timeSlot: s
   const taskData: TablesInsert<"tasks"> = {
     id: generateUUID(),
     todolist_id: todolist!.id,
-    device_id: deviceId,
     kpi_id: kpiId,
-    scheduled_execution: startTime,
     status: "pending",
     value: null
   }
@@ -449,9 +442,7 @@ export async function createMultipleTasks(deviceId: string, date: string, timeSl
   const tasksToInsert: TablesInsert<"tasks">[] = kpiIds.map(kpiId => ({
     id: generateUUID(),
     todolist_id: todolist!.id,
-    device_id: deviceId,
     kpi_id: kpiId,
-    scheduled_execution: startTime,
     status: "pending",
     value: null
   }))
@@ -511,7 +502,35 @@ export async function checkExistingTasks(deviceId: string, date: string, timeSlo
   }
 }
 
-// Helper function to get supabase client
-const supabase = async (): Promise<SupabaseClient<Database>> => {
-  return await createServerSupabaseClient()
+// Completa una todolist e tutte le sue task
+export async function completeTodolist(deviceId: string, date: string, timeSlot: string): Promise<void> {
+  const { startTime } = getTimeRangeFromSlot(date, timeSlot as TimeSlot)
+  
+  // First get the todolist
+  const { data: todolist, error: todolistError } = await (await supabase())
+    .from("todolist")
+    .select("id")
+    .eq("device_id", deviceId)
+    .eq("scheduled_execution", startTime)
+    .single()
+  
+  if (todolistError) handlePostgrestError(todolistError)
+  if (!todolist) throw new Error("Todolist non trovata")
+  
+  // Then update all tasks to completed
+  const { error: tasksError } = await (await supabase())
+    .from("tasks")
+    .update({ status: "completed" })
+    .eq("todolist_id", todolist.id)
+  
+  if (tasksError) handlePostgrestError(tasksError)
+  
+  // Log the activity
+  await logCurrentUserActivity('complete_todolist', 'todolist', todolist.id, {
+    device_id: deviceId,
+    scheduled_execution: startTime,
+    time_slot: timeSlot
+  });
+  
+  revalidatePath("/todolist")
 }

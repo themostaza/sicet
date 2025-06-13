@@ -39,12 +39,9 @@ export interface Database {
         Row: {
           id: string
           todolist_id: string
-          device_id: string
           kpi_id: string
-          scheduled_execution: string
           status: string
           value: Json | null
-          completion_date: string | null
           created_at: string | null
           alert_checked: boolean
           updated_at: string | null
@@ -52,12 +49,9 @@ export interface Database {
         Insert: {
           id?: string
           todolist_id: string
-          device_id: string
           kpi_id: string
-          scheduled_execution: string
           status?: string
           value?: Json | null
-          completion_date?: string | null
           created_at?: string | null
           alert_checked?: boolean
           updated_at?: string | null
@@ -65,16 +59,27 @@ export interface Database {
         Update: {
           id?: string
           todolist_id?: string
-          device_id?: string
           kpi_id?: string
-          scheduled_execution?: string
           status?: string
           value?: Json | null
-          completion_date?: string | null
           created_at?: string | null
           alert_checked?: boolean
           updated_at?: string | null
         }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_todolist_id_fkey"
+            columns: ["todolist_id"]
+            referencedRelation: "todolist"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_kpi_id_fkey"
+            columns: ["kpi_id"]
+            referencedRelation: "kpis"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       devices: {
         Row: {

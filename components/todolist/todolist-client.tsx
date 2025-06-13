@@ -10,6 +10,7 @@ import {
   updateTaskStatus,
   updateTaskValue,
   getTodolistTasks,
+  completeTodolist,
 } from "@/app/actions/actions-todolist"
 import { getKpis } from "@/app/actions/actions-kpi"
 import { getDevice } from "@/app/actions/actions-device"
@@ -184,6 +185,7 @@ export default function TodolistClient({
   const [isPending, startTransition] = useTransition()
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null)
   const [isSavingAll, setIsSavingAll] = useState(false)
+  const [isCompleting, setIsCompleting] = useState(false)
 
   const [kpis, setKpis] = useState<Kpi[]>(initialKpis)
   const [kpisLoading, setKpisLoading] = useState(initialKpis.length === 0)
@@ -262,21 +264,18 @@ export default function TodolistClient({
     }
   }
 
-  const toggleStatus = async (task: Task) => {
-    const newStatus = task.status === "completed" ? "pending" : "completed"
-    setSavingTaskId(task.id)
-    
+  const handleCompleteTodolist = async () => {
+    if (isCompleting) return
+    setIsCompleting(true)
+
     try {
-      // Validation before completing a task
-      if (newStatus === "completed") {
-        // Check for required fields
+      // Validate all tasks before completing
+      const validationErrors: string[] = []
+      for (const task of tasks) {
         const kpi = kpis.find((k) => k.id === task.kpi_id)
         if (kpi?.value) {
           const fields = Array.isArray(kpi.value) ? kpi.value : [kpi.value]
           const currentValue = dirtyFields.has(task.id) ? localValues[task.id] : task.value
-          
-          // Validation results
-          const validationErrors: string[] = []
           
           fields.forEach((field, idx) => {
             const val = Array.isArray(currentValue)
@@ -285,48 +284,65 @@ export default function TodolistClient({
               ? (currentValue as any).value
               : currentValue
             
-            // Required field validation
             if (field.required && (val === undefined || val === null || val === "")) {
-              validationErrors.push(`Campo "${field.name || 'Campo ' + (idx + 1)}" obbligatorio`)
+              validationErrors.push(`${kpi.name}: Campo "${field.name || 'Campo ' + (idx + 1)}" obbligatorio`)
               return
             }
             
-            // Type validation
             const typeValidation = validateFieldValue(val, field)
             if (!typeValidation.valid && typeValidation.message) {
-              validationErrors.push(`${field.name || 'Campo ' + (idx + 1)}: ${typeValidation.message}`)
+              validationErrors.push(`${kpi.name}: ${field.name || 'Campo ' + (idx + 1)}: ${typeValidation.message}`)
             }
           })
-          
-          if (validationErrors.length > 0) {
-            toast({
-              title: "Completamento non possibile",
-              description: (
-                <div className="space-y-1">
-                  <p>Correggi i seguenti errori:</p>
-                  <ul className="list-disc pl-4 text-sm">
-                    {validationErrors.map((error, i) => (
-                      <li key={i}>{error}</li>
-                    ))}
-                  </ul>
-                </div>
-              ),
-              variant: "destructive"
-            })
-            return
-          }
-          
-          if (dirtyFields.has(task.id)) await saveValue(task.id)
         }
-        
-        const updated = await updateTaskStatus(task.id, newStatus)
-        setTasks((p) => p.map((t) => (t.id === task.id ? updated : t)))
       }
+
+      if (validationErrors.length > 0) {
+        toast({
+          title: "Errore di validazione",
+          description: (
+            <ul className="list-disc pl-4">
+              {validationErrors.map((error, i) => (
+                <li key={i}>{error}</li>
+              ))}
+            </ul>
+          ),
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Save all dirty values first
+      if (dirtyFields.size > 0) {
+        await saveAll()
+      }
+
+      // Then complete the todolist
+      await completeTodolist(deviceId, date, timeSlot)
       
-      const updated = await updateTaskStatus(task.id, newStatus)
-      setTasks((p) => p.map((t) => (t.id === task.id ? updated : t)))
+      // Refresh the tasks
+      const res = await getTodolistTasks({
+        deviceId,
+        date,
+        timeSlot,
+        offset: 0,
+        limit: offset + tasks.length,
+      })
+      setTasks(res.tasks)
+      
+      toast({
+        title: "Todolist completata",
+        description: "Tutte le attività sono state completate con successo",
+      })
+    } catch (error) {
+      console.error("Errore durante il completamento della todolist:", error)
+      toast({
+        title: "Errore",
+        description: "Si è verificato un errore durante il completamento della todolist",
+        variant: "destructive",
+      })
     } finally {
-      setSavingTaskId(null)
+      setIsCompleting(false)
     }
   }
 
@@ -677,25 +693,48 @@ export default function TodolistClient({
             )}
           </div>
 
-          {dirtyFields.size > 0 && (
-            <Button 
-              onClick={saveAll} 
-              disabled={isPending || isSavingAll}
-              className="relative"
-            >
-              {isSavingAll ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Salvataggio...
-                </>
-              ) : (
-                <>
-                  <Save size={16} className="mr-2" /> 
-                  Salva tutto ({dirtyFields.size})
-                </>
-              )}
-            </Button>
-          )}
+          <div className="flex gap-2">
+            {dirtyFields.size > 0 && (
+              <Button 
+                onClick={saveAll} 
+                disabled={isPending || isSavingAll}
+                variant="outline"
+                className="relative"
+              >
+                {isSavingAll ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Salvataggio...
+                  </>
+                ) : (
+                  <>
+                    <Save size={16} className="mr-2" /> 
+                    Salva tutto ({dirtyFields.size})
+                  </>
+                )}
+              </Button>
+            )}
+
+            {tasks.some(task => task.status !== "completed") && (
+              <Button 
+                onClick={handleCompleteTodolist}
+                disabled={isPending || isCompleting}
+                className="relative bg-green-600 hover:bg-green-700"
+              >
+                {isCompleting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Completamento...
+                  </>
+                ) : (
+                  <>
+                    <Check size={16} className="mr-2" />
+                    Completa Todolist
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
         </div>
       </CardHeader>
 
@@ -731,24 +770,6 @@ export default function TodolistClient({
                             </CardTitle>
                             {kpi?.description && <CardDescription className="text-xs mt-1">{kpi.description}</CardDescription>}
                           </div>
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant={task.status === "completed" ? "default" : "outline"}
-                                  size="sm"
-                                  disabled={isPending}
-                                  onClick={() => startTransition(() => toggleStatus(task))}
-                                  className={task.status === "completed" ? "bg-green-600 hover:bg-green-700" : ""}
-                                >
-                                  {task.status === "completed" ? <Check size={16} /> : <AlertCircle size={16} />}
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                {task.status === "completed" ? "Completata" : "Da completare"}
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
                         </div>
                       </CardHeader>
                       <Separator />
@@ -866,23 +887,6 @@ export default function TodolistClient({
                                   )}
                                 </div>
                               </div>
-                              
-                              {/* Reopen task button */}
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      disabled={isPending}
-                                      onClick={() => startTransition(() => toggleStatus(task))}
-                                    >
-                                      <Check size={16} className="text-green-600" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Riapri attività</TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
                             </div>
                           </CardContent>
                         </Card>

@@ -1,9 +1,12 @@
 'use server'
 
-import { createServerSupabaseClient } from "@/lib/supabase-server"
+import { createServerSupabaseClient } from "@/lib/supabase/server"
+import type { Database } from "@/supabase/database.types"
+import type { SupabaseClient } from "@supabase/supabase-js"
 import { format, parseISO } from "date-fns"
 import { getKpi } from "./actions-kpi"
 import { getDevice } from "./actions-device"
+import { escapeCSV } from "@/lib/utils"
 
 interface ExportConfig {
   startDate: string
@@ -18,26 +21,40 @@ interface KpiMapEntry {
   valueStructure: any;
 }
 
+// Add type for task with todolist relation
+type TaskWithTodolist = {
+  id: string
+  kpi_id: string
+  status: string
+  value: any
+  todolist: {
+    device_id: string
+    scheduled_execution: string
+  }
+}
+
 export async function exportTodolistData(config: ExportConfig): Promise<Blob> {
   const supabase = await createServerSupabaseClient()
   
-  // Build query for tasks
+  // Build query for tasks with todolist info
   let query = supabase
     .from("tasks")
     .select(`
       id,
-      device_id,
       kpi_id,
-      scheduled_execution,
       status,
-      value
+      value,
+      todolist:todolist_id (
+        device_id,
+        scheduled_execution
+      )
     `)
-    .gte('scheduled_execution', `${config.startDate}T00:00:00`)
-    .lte('scheduled_execution', `${config.endDate}T23:59:59`)
+    .gte('todolist.scheduled_execution', `${config.startDate}T00:00:00`)
+    .lte('todolist.scheduled_execution', `${config.endDate}T23:59:59`)
   
   // Filter by device if specified
   if (config.deviceIds && config.deviceIds.length > 0) {
-    query = query.in('device_id', config.deviceIds)
+    query = query.in('todolist.device_id', config.deviceIds)
   }
   
   // Filter by KPI if specified  
@@ -46,7 +63,7 @@ export async function exportTodolistData(config: ExportConfig): Promise<Blob> {
   }
   
   // Execute query
-  const { data: tasks, error } = await query
+  const { data: tasks, error } = await query as { data: TaskWithTodolist[] | null, error: any }
   
   if (error) {
     console.error("Error fetching tasks:", error)
@@ -59,7 +76,7 @@ export async function exportTodolistData(config: ExportConfig): Promise<Blob> {
   }
   
   // Collect unique device and KPI IDs
-  const deviceIds = [...new Set(tasks.map(task => task.device_id))]
+  const deviceIds = [...new Set(tasks.map(task => task.todolist.device_id))]
   const kpiIds = [...new Set(tasks.map(task => task.kpi_id))]
   
   // Fetch device and KPI details in parallel
@@ -102,9 +119,9 @@ export async function exportTodolistData(config: ExportConfig): Promise<Blob> {
   
   // Process each task
   for (const task of tasks) {
-    if (!task.scheduled_execution) continue;
-    const date = format(parseISO(task.scheduled_execution), 'dd/MM/yyyy')
-    const deviceName = escapeCSV(deviceMap[task.device_id] || 'Punto di controllo sconosciuto')
+    if (!task.todolist.scheduled_execution) continue;
+    const date = format(parseISO(task.todolist.scheduled_execution), 'dd/MM/yyyy')
+    const deviceName = escapeCSV(deviceMap[task.todolist.device_id] || 'Punto di controllo sconosciuto')
     const kpiName = escapeCSV(kpiMap[task.kpi_id]?.name || 'Controllo sconosciuto')
     const fieldNamesMap = kpiFieldNamesMap[task.kpi_id] || {}
     
@@ -166,25 +183,6 @@ export async function exportTodolistData(config: ExportConfig): Promise<Blob> {
   return new Blob([csvContent], { type: 'text/csv;charset=utf-8' })
 }
 
-// Helper function to escape CSV values
-function escapeCSV(value: any): string {
-  if (value === null || value === undefined) return ''
-  
-  // Convert booleans to Italian
-  if (typeof value === 'boolean') {
-    return value ? 'Sì' : 'No'
-  }
-  
-  const stringValue = String(value)
-  
-  // If contains commas, quotes or newlines, wrap in quotes and escape internal quotes
-  if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
-    return `"${stringValue.replace(/"/g, '""')}"`
-  }
-  
-  return stringValue
-}
-
 // Modified function to get KPIs for a specific device and date range
 export async function getKpisByDevice(config: {
   startDate: string;
@@ -193,14 +191,28 @@ export async function getKpisByDevice(config: {
 }): Promise<{ id: string; name: string }[]> {
   const supabase = await createServerSupabaseClient();
   
+  type TaskWithTodolistSimple = {
+    kpi_id: string
+    todolist: {
+      device_id: string
+      scheduled_execution: string
+    }
+  }
+  
   // Query tasks to find unique KPI IDs that have tasks for the specific device and date range
   const { data, error } = await supabase
     .from("tasks")
-    .select(`kpi_id`)
-    .gte('scheduled_execution', `${config.startDate}T00:00:00`)
-    .lte('scheduled_execution', `${config.endDate}T23:59:59`)
-    .eq('device_id', config.deviceId)
-    .order('kpi_id')
+    .select(`
+      kpi_id,
+      todolist:todolist_id (
+        device_id,
+        scheduled_execution
+      )
+    `)
+    .gte('todolist.scheduled_execution', `${config.startDate}T00:00:00`)
+    .lte('todolist.scheduled_execution', `${config.endDate}T23:59:59`)
+    .eq('todolist.device_id', config.deviceId)
+    .order('kpi_id') as { data: TaskWithTodolistSimple[] | null, error: any }
     
   if (error) {
     console.error("Error fetching KPIs for device:", error);
@@ -208,7 +220,7 @@ export async function getKpisByDevice(config: {
   }
   
   // Extract unique KPI IDs
-  const kpiIds = [...new Set(data.map(item => item.kpi_id))];
+  const kpiIds = [...new Set(data?.map(item => item.kpi_id) ?? [])];
   
   // For empty results, return empty array
   if (kpiIds.length === 0) {

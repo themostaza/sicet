@@ -14,12 +14,9 @@ export const TodolistSchema = z.object({
 export const TaskSchema = z.object({
   id: z.string({ message: "ID non valido" }),
   todolist_id: z.string({ message: "ID todolist non valido" }),
-  device_id: z.string({ message: "ID dispositivo non valido" }),
   kpi_id: z.string({ message: "ID KPI non valido" }),
-  scheduled_execution: z.string({ message: "Data di esecuzione non valida" }),
   status: z.string({ message: "Stato non valido" }),
   value: z.any().optional(),
-  completion_date: z.string().optional().nullable(),
   created_at: z.string().optional().nullable(),
   alert_checked: z.boolean().optional().default(false),
   updated_at: z.string().optional().nullable()

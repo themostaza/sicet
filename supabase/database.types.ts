@@ -71,42 +71,51 @@ export interface Database {
       }
       tasks: {
         Row: {
-          alert_checked: boolean | null
-          completion_date: string | null
-          created_at: string | null
-          device_id: string
           id: string
+          todolist_id: string
           kpi_id: string
-          scheduled_execution: string | null
           status: string
-          updated_at: string | null
           value: Json | null
+          created_at: string | null
+          alert_checked: boolean
+          updated_at: string | null
         }
         Insert: {
-          alert_checked?: boolean | null
-          completion_date?: string | null
-          created_at?: string | null
-          device_id: string
-          id: string
+          id?: string
+          todolist_id: string
           kpi_id: string
-          scheduled_execution?: string | null
-          status: string
-          updated_at?: string | null
+          status?: string
           value?: Json | null
+          created_at?: string | null
+          alert_checked?: boolean
+          updated_at?: string | null
         }
         Update: {
-          alert_checked?: boolean | null
-          completion_date?: string | null
-          created_at?: string | null
-          device_id?: string
           id?: string
+          todolist_id?: string
           kpi_id?: string
-          scheduled_execution?: string | null
           status?: string
-          updated_at?: string | null
           value?: Json | null
+          created_at?: string | null
+          alert_checked?: boolean
+          updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tasks_todolist_id_fkey"
+            columns: ["todolist_id"]
+            isOneToOne: false
+            referencedRelation: "todolist"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_kpi_id_fkey"
+            columns: ["kpi_id"]
+            isOneToOne: false
+            referencedRelation: "kpis"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       kpi_alerts: {
         Row: {
@@ -273,6 +282,44 @@ export interface Database {
         }
         Relationships: []
       }
+      todolist: {
+        Row: {
+          id: string
+          device_id: string
+          scheduled_execution: string
+          status: "pending" | "in_progress" | "completed"
+          completion_date: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          device_id: string
+          scheduled_execution: string
+          status?: "pending" | "in_progress" | "completed"
+          completion_date?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          device_id?: string
+          scheduled_execution?: string
+          status?: "pending" | "in_progress" | "completed"
+          completion_date?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "todolist_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -290,7 +337,7 @@ export interface Database {
       }
     }
     Enums: {
-      user_action_type: 'create_device' | 'create_kpi' | 'create_todolist' | 'complete_task' | 
+      user_action_type: 'create_device' | 'create_kpi' | 'create_todolist' | 'complete_task' | 'complete_todolist' | 
                        'update_device' | 'update_kpi' | 'update_todolist' | 
                        'delete_device' | 'delete_kpi' | 'delete_todolist'
       entity_type: 'device' | 'kpi' | 'todolist' | 'task'
