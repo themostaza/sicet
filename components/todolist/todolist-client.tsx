@@ -17,6 +17,7 @@ import { getDevice } from "@/app/actions/actions-device"
 import type { Task } from "@/lib/validation/todolist-schemas"
 import type { Kpi } from "@/lib/validation/kpi-schemas"
 import { Check, AlertCircle, Info, Save, Loader2 } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -179,6 +180,7 @@ export default function TodolistClient({
   initialKpis = [],
   deviceInfo: initialDeviceInfo = null,
 }: Props) {
+  const router = useRouter()
   const [tasks, setTasks] = useState<Task[]>(initialData.tasks)
   const [hasMore, setHasMore] = useState(initialData.hasMore)
   const [offset, setOffset] = useState(initialData.tasks.length)
@@ -205,11 +207,26 @@ export default function TodolistClient({
       getKpis({ offset: 0, limit: 100 }).then(({ kpis }) => {
         setKpis(kpis)
         setKpisLoading(false)
+      }).catch(error => {
+        console.error("Error fetching KPIs:", error)
+        toast({
+          title: "Errore",
+          description: "Impossibile caricare i controlli. Riprova più tardi.",
+          variant: "destructive"
+        })
+        setKpisLoading(false)
       })
     }
     if (!initialDeviceInfo) {
       getDevice(deviceId).then((d) => {
         if (d) setDeviceInfo({ name: d.name, location: d.location })
+      }).catch(error => {
+        console.error("Error fetching device:", error)
+        toast({
+          title: "Errore",
+          description: "Impossibile caricare le informazioni del dispositivo. Riprova più tardi.",
+          variant: "destructive"
+        })
       })
     }
   }, [deviceId, initialKpis, initialDeviceInfo])
@@ -217,16 +234,25 @@ export default function TodolistClient({
   /* ---------------- pagination ---------------- */
   const loadMore = () =>
     startTransition(async () => {
-      const res = await getTodolistTasks({
-        deviceId,
-        date,
-        timeSlot,
-        offset,
-        limit: 20,
-      })
-      setTasks((p) => [...p, ...res.tasks])
-      setHasMore(res.hasMore)
-      setOffset((o) => o + res.tasks.length)
+      try {
+        const res = await getTodolistTasks({
+          deviceId,
+          date,
+          timeSlot,
+          offset,
+          limit: 20,
+        })
+        setTasks((p) => [...p, ...res.tasks])
+        setHasMore(res.hasMore)
+        setOffset((o) => o + res.tasks.length)
+      } catch (error) {
+        console.error("Error loading more tasks:", error)
+        toast({
+          title: "Errore",
+          description: "Impossibile caricare altre attività. Riprova più tardi.",
+          variant: "destructive"
+        })
+      }
     })
 
   /* ---------------- mutations ----------------- */

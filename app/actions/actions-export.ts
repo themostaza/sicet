@@ -1,6 +1,6 @@
 'use server'
 
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { createServerSupabaseClient } from "@/lib/supabase-server"
 import type { Database } from "@/supabase/database.types"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { format, parseISO } from "date-fns"

@@ -126,7 +126,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
               ) : (
                 filtered.map((item) => (
                   <TableRow
-                    key={`${item.device_id}_${item.date}_${item.time_slot}`}
+                    key={item.id}
                     className="cursor-pointer"
                     onClick={() => handleRowClick(item)}
                   >

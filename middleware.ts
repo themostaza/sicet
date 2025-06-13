@@ -53,31 +53,32 @@ export async function middleware(req: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll: () => {
-          // Get all cookies from the request
-          const cookieStore = req.cookies
-          const cookies: { name: string; value: string }[] = []
-          
-          // Iterate through all cookie names
-          cookieStore.getAll().forEach(cookie => {
-            cookies.push({
-              name: cookie.name,
-              value: cookie.value
-            })
-          })
-          
-          return cookies
+        get: (name: string) => {
+          const cookie = req.cookies.get(name)
+          return cookie?.value
         },
-        setAll: (cookies: { name: string; value: string; options?: CookieOptions }[]) => {
-          cookies.forEach(({ name, value, options }) => {
+        set: (name: string, value: string, options: CookieOptions) => {
+          try {
+            // Ensure the value is a string before setting
+            const stringValue = typeof value === 'string' ? value : JSON.stringify(value)
             res.cookies.set({
               name,
-              value,
+              value: stringValue,
               ...options,
             })
-          })
+          } catch (error) {
+            console.error('Error setting cookie:', error)
+          }
         },
-      },
+        remove: (name: string, options: CookieOptions) => {
+          res.cookies.set({
+            name,
+            value: '',
+            ...options,
+            maxAge: 0
+          })
+        }
+      }
     }
   )
 
