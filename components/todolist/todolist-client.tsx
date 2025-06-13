@@ -14,7 +14,7 @@ import {
 } from "@/app/actions/actions-todolist"
 import { getKpis } from "@/app/actions/actions-kpi"
 import { getDevice } from "@/app/actions/actions-device"
-import type { Task } from "@/app/actions/actions-todolist"
+import type { Task } from "@/lib/validation/todolist-schemas"
 import type { Kpi } from "@/lib/validation/kpi-schemas"
 import { Check, AlertCircle, Info, Save, Loader2 } from "lucide-react"
 
@@ -230,40 +230,6 @@ export default function TodolistClient({
     })
 
   /* ---------------- mutations ----------------- */
-  const saveValue = async (taskId: string) => {
-    if (!dirtyFields.has(taskId)) return
-    setSavingTaskId(taskId)
-    try {
-      const value = localValues[taskId]
-      const updated = await updateTaskValue(taskId, value)
-      setTasks((p) => p.map((t) => (t.id === taskId ? updated : t)))
-      dirtyFields.delete(taskId)
-      if (dirtyFields.size === 0) clearDirty()
-      toast({ title: "Valore salvato", duration: 2000 })
-    } finally {
-      setSavingTaskId(null)
-    }
-  }
-
-  const saveAll = async () => {
-    if (!dirtyFields.size) return
-    setIsSavingAll(true)
-    try {
-      await Promise.all(
-        Array.from(dirtyFields).map((id) => updateTaskValue(id, localValues[id])),
-      )
-      setTasks((p) =>
-        p.map((t) =>
-          dirtyFields.has(t.id) ? { ...t, value: localValues[t.id] } : t,
-        ),
-      )
-      clearDirty()
-      toast({ title: "Tutti i valori salvati", duration: 2000 })
-    } finally {
-      setIsSavingAll(false)
-    }
-  }
-
   const handleCompleteTodolist = async () => {
     if (isCompleting) return
     setIsCompleting(true)
@@ -314,7 +280,15 @@ export default function TodolistClient({
 
       // Save all dirty values first
       if (dirtyFields.size > 0) {
-        await saveAll()
+        await Promise.all(
+          Array.from(dirtyFields).map((id) => updateTaskValue(id, localValues[id]))
+        )
+        setTasks((p) =>
+          p.map((t) =>
+            dirtyFields.has(t.id) ? { ...t, value: localValues[t.id] } : t,
+          ),
+        )
+        clearDirty()
       }
 
       // Then complete the todolist
@@ -694,27 +668,6 @@ export default function TodolistClient({
           </div>
 
           <div className="flex gap-2">
-            {dirtyFields.size > 0 && (
-              <Button 
-                onClick={saveAll} 
-                disabled={isPending || isSavingAll}
-                variant="outline"
-                className="relative"
-              >
-                {isSavingAll ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Salvataggio...
-                  </>
-                ) : (
-                  <>
-                    <Save size={16} className="mr-2" /> 
-                    Salva tutto ({dirtyFields.size})
-                  </>
-                )}
-              </Button>
-            )}
-
             {tasks.some(task => task.status !== "completed") && (
               <Button 
                 onClick={handleCompleteTodolist}
@@ -754,7 +707,6 @@ export default function TodolistClient({
                 .map((task) => {
                   const kpi = kpis.find((k) => k.id === task.kpi_id)
                   const dirty = dirtyFields.has(task.id)
-                  const isSaving = savingTaskId === task.id
                   return (
                     <Card key={task.id} className={dirty ? "ring-1 ring-amber-500" : ""}>
                       <CardHeader className="pb-3">
@@ -776,27 +728,6 @@ export default function TodolistClient({
                       <CardContent className="pt-4">
                         {kpisLoading ? <ValueSkeleton /> : renderInput(task, kpi)}
                       </CardContent>
-                      {dirty && (
-                        <CardFooter className="pt-0 flex justify-end">
-                          <Button
-                            size="sm"
-                            onClick={() => startTransition(() => saveValue(task.id))}
-                            disabled={isPending || isSaving}
-                            className="relative"
-                          >
-                            {isSaving ? (
-                              <>
-                                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                                Salvataggio...
-                              </>
-                            ) : (
-                              <>
-                                <Save size={16} className="mr-1" /> Salva
-                              </>
-                            )}
-                          </Button>
-                        </CardFooter>
-                      )}
                     </Card>
                   )
                 })}
