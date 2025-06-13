@@ -2,29 +2,59 @@
 
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
-import { createServerSupabaseClient } from "@/lib/supabase-server"
-import type { Database } from "@/supabase/database.types"
+import { createServerSupabaseClient } from "@/lib/supabase/server"
+import type { Database } from "@/lib/database.types"
 import type { SupabaseClient, PostgrestError } from "@supabase/supabase-js"
-import { TablesInsert } from "@/supabase/database.types"
+import type { TablesInsert } from "@/lib/database.types"
 import {
   Task,
   TaskSchema,
   TodolistParamsSchema,
   TimeSlot,
-  timeSlotOrder
+  timeSlotOrder,
+  getTimeRangeFromSlot,
+  getTimeSlotFromDateTime
 } from "@/lib/validation/todolist-schemas"
 import { checkKpiAlerts } from "./actions-alerts"
-import { logCurrentUserActivity } from "./actions-activity"
+import { logCurrentUserActivity } from "@/app/actions/actions-activity"
+import { handlePostgrestError } from "@/lib/supabase/error"
+import { generateUUID } from "@/lib/utils"
+import { TodolistParamsSchema as NewTodolistParamsSchema, CreateTodolistSchema, type Todolist } from "@/lib/validation/todolist-schemas"
 
 /** -------------------------------------------------------------------------
- * 1 · SUPABASE CLIENT TIPIZZATO
+ * 1 · TYPES
  * ------------------------------------------------------------------------*/
 
-type TasksTable = Database["public"]["Tables"]["tasks"]
-type TasksRow = TasksTable["Row"]
+type TasksRow = {
+  id: string
+  todolist_id: string
+  device_id: string
+  kpi_id: string
+  scheduled_execution: string
+  status: string
+  value: any
+  completion_date: string | null
+  created_at: string | null
+  alert_checked: boolean
+  updated_at: string | null
+}
 
-const supabase = async (): Promise<SupabaseClient<Database>> =>
-  await createServerSupabaseClient();
+type TodolistRow = {
+  id: string
+  device_id: string
+  scheduled_execution: string
+  status: "pending" | "in_progress" | "completed"
+  created_at: string | null
+  updated_at: string | null
+}
+
+type TodolistWithTasks = TodolistRow & {
+  tasks: Array<{
+    id: string
+    kpi_id: string
+    status: string
+  }>
+}
 
 /** -------------------------------------------------------------------------
  * 2 · MAPPERS
@@ -32,6 +62,7 @@ const supabase = async (): Promise<SupabaseClient<Database>> =>
 
 const toTask = (row: TasksRow): Task => ({
   id: row.id,
+  todolist_id: row.todolist_id,
   device_id: row.device_id,
   kpi_id: row.kpi_id,
   scheduled_execution: row.scheduled_execution,
@@ -40,6 +71,15 @@ const toTask = (row: TasksRow): Task => ({
   completion_date: row.completion_date ?? undefined,
   created_at: row.created_at ?? undefined,
   alert_checked: row.alert_checked ?? false,
+  updated_at: row.updated_at ?? row.created_at ?? new Date().toISOString()
+})
+
+const toTodolist = (row: TodolistRow): Todolist => ({
+  id: row.id,
+  device_id: row.device_id,
+  scheduled_execution: row.scheduled_execution,
+  status: row.status,
+  created_at: row.created_at ?? undefined,
   updated_at: row.updated_at ?? row.created_at ?? new Date().toISOString()
 })
 
@@ -79,39 +119,41 @@ function handleZodError(e: z.ZodError): never {
  * 4 · SERVER ACTIONS
  * ------------------------------------------------------------------------*/
 
-// Utility per fascia oraria
-function getTimeRangeFromSlot(date: string, timeSlot: string) {
-  const baseDate = new Date(`${date}T00:00:00Z`)
-  let startHour = 0, endHour = 0
-  switch (timeSlot) {
-    case "mattina": startHour = 6; endHour = 12; break
-    case "pomeriggio": startHour = 12; endHour = 18; break
-    case "sera": startHour = 18; endHour = 22; break
-    case "notte": startHour = 22; endHour = 6; break
-    default: startHour = 0; endHour = 23
+// Ottieni una todolist
+export async function getTodolist(params: unknown): Promise<Todolist | null> {
+  const { deviceId, date, timeSlot } = TodolistParamsSchema.parse(params)
+  const { startTime } = getTimeRangeFromSlot(date, timeSlot as TimeSlot)
+
+  const { data, error } = await (await supabase())
+    .from("todolist")
+    .select("*")
+    .eq("device_id", deviceId)
+    .eq("scheduled_execution", startTime)
+    .single()
+
+  if (error) {
+    if (error.code === "PGRST116") return null // Not found
+    handlePostgrestError(error)
   }
-  const startDate = new Date(baseDate)
-  startDate.setHours(startHour, 0, 0, 0)
-  const endDate = new Date(baseDate)
-  if (timeSlot === "notte") endDate.setDate(endDate.getDate() + 1)
-  endDate.setHours(endHour, 0, 0, 0)
-  return {
-    startTime: startDate.toISOString(),
-    endTime: endDate.toISOString(),
-  }
+
+  return data ? toTodolist(data) : null
 }
 
 // Ottieni le task per una todolist (con paginazione)
 export async function getTodolistTasks(params: unknown): Promise<{ tasks: Task[]; hasMore: boolean }> {
   const { deviceId, date, timeSlot, offset, limit } = TodolistParamsSchema.parse(params)
-  const { startTime, endTime } = getTimeRangeFromSlot(date, timeSlot)
+  const { startTime } = getTimeRangeFromSlot(date, timeSlot as TimeSlot)
+
+  // First get the todolist
+  const todolist = await getTodolist({ deviceId, date, timeSlot })
+  if (!todolist) {
+    return { tasks: [], hasMore: false }
+  }
 
   const { data, count, error } = await (await supabase())
     .from("tasks")
     .select("*", { count: "exact" })
-    .eq("device_id", deviceId)
-    .gte("scheduled_execution", startTime)
-    .lte("scheduled_execution", endTime)
+    .eq("todolist_id", todolist.id)
     .order("scheduled_execution", { ascending: true })
     .range(offset, offset + limit - 1)
 
@@ -125,10 +167,10 @@ export async function getTodolistTasks(params: unknown): Promise<{ tasks: Task[]
 export async function updateTaskStatus(taskId: string, status: string): Promise<Task> {
   console.log(`[updateTaskStatus] Starting update for task ${taskId} with status ${status}`)
   
-  // First get the task to get its KPI and device IDs
+  // First get the task to get its todolist_id
   const { data: taskData, error: taskError } = await (await supabase())
     .from("tasks")
-    .select("kpi_id, device_id, value, alert_checked")
+    .select("todolist_id, kpi_id, device_id, value, alert_checked")
     .eq("id", taskId)
     .single()
 
@@ -143,6 +185,7 @@ export async function updateTaskStatus(taskId: string, status: string): Promise<
 
   console.log(`[updateTaskStatus] Task data:`, {
     taskId,
+    todolistId: taskData.todolist_id,
     kpiId: taskData.kpi_id,
     deviceId: taskData.device_id,
     hasValue: !!taskData.value,
@@ -156,7 +199,6 @@ export async function updateTaskStatus(taskId: string, status: string): Promise<
     .update({ 
       status, 
       completion_date: status === "completed" ? new Date().toISOString() : null,
-      // Se il task viene completato e gli alert non sono stati ancora controllati, impostiamo alert_checked a true
       alert_checked: status === "completed" ? true : taskData.alert_checked
     })
     .eq("id", taskId)
@@ -168,35 +210,6 @@ export async function updateTaskStatus(taskId: string, status: string): Promise<
     handlePostgrestError(error)
   }
 
-  // Check for alerts only when completing the task and if alerts haven't been checked yet
-  if (status === "completed" && taskData.value && !taskData.alert_checked) {
-    console.log(`[updateTaskStatus] Checking alerts for task ${taskId}`, {
-      kpiId: taskData.kpi_id,
-      deviceId: taskData.device_id,
-      value: taskData.value
-    })
-    
-    try {
-      await checkKpiAlerts(taskData.kpi_id, taskData.device_id, taskData.value)
-      console.log(`[updateTaskStatus] Alert check completed for task ${taskId}`)
-    } catch (error) {
-      console.error(`[updateTaskStatus] Error checking alerts:`, error)
-      // Non lanciamo l'errore per non bloccare il completamento del task
-    }
-  } else if (status === "completed" && taskData.alert_checked) {
-    console.log(`[updateTaskStatus] Alerts already checked for task ${taskId}, skipping`)
-  }
-
-  // Log the activity if task is completed
-  if (status === "completed") {
-    await logCurrentUserActivity('complete_task', 'task', taskId, {
-      completion_date: data!.completion_date,
-      device_id: data!.device_id,
-      kpi_id: data!.kpi_id
-    });
-  }
-
-  revalidatePath("/todolist")
   return toTask(data!)
 }
 
@@ -210,29 +223,39 @@ export async function updateTaskValue(taskId: string, value: any): Promise<Task>
     .single()
 
   if (error) handlePostgrestError(error)
-
-  revalidatePath("/todolist")
   return toTask(data!)
 }
 
-// Elimina tutte le task di una todolist
+// Elimina una todolist e tutte le sue task
 export async function deleteTodolist(deviceId: string, date: string, timeSlot: string): Promise<void> {
-  const { startTime, endTime } = getTimeRangeFromSlot(date, timeSlot)
+  const { startTime } = getTimeRangeFromSlot(date, timeSlot as TimeSlot)
   
+  // Get todolist info before deleting for logging
+  const { data: todolistData, error: todolistError } = await (await supabase())
+    .from("todolist")
+    .select("id")
+    .eq("device_id", deviceId)
+    .eq("scheduled_execution", startTime)
+    .single()
+
+  if (todolistError) {
+    if (todolistError.code === "PGRST116") return // Not found
+    handlePostgrestError(todolistError)
+  }
+
+  if (!todolistData) return
+
   // Get tasks info before deleting for logging
   const { data: tasksData } = await (await supabase())
     .from("tasks")
     .select("id, kpi_id, scheduled_execution")
-    .eq("device_id", deviceId)
-    .gte("scheduled_execution", startTime)
-    .lte("scheduled_execution", endTime)
+    .eq("todolist_id", todolistData.id)
   
+  // Delete the todolist (this will cascade delete all tasks)
   const { error } = await (await supabase())
-    .from("tasks")
+    .from("todolist")
     .delete()
-    .eq("device_id", deviceId)
-    .gte("scheduled_execution", startTime)
-    .lte("scheduled_execution", endTime)
+    .eq("id", todolistData.id)
   
   if (error) handlePostgrestError(error)
   
@@ -251,74 +274,47 @@ export async function deleteTodolist(deviceId: string, date: string, timeSlot: s
   revalidatePath("/todolist")
 }
 
-// Utility per fascia oraria (sincrona)
-function getTimeSlotFromDateTime(dateTimeStr: string): string {
-  const date = new Date(dateTimeStr)
-  const hours = date.getHours()
-  if (hours >= 6 && hours < 12) return "mattina"
-  if (hours >= 12 && hours < 18) return "pomeriggio"
-  if (hours >= 18 && hours < 22) return "sera"
-  return "notte"
-}
-
 // Ottieni tutte le todolist raggruppate per device/data/slot
 export async function getTodolistsGrouped() {
   const { data, error } = await (await supabase())
-    .from("tasks")
-    .select("id, device_id, kpi_id, scheduled_execution, status, created_at")
+    .from("todolist")
+    .select(`
+      id,
+      device_id,
+      scheduled_execution,
+      status,
+      created_at,
+      tasks (
+        id,
+        kpi_id,
+        status
+      )
+    `)
     .order("scheduled_execution", { ascending: false })
 
   if (error) handlePostgrestError(error)
 
-  // Raggruppa per device_id, data, time_slot
-  const todolistGroups: Record<string, any> = {}
-  for (const task of data ?? []) {
-    if (!task.scheduled_execution) continue // Skip tasks without scheduled_execution
-    const executionDate = task.scheduled_execution.split("T")[0]
-    const timeSlot = getTimeSlotFromDateTime(task.scheduled_execution)
-    const key = `${task.device_id}_${executionDate}_${timeSlot}`
-
-    if (!todolistGroups[key]) {
-      todolistGroups[key] = {
-        device_id: task.device_id,
-        date: executionDate,
-        time_slot: timeSlot,
-        tasks: [],
-        status: "pending",
-      }
-    }
-    todolistGroups[key].tasks.push(task)
-  }
-
-  // Stato todolist
-  for (const key in todolistGroups) {
-    const todolist = todolistGroups[key]
-    const allCompleted = todolist.tasks.every((task: any) => task.status === "completed")
-    if (allCompleted) {
-      todolist.status = "completed"
-    } else if (todolist.tasks.some((task: any) => task.status === "completed")) {
-      todolist.status = "in_progress"
-    } else {
-      todolist.status = "pending"
-    }
-  }
-
   // Arricchisci con device_name
-  const todolistsArray = Object.values(todolistGroups)
-  const deviceIds = [...new Set(todolistsArray.map((item: any) => item.device_id))]
-  let devicesMap: Record<string, any> = {}
+  const todolistsArray = (data ?? []) as TodolistWithTasks[]
+  const deviceIds = [...new Set(todolistsArray.map(item => item.device_id))]
+  let devicesMap: Record<string, { id: string; name: string }> = {}
   if (deviceIds.length > 0) {
     const { data: devicesData } = await (await supabase())
       .from("devices")
       .select("id, name")
       .in("id", deviceIds)
-    devicesMap = Object.fromEntries((devicesData ?? []).map((d: any) => [d.id, d]))
+    devicesMap = Object.fromEntries((devicesData ?? []).map(d => [d.id, d]))
   }
 
-  return todolistsArray.map((item: any) => ({
-    ...item,
+  return todolistsArray.map(item => ({
+    id: item.id,
+    device_id: item.device_id,
     device_name: devicesMap[item.device_id]?.name || "Dispositivo sconosciuto",
+    date: item.scheduled_execution.split("T")[0],
+    time_slot: getTimeSlotFromDateTime(item.scheduled_execution),
+    status: item.status,
     count: item.tasks.length,
+    tasks: item.tasks
   }))
 }
 
@@ -378,17 +374,30 @@ export async function getTodolistsGroupedWithFilters() {
   return { filtered, counts };
 }
 
-// Define a UUID generator function
-function generateUUID(): string {
-  return crypto.randomUUID();
-}
-
-// Crea task per todolist
+// Crea una todolist e le sue task
 export async function createTodolist(deviceId: string, date: string, timeSlot: string, kpiId: string): Promise<Task> {
-  const { startTime } = getTimeRangeFromSlot(date, timeSlot)
+  const { startTime } = getTimeRangeFromSlot(date, timeSlot as TimeSlot)
   
-  const insertData: TablesInsert<"tasks"> = {
+  // First create the todolist
+  const todolistData: TablesInsert<"todolist"> = {
     id: generateUUID(),
+    device_id: deviceId,
+    scheduled_execution: startTime,
+    status: "pending"
+  }
+  
+  const { data: todolist, error: todolistError } = await (await supabase())
+    .from("todolist")
+    .insert(todolistData)
+    .select()
+    .single()
+  
+  if (todolistError) handlePostgrestError(todolistError)
+  
+  // Then create the task
+  const taskData: TablesInsert<"tasks"> = {
+    id: generateUUID(),
+    todolist_id: todolist!.id,
     device_id: deviceId,
     kpi_id: kpiId,
     scheduled_execution: startTime,
@@ -396,16 +405,16 @@ export async function createTodolist(deviceId: string, date: string, timeSlot: s
     value: null
   }
   
-  const { data, error } = await (await supabase())
+  const { data: task, error: taskError } = await (await supabase())
     .from("tasks")
-    .insert(insertData)
+    .insert(taskData)
     .select()
     .single()
   
-  if (error) handlePostgrestError(error)
+  if (taskError) handlePostgrestError(taskError)
   
   // Log the activity
-  await logCurrentUserActivity('create_todolist', 'task', data!.id, {
+  await logCurrentUserActivity('create_todolist', 'task', task!.id, {
     device_id: deviceId,
     kpi_id: kpiId,
     scheduled_execution: startTime,
@@ -413,15 +422,33 @@ export async function createTodolist(deviceId: string, date: string, timeSlot: s
   });
   
   revalidatePath("/todolist")
-  return toTask(data!)
+  return toTask(task!)
 }
 
-// Utility per creare multiple task
+// Utility per creare multiple task in una todolist
 export async function createMultipleTasks(deviceId: string, date: string, timeSlot: string, kpiIds: string[]): Promise<void> {
-  const { startTime } = getTimeRangeFromSlot(date, timeSlot)
+  const { startTime } = getTimeRangeFromSlot(date, timeSlot as TimeSlot)
   
+  // First create the todolist
+  const todolistData: TablesInsert<"todolist"> = {
+    id: generateUUID(),
+    device_id: deviceId,
+    scheduled_execution: startTime,
+    status: "pending"
+  }
+  
+  const { data: todolist, error: todolistError } = await (await supabase())
+    .from("todolist")
+    .insert(todolistData)
+    .select()
+    .single()
+  
+  if (todolistError) handlePostgrestError(todolistError)
+  
+  // Then create all tasks
   const tasksToInsert: TablesInsert<"tasks">[] = kpiIds.map(kpiId => ({
     id: generateUUID(),
+    todolist_id: todolist!.id,
     device_id: deviceId,
     kpi_id: kpiId,
     scheduled_execution: startTime,
@@ -429,16 +456,16 @@ export async function createMultipleTasks(deviceId: string, date: string, timeSl
     value: null
   }))
   
-  const { data, error } = await (await supabase())
+  const { data: tasks, error: taskError } = await (await supabase())
     .from("tasks")
     .insert(tasksToInsert)
     .select()
   
-  if (error) handlePostgrestError(error)
+  if (taskError) handlePostgrestError(taskError)
   
   // Log activities for each created task
-  if (data) {
-    await Promise.all(data.map(task => 
+  if (tasks) {
+    await Promise.all(tasks.map(task => 
       logCurrentUserActivity('create_todolist', 'task', task.id, {
         device_id: deviceId,
         kpi_id: task.kpi_id,
@@ -453,14 +480,25 @@ export async function createMultipleTasks(deviceId: string, date: string, timeSl
 
 // Check for existing tasks with the same date-device-KPI tuple
 export async function checkExistingTasks(deviceId: string, date: string, timeSlot: string, kpiIds: string[]): Promise<{ exists: boolean; existingTasks: Task[] }> {
-  const { startTime, endTime } = getTimeRangeFromSlot(date, timeSlot)
+  const { startTime } = getTimeRangeFromSlot(date, timeSlot as TimeSlot)
   
+  // First check if todolist exists
+  const { data: todolist } = await (await supabase())
+    .from("todolist")
+    .select("id")
+    .eq("device_id", deviceId)
+    .eq("scheduled_execution", startTime)
+    .single()
+
+  if (!todolist) {
+    return { exists: false, existingTasks: [] }
+  }
+  
+  // Then check for tasks with the same KPIs
   const { data, error } = await (await supabase())
     .from("tasks")
-    .select("id, device_id, kpi_id, scheduled_execution, status, value, completion_date, created_at, alert_checked, updated_at")
-    .eq("device_id", deviceId)
-    .gte("scheduled_execution", startTime)
-    .lte("scheduled_execution", endTime)
+    .select("*")
+    .eq("todolist_id", todolist.id)
     .in("kpi_id", kpiIds)
   
   if (error) handlePostgrestError(error)
@@ -471,4 +509,9 @@ export async function checkExistingTasks(deviceId: string, date: string, timeSlo
     exists: existingTasks.length > 0,
     existingTasks
   }
+}
+
+// Helper function to get supabase client
+const supabase = async (): Promise<SupabaseClient<Database>> => {
+  return await createServerSupabaseClient()
 }

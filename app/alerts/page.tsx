@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { AlertActions } from "./alert-actions"
 import { AlertDelete } from "./alert-delete"
+import { SupabaseClient } from "@supabase/supabase-js"
 
 type Alert = Database['public']['Tables']['kpi_alerts']['Row'] & {
   kpis: Database['public']['Tables']['kpis']['Row'] | null
@@ -29,6 +30,10 @@ type AlertCondition = {
   match_text?: string
   boolean_value?: boolean
 }
+
+// Helper function to get supabase client
+const supabase = async (): Promise<SupabaseClient<Database>> =>
+  await createServerSupabaseClient();
 
 async function getAlerts(): Promise<Alert[]> {
   const supabase = createServerSupabaseClient()
@@ -87,10 +92,10 @@ async function getAlertLogs(): Promise<AlertLog[]> {
 }
 
 export default async function AlertsPage() {
-  const supabase = await createServerSupabaseClient()
+  const client = await supabase();
   
   // Fetch alerts with their related KPIs
-  const { data: alerts, error: alertsError } = await supabase
+  const { data: alerts, error: alertsError } = await client
     .from('kpi_alerts')
     .select(`
       *,
@@ -108,7 +113,7 @@ export default async function AlertsPage() {
   }
 
   // Fetch alert logs with their related alerts and KPIs
-  const { data: alertLogs, error: logsError } = await supabase
+  const { data: alertLogs, error: logsError } = await client
     .from('kpi_alert_logs')
     .select(`
       *,
@@ -123,11 +128,16 @@ export default async function AlertsPage() {
         description
       )
     `)
-    .order('created_at', { ascending: false })
+    .order('triggered_at', { ascending: false })
 
   if (logsError) {
-    console.error('Error fetching alert logs:', logsError)
-    return <div>Error loading alert logs</div>
+    console.error('Error fetching alert logs:', {
+      error: logsError,
+      message: logsError.message,
+      details: logsError.details,
+      hint: logsError.hint
+    })
+    return <div>Error loading alert logs: {logsError.message}</div>
   }
 
   return (
@@ -146,7 +156,7 @@ export default async function AlertsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>KPI</TableHead>
-                      <TableHead>Threshold</TableHead>
+                      <TableHead>Conditions</TableHead>
                       <TableHead>Created</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
@@ -155,7 +165,7 @@ export default async function AlertsPage() {
                     {(alerts as Alert[]).map((alert) => (
                       <TableRow key={alert.id}>
                         <TableCell>{alert.kpis?.name || 'Unknown KPI'}</TableCell>
-                        <TableCell>{JSON.stringify(alert.threshold)}</TableCell>
+                        <TableCell>{JSON.stringify(alert.conditions)}</TableCell>
                         <TableCell>{alert.created_at ? new Date(alert.created_at).toLocaleString() : 'N/A'}</TableCell>
                         <TableCell>
                           <Button variant="ghost" size="icon">
@@ -188,16 +198,16 @@ export default async function AlertsPage() {
                       <TableHead>KPI</TableHead>
                       <TableHead>Value</TableHead>
                       <TableHead>Email</TableHead>
-                      <TableHead>Created</TableHead>
+                      <TableHead>Triggered</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {(alertLogs as AlertLog[]).map((log) => (
                       <TableRow key={log.id}>
                         <TableCell>{log.kpis?.name || 'Unknown KPI'}</TableCell>
-                        <TableCell>{JSON.stringify(log.value)}</TableCell>
+                        <TableCell>{JSON.stringify(log.triggered_value)}</TableCell>
                         <TableCell>{log.kpi_alerts?.email || 'Unknown'}</TableCell>
-                        <TableCell>{log.created_at ? new Date(log.created_at).toLocaleString() : 'N/A'}</TableCell>
+                        <TableCell>{log.triggered_at ? new Date(log.triggered_at).toLocaleString() : 'N/A'}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

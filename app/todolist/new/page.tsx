@@ -133,8 +133,9 @@ function TodolistCreationForm() {
     const todolistPromises = []
     
     for (const deviceId of selectedDevices) {
-      for (const kpiId of selectedKpis) {
-        if (alertConditions.length > 0 && alertEmail) {
+      // Create alerts for each KPI if conditions are set
+      if (alertConditions.length > 0 && alertEmail) {
+        for (const kpiId of selectedKpis) {
           console.log(`Queueing alert creation for KPI ${kpiId} and device ${deviceId}`)
           alertPromises.push(
             createAlert(kpiId, deviceId, alertEmail, alertConditions)
@@ -151,27 +152,29 @@ function TodolistCreationForm() {
               })
           )
         }
+      }
 
-        for (const entry of dateEntries) {
-          // Skip if this combination exists in existingTasks
-          const exists = existingTasksDialog.tasks.some(
-            task => 
-              task.deviceId === deviceId && 
-              task.kpiId === kpiId && 
-              task.date === format(entry.date, "yyyy-MM-dd") && 
-              task.timeSlot === entry.timeSlot
-          )
-          
-          if (!exists) {
-            todolistPromises.push(
-              createTodolist(
-                deviceId,
-                format(entry.date, "yyyy-MM-dd"),
-                entry.timeSlot,
-                kpiId
-              )
+      // Create one todolist per device/date with all selected KPIs
+      for (const entry of dateEntries) {
+        const formattedDate = format(entry.date, "yyyy-MM-dd")
+        
+        // Skip if this combination exists in existingTasks
+        const exists = existingTasksDialog.tasks.some(
+          task => 
+            task.deviceId === deviceId && 
+            task.date === formattedDate && 
+            task.timeSlot === entry.timeSlot
+        )
+        
+        if (!exists) {
+          todolistPromises.push(
+            createMultipleTasks(
+              deviceId,
+              formattedDate,
+              entry.timeSlot,
+              Array.from(selectedKpis)
             )
-          }
+          )
         }
       }
     }

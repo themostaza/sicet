@@ -13,6 +13,7 @@ type TimeSlot = "mattina" | "pomeriggio" | "sera" | "notte"
 type FilterType = "all" | "today" | "overdue" | "future" | "completed"
 
 type TodolistItem = {
+  id: string
   device_id: string
   device_name: string
   date: string
@@ -106,6 +107,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>ID</TableHead>
                 <TableHead>Dispositivo</TableHead>
                 <TableHead>Data</TableHead>
                 <TableHead>Fascia</TableHead>
@@ -128,6 +130,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                     className="cursor-pointer"
                     onClick={() => handleRowClick(item)}
                   >
+                    <TableCell className="font-mono text-xs">{item.id}</TableCell>
                     <TableCell>{item.device_name}</TableCell>
                     <TableCell>{item.date}</TableCell>
                     <TableCell>{item.time_slot}</TableCell>

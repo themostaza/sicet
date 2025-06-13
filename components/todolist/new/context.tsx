@@ -276,8 +276,8 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
   
   // Conteggio totale delle todolist da creare
   const totalTodolistCount = useMemo(() => 
-    selectedDevices.size * selectedKpis.size * dateEntries.length,
-  [selectedDevices.size, selectedKpis.size, dateEntries.length])
+    selectedDevices.size * dateEntries.length,
+  [selectedDevices.size, dateEntries.length])
   
   // Stati di selezione tutti/alcuni
   const allRowsSelected = useMemo(() => 
