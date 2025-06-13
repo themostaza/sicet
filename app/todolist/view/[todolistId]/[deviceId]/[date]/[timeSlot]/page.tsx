@@ -2,30 +2,11 @@ import type React from "react"
 import { Suspense } from "react"
 import { AlertCircle, Loader2 } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { getTodolistTasks } from "@/app/actions/actions-todolist"
+import { getTodolistTasksById } from "@/app/actions/actions-todolist"
 import TodolistClient from "@/components/todolist/todolist-client"
 import { getKpis } from "@/app/actions/actions-kpi"
 import { getDevice } from "@/app/actions/actions-device"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-
-interface FieldErrorTooltipProps {
-  message: string
-}
-
-const FieldErrorTooltip: React.FC<FieldErrorTooltipProps> = ({ message }) => {
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger>
-          <AlertCircle className="h-4 w-4 ml-1 text-red-500" />
-        </TooltipTrigger>
-        <TooltipContent className="bg-red-500 text-white">
-          <p>{message}</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  )
-}
 
 // Componente di loading
 function TodolistLoading() {
@@ -40,12 +21,10 @@ function TodolistLoading() {
 }
 
 // Componente per il contenuto della todolist 
-async function TodolistContent({ params }: { params: { deviceId: string; date: string; timeSlot: string } }) {
+async function TodolistContent({ params }: { params: { todolistId: string; deviceId: string; date: string; timeSlot: string } }) {
   // Fetch server-side con paginazione
-  const initialData = await getTodolistTasks({
-    deviceId: params.deviceId,
-    date: params.date,
-    timeSlot: params.timeSlot,
+  const initialData = await getTodolistTasksById({
+    todolistId: params.todolistId,
     offset: 0,
     limit: 20,
   })
@@ -72,6 +51,7 @@ async function TodolistContent({ params }: { params: { deviceId: string; date: s
   return (
     <TodolistClient
       initialData={initialData}
+      todolistId={params.todolistId}
       deviceId={params.deviceId}
       date={params.date}
       timeSlot={params.timeSlot}
@@ -80,18 +60,16 @@ async function TodolistContent({ params }: { params: { deviceId: string; date: s
 }
 
 export default async function Page(
-  props: { params: Promise<{ deviceId: string; date: string; timeSlot: string }> }
+  props: { params: Promise<{ todolistId: string; deviceId: string; date: string; timeSlot: string }> }
 ) {
   const params = await props.params;
   // Awaiting params to ensure they're fully available
-  const { deviceId, date, timeSlot } = await Promise.resolve(params);
+  const { todolistId, deviceId, date, timeSlot } = await Promise.resolve(params);
 
   // Carica in parallelo tutti i dati necessari
   const [initialData, kpisData, device] = await Promise.all([
-    getTodolistTasks({
-      deviceId,
-      date,
-      timeSlot,
+    getTodolistTasksById({
+      todolistId,
       offset: 0,
       limit: 20,
     }),
@@ -103,6 +81,7 @@ export default async function Page(
     <Suspense fallback={<div className="p-6">Caricamento todolist...</div>}>
       <TodolistClient
         initialData={initialData}
+        todolistId={todolistId}
         deviceId={deviceId}
         date={date}
         timeSlot={timeSlot}
@@ -111,4 +90,4 @@ export default async function Page(
       />
     </Suspense>
   )
-}
+} 

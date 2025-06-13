@@ -9,7 +9,7 @@ const rolePermissions = {
     '/devices', 
     '/device/*', 
     '/device/*/scan',  // Allow access to scan route
-    '/todolist/view/*/*/*'  // Allow access to todolist view when redirected from scan
+    '/todolist/view/*/*/*/*'  // Allow access to todolist view with todolist ID
   ],
   referrer: ['/summary'] // Referrer can only access summary page
 } as const
@@ -32,8 +32,9 @@ function hasAccess(role: Role, path: string, referer?: string): boolean {
   
   // Special case for operator accessing todolist
   if (role === 'operator' && path.startsWith('/todolist/view/')) {
-    // Only allow access if coming from a device scan page
-    return (referer?.includes('/device/') && referer?.includes('/scan')) ?? false
+    // Allow access if coming from a device scan page or todolist list page
+    return ((referer?.includes('/device/') && referer?.includes('/scan')) || 
+            referer?.includes('/todolist')) ?? false
   }
 
   // Special case for referrer accessing todolist

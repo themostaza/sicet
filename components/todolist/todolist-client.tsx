@@ -11,6 +11,7 @@ import {
   updateTaskValue,
   getTodolistTasks,
   completeTodolist,
+  getTodolistTasksById,
 } from "@/app/actions/actions-todolist"
 import { getKpis } from "@/app/actions/actions-kpi"
 import { getDevice } from "@/app/actions/actions-device"
@@ -32,6 +33,7 @@ import { toast } from "@/components/ui/use-toast"
 
 interface Props {
   initialData: { tasks: Task[]; hasMore: boolean }
+  todolistId: string
   deviceId: string
   date: string
   timeSlot: string
@@ -174,6 +176,7 @@ function usePersistedValues(key: string) {
  * ----------------------------------------------------------- */
 export default function TodolistClient({
   initialData,
+  todolistId,
   deviceId,
   date,
   timeSlot,
@@ -235,10 +238,8 @@ export default function TodolistClient({
   const loadMore = () =>
     startTransition(async () => {
       try {
-        const res = await getTodolistTasks({
-          deviceId,
-          date,
-          timeSlot,
+        const res = await getTodolistTasksById({
+          todolistId,
           offset,
           limit: 20,
         })
@@ -257,89 +258,21 @@ export default function TodolistClient({
 
   /* ---------------- mutations ----------------- */
   const handleCompleteTodolist = async () => {
-    if (isCompleting) return
     setIsCompleting(true)
-
     try {
-      // Validate all tasks before completing
-      const validationErrors: string[] = []
-      for (const task of tasks) {
-        const kpi = kpis.find((k) => k.id === task.kpi_id)
-        if (kpi?.value) {
-          const fields = Array.isArray(kpi.value) ? kpi.value : [kpi.value]
-          const currentValue = dirtyFields.has(task.id) ? localValues[task.id] : task.value
-          
-          fields.forEach((field, idx) => {
-            const val = Array.isArray(currentValue)
-              ? currentValue[idx]?.value
-              : typeof currentValue === "object" && currentValue !== null
-              ? (currentValue as any).value
-              : currentValue
-            
-            if (field.required && (val === undefined || val === null || val === "")) {
-              validationErrors.push(`${kpi.name}: Campo "${field.name || 'Campo ' + (idx + 1)}" obbligatorio`)
-              return
-            }
-            
-            const typeValidation = validateFieldValue(val, field)
-            if (!typeValidation.valid && typeValidation.message) {
-              validationErrors.push(`${kpi.name}: ${field.name || 'Campo ' + (idx + 1)}: ${typeValidation.message}`)
-            }
-          })
-        }
-      }
-
-      if (validationErrors.length > 0) {
-        toast({
-          title: "Errore di validazione",
-          description: (
-            <ul className="list-disc pl-4">
-              {validationErrors.map((error, i) => (
-                <li key={i}>{error}</li>
-              ))}
-            </ul>
-          ),
-          variant: "destructive",
-        })
-        return
-      }
-
-      // Save all dirty values first
-      if (dirtyFields.size > 0) {
-        await Promise.all(
-          Array.from(dirtyFields).map((id) => updateTaskValue(id, localValues[id]))
-        )
-        setTasks((p) =>
-          p.map((t) =>
-            dirtyFields.has(t.id) ? { ...t, value: localValues[t.id] } : t,
-          ),
-        )
-        clearDirty()
-      }
-
-      // Then complete the todolist
-      await completeTodolist(deviceId, date, timeSlot)
-      
-      // Refresh the tasks
-      const res = await getTodolistTasks({
-        deviceId,
-        date,
-        timeSlot,
-        offset: 0,
-        limit: offset + tasks.length,
-      })
-      setTasks(res.tasks)
-      
+      await completeTodolist(todolistId)
+      // Update local state
+      setTasks(tasks.map(task => ({ ...task, status: "completed" })))
       toast({
         title: "Todolist completata",
-        description: "Tutte le attività sono state completate con successo",
+        description: "Tutte le attività sono state completate con successo.",
       })
     } catch (error) {
-      console.error("Errore durante il completamento della todolist:", error)
+      console.error("Error completing todolist:", error)
       toast({
         title: "Errore",
-        description: "Si è verificato un errore durante il completamento della todolist",
-        variant: "destructive",
+        description: "Impossibile completare la todolist. Riprova più tardi.",
+        variant: "destructive"
       })
     } finally {
       setIsCompleting(false)

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { TablesInsert } from "@/supabase/database.types";
 
 // Schema base per Todolist
 export const TodolistSchema = z.object({
@@ -31,6 +32,13 @@ export const TodolistParamsSchema = z.object({
   limit: z.number().optional().default(20)
 });
 
+// Schema per i parametri di una todolist con ID
+export const TodolistIdParamsSchema = z.object({
+  todolistId: z.string({ message: "ID todolist richiesto" }),
+  offset: z.number().optional().default(0),
+  limit: z.number().optional().default(20)
+});
+
 // Schema per creazione todolist
 export const CreateTodolistSchema = z.object({
   deviceId: z.string({ message: "ID dispositivo richiesto" }),
@@ -43,6 +51,7 @@ export const CreateTodolistSchema = z.object({
 export type Todolist = z.infer<typeof TodolistSchema>;
 export type Task = z.infer<typeof TaskSchema>;
 export type TodolistParams = z.infer<typeof TodolistParamsSchema>;
+export type TodolistIdParams = z.infer<typeof TodolistIdParamsSchema>;
 export type CreateTodolistParams = z.infer<typeof CreateTodolistSchema>;
 
 // Type per gli slot temporali
@@ -119,4 +128,41 @@ export function getTimeRangeFromSlot(date: string, timeSlot: TimeSlot): { startT
     startTime: startTime.toISOString(),
     endTime: endTime.toISOString()
   }
-} 
+}
+
+// Helper functions for converting database rows to types
+export const toTask = (row: {
+  id: string
+  todolist_id: string
+  kpi_id: string
+  status: string
+  value: any
+  created_at: string | null
+  alert_checked: boolean
+  updated_at: string | null
+}) => ({
+  id: row.id,
+  todolist_id: row.todolist_id,
+  kpi_id: row.kpi_id,
+  status: row.status as "pending" | "in_progress" | "completed",
+  value: row.value,
+  created_at: row.created_at ?? undefined,
+  updated_at: row.updated_at ?? row.created_at ?? new Date().toISOString(),
+  alert_checked: row.alert_checked
+})
+
+export const toTodolist = (row: {
+  id: string
+  device_id: string
+  scheduled_execution: string
+  status: "pending" | "in_progress" | "completed"
+  created_at: string | null
+  updated_at: string | null
+}) => ({
+  id: row.id,
+  device_id: row.device_id,
+  scheduled_execution: row.scheduled_execution,
+  status: row.status,
+  created_at: row.created_at ?? undefined,
+  updated_at: row.updated_at ?? row.created_at ?? new Date().toISOString()
+}) 

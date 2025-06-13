@@ -14,11 +14,14 @@ import {
   TaskSchema,
   TodolistParamsSchema,
   CreateTodolistSchema,
+  TodolistIdParamsSchema,
   type Todolist,
   type TimeSlot,
   timeSlotOrder,
   getTimeRangeFromSlot,
-  getTimeSlotFromDateTime
+  getTimeSlotFromDateTime,
+  toTask,
+  toTodolist
 } from "@/lib/validation/todolist-schemas"
 import { checkKpiAlerts } from "./actions-alerts"
 
@@ -62,26 +65,6 @@ type TodolistWithTasks = TodolistRow & {
 async function getSupabaseClient() {
   return await createServerSupabaseClient()
 }
-
-const toTask = (row: TasksRow): Task => ({
-  id: row.id,
-  todolist_id: row.todolist_id,
-  kpi_id: row.kpi_id,
-  status: row.status as "pending" | "in_progress" | "completed",
-  value: row.value,
-  created_at: row.created_at ?? undefined,
-  updated_at: row.updated_at ?? row.created_at ?? new Date().toISOString(),
-  alert_checked: row.alert_checked
-})
-
-const toTodolist = (row: TodolistRow): Todolist => ({
-  id: row.id,
-  device_id: row.device_id,
-  scheduled_execution: row.scheduled_execution,
-  status: row.status,
-  created_at: row.created_at ?? undefined,
-  updated_at: row.updated_at ?? row.created_at ?? new Date().toISOString()
-})
 
 /** -------------------------------------------------------------------------
  * 3 · ERROR HANDLING
@@ -150,6 +133,23 @@ export async function getTodolistTasks(params: unknown): Promise<{ tasks: Task[]
     .from("tasks")
     .select("*", { count: "exact" })
     .eq("todolist_id", todolist.id)
+    .order("created_at", { ascending: true })
+    .range(offset, offset + limit - 1)
+
+  if (error) handleError(error)
+  const tasks = (data ?? []).map(toTask)
+  const hasMore = count !== null ? offset + limit < count : tasks.length === limit
+  return { tasks, hasMore }
+}
+
+// Ottieni le task per una todolist usando l'ID (con paginazione)
+export async function getTodolistTasksById(params: unknown): Promise<{ tasks: Task[]; hasMore: boolean }> {
+  const { todolistId, offset, limit } = TodolistIdParamsSchema.parse(params)
+
+  const { data, count, error } = await (await getSupabaseClient())
+    .from("tasks")
+    .select("*", { count: "exact" })
+    .eq("todolist_id", todolistId)
     .order("created_at", { ascending: true })
     .range(offset, offset + limit - 1)
 
@@ -627,33 +627,30 @@ export async function checkExistingTasks(deviceId: string, date: string, timeSlo
 }
 
 // Completa una todolist e tutte le sue task
-export async function completeTodolist(deviceId: string, date: string, timeSlot: string): Promise<void> {
-  const { startTime } = getTimeRangeFromSlot(date, timeSlot as TimeSlot)
+export async function completeTodolist(todolistId: string): Promise<void> {
+  // Update all tasks to completed
+  const { error: tasksError } = await (await getSupabaseClient())
+    .from("tasks")
+    .update({ status: "completed" })
+    .eq("todolist_id", todolistId)
   
-  // First get the todolist
+  if (tasksError) handleError(tasksError)
+  
+  // Get todolist info for logging
   const { data: todolist, error: todolistError } = await (await getSupabaseClient())
     .from("todolist")
-    .select("id")
-    .eq("device_id", deviceId)
-    .eq("scheduled_execution", startTime)
+    .select("device_id, scheduled_execution")
+    .eq("id", todolistId)
     .single()
   
   if (todolistError) handleError(todolistError)
   if (!todolist) throw new Error("Todolist non trovata")
   
-  // Then update all tasks to completed
-  const { error: tasksError } = await (await getSupabaseClient())
-    .from("tasks")
-    .update({ status: "completed" })
-    .eq("todolist_id", todolist.id)
-  
-  if (tasksError) handleError(tasksError)
-  
   // Log the activity
-  await logCurrentUserActivity('complete_todolist', 'todolist', todolist.id, {
-    device_id: deviceId,
-    scheduled_execution: startTime,
-    time_slot: timeSlot
+  await logCurrentUserActivity('complete_todolist', 'todolist', todolistId, {
+    device_id: todolist.device_id,
+    scheduled_execution: todolist.scheduled_execution,
+    time_slot: getTimeSlotFromDateTime(todolist.scheduled_execution)
   });
   
   revalidatePath("/todolist")

@@ -2,10 +2,11 @@
 
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { getCurrentTimeSlot } from "@/lib/validation/todolist-schemas"
+import { getCurrentTimeSlot, getTimeRangeFromSlot } from "@/lib/validation/todolist-schemas"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2 } from "lucide-react"
 import { use } from "react"
+import { createServerSupabaseClient } from "@/lib/supabase-server"
 
 export default function DeviceScanPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
@@ -16,12 +17,33 @@ export default function DeviceScanPage({ params }: { params: Promise<{ id: strin
     const today = new Date().toISOString().split('T')[0]
     const currentTimeSlot = getCurrentTimeSlot(new Date())
     
-    // Redirect to today's todolist after a short delay
-    const timeout = setTimeout(() => {
-      router.push(`/todolist/view/${id}/${today}/${currentTimeSlot}`)
-    }, 1000) // 1 second delay to show loading state
+    // First get the todolist ID for this device/date/time slot
+    const getTodolistId = async () => {
+      try {
+        const supabase = await createServerSupabaseClient()
+        const { data } = await supabase
+          .from("todolist")
+          .select("id")
+          .eq("device_id", id)
+          .eq("scheduled_execution", getTimeRangeFromSlot(today, currentTimeSlot).startTime)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single()
 
-    return () => clearTimeout(timeout)
+        if (data) {
+          router.push(`/todolist/view/${data.id}/${id}/${today}/${currentTimeSlot}`)
+        } else {
+          // If no todolist exists, redirect to create new
+          router.push(`/todolist/new?deviceId=${id}&date=${today}&timeSlot=${currentTimeSlot}`)
+        }
+      } catch (error) {
+        console.error("Error fetching todolist:", error)
+        // On error, redirect to create new
+        router.push(`/todolist/new?deviceId=${id}&date=${today}&timeSlot=${currentTimeSlot}`)
+      }
+    }
+
+    getTodolistId()
   }, [id, router])
 
   return (

@@ -42,7 +42,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
   const filtered = todolistsByFilter[activeFilter]
 
   const handleRowClick = (todolist: TodolistItem) => {
-    router.push(`/todolist/view/${todolist.device_id}/${todolist.date}/${todolist.time_slot}`)
+    router.push(`/todolist/view/${todolist.id}/${todolist.device_id}/${todolist.date}/${todolist.time_slot}`)
   }
 
   const handleCreateTodolist = () => {
