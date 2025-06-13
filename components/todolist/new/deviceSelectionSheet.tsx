@@ -39,14 +39,33 @@ export function DeviceSelectionSheet() {
     handleToggleAllDevices
   } = useTodolist()
 
+  const handleReset = () => {
+    setManualSelectedDevices(new Set())
+    setDeviceSearchTerm("")
+    clearAllTags()
+  }
+
   return (
     <Sheet open={isDeviceSheetOpen} onOpenChange={setIsDeviceSheetOpen}>
       <SheetContent className="w-full sm:max-w-3xl overflow-y-auto">
         <SheetHeader className="mb-4">
-          <SheetTitle>Seleziona Punti di controllo</SheetTitle>
-          <SheetDescription>
-            Seleziona i Punti di controllo per la tua todolist
-          </SheetDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <SheetTitle>Seleziona Punti di controllo</SheetTitle>
+              <SheetDescription>
+                Seleziona i Punti di controllo per la tua todolist
+              </SheetDescription>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleReset}
+              className="h-8"
+              disabled={manualSelectedDevices.size === 0 && selectedTags.size === 0}
+            >
+              <X className="h-4 w-4 mr-1" /> Reset
+            </Button>
+          </div>
         </SheetHeader>
 
         <div className="space-y-4">

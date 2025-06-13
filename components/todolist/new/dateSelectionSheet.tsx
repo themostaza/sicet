@@ -69,14 +69,39 @@ export function DateSelectionSheet() {
     applyIntervalSelection()
   }
 
+  const handleReset = () => {
+    // Reset all date-related states
+    setStartDate(new Date())
+    setIntervalDays(1)
+    setMonthsToRepeat(1)
+    setDefaultTimeSlot("mattina")
+    setTempSelectedDate(new Date())
+    setSelectedTimeSlot("mattina")
+    // Clear all date entries
+    dateEntries.forEach((_, index) => removeDateEntry(index))
+  }
+
   return (
     <Sheet open={isDateSheetOpen} onOpenChange={setIsDateSheetOpen}>
       <SheetContent className="w-full sm:max-w-3xl overflow-y-auto">
         <SheetHeader className="mb-4">
-          <SheetTitle>Seleziona date e orari</SheetTitle>
-          <SheetDescription>
-            Seleziona le date e le fasce orarie per cui creare le todolist
-          </SheetDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <SheetTitle>Seleziona date e orari</SheetTitle>
+              <SheetDescription>
+                Seleziona le date e le fasce orarie per cui creare le todolist
+              </SheetDescription>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleReset}
+              className="h-8"
+              disabled={dateEntries.length === 0 && intervalDays === 1 && monthsToRepeat === 1}
+            >
+              <X className="h-4 w-4 mr-1" /> Reset
+            </Button>
+          </div>
         </SheetHeader>
 
         <Card className="border-none shadow-none">

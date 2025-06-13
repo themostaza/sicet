@@ -13,7 +13,7 @@ import {
   SheetFooter,
   SheetClose,
 } from "@/components/ui/sheet"
-import { Search } from "lucide-react"
+import { Search, X } from "lucide-react"
 import { useTodolist } from "./context"
 import { KPI } from "./types"
 
@@ -31,14 +31,32 @@ export function KpiSelectionSheet() {
     handleToggleAllKpis,
   } = useTodolist()
 
+  const handleReset = () => {
+    setSelectedKpis(new Set())
+    setKpiSearchTerm("")
+  }
+
   return (
     <Sheet open={isKpiSheetOpen} onOpenChange={setIsKpiSheetOpen}>
       <SheetContent className="w-full sm:max-w-3xl overflow-y-auto">
         <SheetHeader className="mb-4">
-          <SheetTitle>Seleziona Controlli</SheetTitle>
-          <SheetDescription>
-            Seleziona i Controlli da misurare per questi Punti di controllo
-          </SheetDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <SheetTitle>Seleziona Controlli</SheetTitle>
+              <SheetDescription>
+                Seleziona i Controlli da misurare per questi Punti di controllo
+              </SheetDescription>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleReset}
+              className="h-8"
+              disabled={selectedKpis.size === 0}
+            >
+              <X className="h-4 w-4 mr-1" /> Reset
+            </Button>
+          </div>
         </SheetHeader>
 
         <div className="space-y-4">
