@@ -14,8 +14,8 @@ const handlePostgrestError = (error: PostgrestError) => {
 }
 
 // Get typed supabase client
-const supabase = (): SupabaseClient<Database> =>
-  createServerSupabaseClient() as SupabaseClient<Database>
+const supabase = async (): Promise<SupabaseClient<Database>> =>
+  await createServerSupabaseClient()
 
 // Schema for alert validation
 const AlertConditionSchema = z.object({
@@ -63,7 +63,7 @@ export async function createAlert(
     is_active: isActive
   }
 
-  const { data, error } = await supabase()
+  const { data, error } = await (await supabase())
     .from('kpi_alerts')
     .insert(alert)
     .select()
@@ -78,7 +78,7 @@ export async function createAlert(
 // Get alerts for a KPI
 export async function getKpiAlerts(kpiId: string): Promise<Alert[]> {
   console.log('Getting alerts for KPI:', kpiId)
-  const { data, error } = await supabase()
+  const { data, error } = await (await supabase())
     .from('kpi_alerts')
     .select('*')
     .eq('kpi_id', kpiId)
@@ -103,7 +103,7 @@ async function logAlertTrigger(
   errorMessage?: string
 ): Promise<void> {
   // First get the KPI and device details for the email
-  const { data: kpiData, error: kpiError } = await supabase()
+  const { data: kpiData, error: kpiError } = await (await supabase())
     .from('kpis')
     .select('name, description')
     .eq('id', kpiId)
@@ -114,7 +114,7 @@ async function logAlertTrigger(
     throw kpiError
   }
 
-  const { data: deviceData, error: deviceError } = await supabase()
+  const { data: deviceData, error: deviceError } = await (await supabase())
     .from('devices')
     .select('name, location')
     .eq('id', deviceId)
@@ -135,7 +135,7 @@ async function logAlertTrigger(
     email_sent: false // Will be updated after sending email
   }
 
-  const { data: logData, error: logError } = await supabase()
+  const { data: logData, error: logError } = await (await supabase())
     .from('kpi_alert_logs')
     .insert(log)
     .select()
@@ -158,7 +158,7 @@ async function logAlertTrigger(
     })
 
     // Update the log to mark email as sent
-    const { error: updateError } = await supabase()
+    const { error: updateError } = await (await supabase())
       .from('kpi_alert_logs')
       .update({
         email_sent: true,
@@ -172,7 +172,7 @@ async function logAlertTrigger(
   } catch (emailError) {
     console.error('Error sending alert email:', emailError)
     // Update the log with the email error
-    const { error: updateError } = await supabase()
+    const { error: updateError } = await (await supabase())
       .from('kpi_alert_logs')
       .update({
         error_message: emailError instanceof Error ? emailError.message : 'Failed to send email'
@@ -197,7 +197,7 @@ export async function getAlertLogs(
     limit?: number;
   } = {}
 ): Promise<Database['public']['Tables']['kpi_alert_logs']['Row'][]> {
-  let query = supabase()
+  let query = (await supabase())
     .from('kpi_alert_logs')
     .select(`
       *,
@@ -384,7 +384,7 @@ export async function checkKpiAlerts(
 
 // Toggle alert active status
 export async function toggleAlertActive(alertId: string, isActive: boolean): Promise<void> {
-  const { error } = await supabase()
+  const { error } = await (await supabase())
     .from('kpi_alerts')
     .update({ is_active: isActive })
     .eq('id', alertId)
@@ -397,7 +397,7 @@ export async function toggleAlertActive(alertId: string, isActive: boolean): Pro
 
 // Delete an alert
 export async function deleteAlert(alertId: string): Promise<void> {
-  const { error } = await supabase()
+  const { error } = await (await supabase())
     .from('kpi_alerts')
     .delete()
     .eq('id', alertId)

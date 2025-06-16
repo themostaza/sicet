@@ -91,6 +91,62 @@ async function getAlertLogs(): Promise<AlertLog[]> {
   return logs as AlertLog[]
 }
 
+function renderKpiConditions(alert: Alert) {
+  // Cast sicuro dei campi del KPI
+  const fields = Array.isArray(alert.kpis?.value)
+    ? (alert.kpis.value as any[]).filter(f => f && typeof f === 'object' && 'id' in f && 'name' in f)
+    : [];
+  const conditions = Array.isArray(alert.conditions)
+    ? (alert.conditions as any[]).filter(c => c && typeof c === 'object' && 'field_id' in c)
+    : [];
+  if (conditions.length === 0) return <span>Nessuna condizione</span>;
+  return (
+    <ul className="space-y-1">
+      {fields.map((field: any) => {
+        const cond = conditions.find((c: any) => c.field_id === field.id);
+        if (!cond) return null;
+        return (
+          <li key={field.id} className="text-xs bg-gray-50 rounded px-2 py-1">
+            <span className="font-semibold">{field.name}</span>
+            {cond.type === 'numeric' && (
+              <>
+                {cond.min !== undefined && <> | Min: <span className="font-mono">{cond.min}</span></>}
+                {cond.max !== undefined && <> | Max: <span className="font-mono">{cond.max}</span></>}
+              </>
+            )}
+            {cond.type === 'text' && cond.match_text && (
+              <> | Match: <span className="font-mono">{cond.match_text}</span></>
+            )}
+            {cond.type === 'boolean' && cond.boolean_value !== undefined && (
+              <> | Valore: <span className="font-mono">{cond.boolean_value ? 'Sì' : 'No'}</span></>
+            )}
+            <span className="ml-2 text-gray-400">({field.type})</span>
+          </li>
+        );
+      })}
+      {/* Se nessun campo del KPI ha una condizione, mostra tutte le condizioni raw */}
+      {fields.length === 0 && conditions.map((cond: any, idx: number) => (
+        <li key={idx} className="text-xs bg-gray-50 rounded px-2 py-1 whitespace-nowrap truncate">
+          {/* <span className="font-semibold">{cond.field_id}</span> */}
+          {cond.type === 'numeric' && (
+            <>
+              {cond.min !== undefined && <> Min: <span className="font-mono">{cond.min}</span></>}
+              {cond.max !== undefined && <> | Max: <span className="font-mono">{cond.max}</span></>}
+            </>
+          )}
+          {cond.type === 'text' && cond.match_text && (
+            <> Match: <span className="font-mono">{cond.match_text}</span></>
+          )}
+          {cond.type === 'boolean' && cond.boolean_value !== undefined && (
+            <> Valore: <span className="font-mono">{cond.boolean_value ? 'Sì' : 'No'}</span></>
+          )}
+          <span className="ml-2 text-gray-400">({cond.type})</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export default async function AlertsPage() {
   const client = await supabase();
   
@@ -144,82 +200,50 @@ export default async function AlertsPage() {
     <div className="container mx-auto py-6">
       <h1 className="text-2xl font-bold mb-6">Alerts</h1>
       
-      <div className="grid gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Active Alerts</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {alerts && alerts.length > 0 ? (
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>KPI</TableHead>
-                      <TableHead>Conditions</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(alerts as Alert[]).map((alert) => (
-                      <TableRow key={alert.id}>
-                        <TableCell>{alert.kpis?.name || 'Unknown KPI'}</TableCell>
-                        <TableCell>{JSON.stringify(alert.conditions)}</TableCell>
-                        <TableCell>{alert.created_at ? new Date(alert.created_at).toLocaleString() : 'N/A'}</TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="icon">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
+      <div className="flex flex-col md:flex-row gap-6">
+        <div className="flex-1">
+          <Card>
+            <CardHeader>
+              <CardTitle>Active Alerts</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {alerts && alerts.length > 0 ? (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>KPI</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Controlli</TableHead>
+                        <TableHead>Created</TableHead>
+                        <TableHead>Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <div className="text-center py-4 text-muted-foreground">
-                No active alerts
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Alert History</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {alertLogs && alertLogs.length > 0 ? (
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>KPI</TableHead>
-                      <TableHead>Value</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Triggered</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(alertLogs as AlertLog[]).map((log) => (
-                      <TableRow key={log.id}>
-                        <TableCell>{log.kpis?.name || 'Unknown KPI'}</TableCell>
-                        <TableCell>{JSON.stringify(log.triggered_value)}</TableCell>
-                        <TableCell>{log.kpi_alerts?.email || 'Unknown'}</TableCell>
-                        <TableCell>{log.triggered_at ? new Date(log.triggered_at).toLocaleString() : 'N/A'}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <div className="text-center py-4 text-muted-foreground">
-                No alert history
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                    </TableHeader>
+                    <TableBody>
+                      {(alerts as Alert[]).map((alert) => (
+                        <TableRow key={alert.id}>
+                          <TableCell>{alert.kpis?.name || 'Unknown KPI'}</TableCell>
+                          <TableCell>{alert.email}</TableCell>
+                          <TableCell>{renderKpiConditions(alert)}</TableCell>
+                          <TableCell>{alert.created_at ? new Date(alert.created_at).toLocaleString() : 'N/A'}</TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="icon">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="text-center py-4 text-muted-foreground">
+                  No active alerts
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   )

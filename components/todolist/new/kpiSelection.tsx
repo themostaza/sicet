@@ -63,6 +63,10 @@ export function KpiSelection() {
   // Add state to track conditions per KPI
   const [kpiAlertConditions, setKpiAlertConditions] = useState<Record<string, { email: string, conditions: AlertCondition[] }>>({})
 
+  // Stato locale per alert dello sheet
+  const [localAlertEmail, setLocalAlertEmail] = useState("");
+  const [localAlertConditions, setLocalAlertConditions] = useState<AlertCondition[]>([]);
+
   // Create fields from KPI value data
   const getKpiFields = (kpi: Kpi): KpiField[] => {
     // If kpi already has fields defined, use those
@@ -141,13 +145,13 @@ export function KpiSelection() {
 
   const handleOpenAlertSheet = (kpi: Kpi) => {
     setSelectedKpiForAlert(kpi)
-    // Load existing conditions for this KPI if any
+    // Carica condizioni/email solo per questo KPI
     if (kpiAlertConditions[kpi.id]) {
-      setAlertEmail(kpiAlertConditions[kpi.id].email)
-      setAlertConditions(kpiAlertConditions[kpi.id].conditions)
+      setLocalAlertEmail(kpiAlertConditions[kpi.id].email)
+      setLocalAlertConditions(kpiAlertConditions[kpi.id].conditions)
     } else {
-      setAlertEmail("")
-      setAlertConditions([])
+      setLocalAlertEmail("")
+      setLocalAlertConditions([])
     }
     setIsAlertSheetOpen(true)
   }
@@ -155,8 +159,8 @@ export function KpiSelection() {
   const handleCloseAlertSheet = () => {
     if (!selectedKpiForAlert) return
 
-    // Validate before closing
-    if (alertConditions.length > 0 && !alertEmail) {
+    // Validazione
+    if (localAlertConditions.length > 0 && !localAlertEmail) {
       toast({
         title: "Errore",
         description: "Inserisci un indirizzo email per ricevere le notifiche",
@@ -165,7 +169,7 @@ export function KpiSelection() {
       return
     }
 
-    if (alertEmail && alertConditions.length === 0) {
+    if (localAlertEmail && localAlertConditions.length === 0) {
       toast({
         title: "Errore",
         description: "Configura almeno una condizione per l'alert",
@@ -174,13 +178,13 @@ export function KpiSelection() {
       return
     }
 
-    // If we have both email and conditions, save them for this KPI
-    if (alertEmail && alertConditions.length > 0) {
+    // Salva solo per questo KPI
+    if (localAlertEmail && localAlertConditions.length > 0) {
       setKpiAlertConditions(prev => ({
         ...prev,
         [selectedKpiForAlert.id]: {
-          email: alertEmail,
-          conditions: alertConditions
+          email: localAlertEmail,
+          conditions: localAlertConditions
         }
       }))
       toast({
@@ -188,7 +192,6 @@ export function KpiSelection() {
         description: "Le condizioni dell'alert sono state salvate"
       })
     } else {
-      // If no conditions or email, remove any existing conditions for this KPI
       setKpiAlertConditions(prev => {
         const { [selectedKpiForAlert.id]: _, ...rest } = prev
         return rest
@@ -218,15 +221,14 @@ export function KpiSelection() {
     type: 'numeric' | 'text' | 'boolean',
     value: Partial<AlertCondition>
   ) => {
-    setAlertConditions((prev: AlertCondition[]) => {
-      const existing = prev.findIndex((c: AlertCondition) => c.field_id === fieldId)
-      if (existing >= 0) {
-        const updated = [...prev]
-        updated[existing] = { ...updated[existing], ...value }
-        return updated
-      }
-      return [...prev, { field_id: fieldId, type, ...value } as AlertCondition]
-    })
+    const existing = localAlertConditions.findIndex((c) => c.field_id === fieldId)
+    if (existing >= 0) {
+      const updated = [...localAlertConditions]
+      updated[existing] = { ...updated[existing], ...value }
+      setLocalAlertConditions(updated)
+    } else {
+      setLocalAlertConditions([...localAlertConditions, { field_id: fieldId, type, ...value } as AlertCondition])
+    }
   }
 
   return (
@@ -260,27 +262,42 @@ export function KpiSelection() {
                 <TableRow>
                   <TableHead>Nome</TableHead>
                   <TableHead className="hidden md:table-cell">Descrizione</TableHead>
+                  <TableHead>Alert</TableHead>
                   <TableHead>Azioni</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {selectedKpisArray.map((kpi) => (
-                  <TableRow key={kpi.id}>
-                    <TableCell>{kpi.nome}</TableCell>
-                    <TableCell className="hidden md:table-cell">{kpi.descrizione || "-"}</TableCell>
-                    <TableCell>
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => handleOpenAlertSheet(kpi)}
-                      >
-                        <BellRing className="h-4 w-4 mr-2" />
-                        Imposta Alert
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {selectedKpisArray.map((kpi) => {
+                  const alertInfo = kpiAlertConditions[kpi.id]
+                  let alertSummary = "Nessun alert"
+                  if (alertInfo && alertInfo.conditions && alertInfo.conditions.length > 0 && alertInfo.email) {
+                    alertSummary = `${alertInfo.conditions.length} condizione${alertInfo.conditions.length > 1 ? 'i' : ''}, email: ${alertInfo.email}`
+                  }
+                  // Mappo sempre il KPI per garantire compatibilità
+                  const mappedKpi = {
+                    ...kpi,
+                    nome: (kpi as any).nome || (kpi as any).name || '',
+                    descrizione: (kpi as any).descrizione || (kpi as any).description || '',
+                  }
+                  return (
+                    <TableRow key={kpi.id}>
+                      <TableCell>{mappedKpi.nome}</TableCell>
+                      <TableCell className="hidden md:table-cell">{mappedKpi.descrizione || "-"}</TableCell>
+                      <TableCell>{alertSummary}</TableCell>
+                      <TableCell>
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleOpenAlertSheet(mappedKpi)}
+                        >
+                          <BellRing className="h-4 w-4 mr-2" />
+                          Imposta Alert
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           </div>
@@ -308,7 +325,7 @@ export function KpiSelection() {
         <SheetContent className="sm:max-w-md">
           <SheetHeader>
             <SheetTitle>
-              {selectedKpiForAlert && `Imposta alert per il controllo ${selectedKpiForAlert.nome}`}
+              {selectedKpiForAlert && `Imposta alert per il controllo ${(selectedKpiForAlert as any).nome || (selectedKpiForAlert as any).name}`}
             </SheetTitle>
           </SheetHeader>
           
@@ -319,8 +336,8 @@ export function KpiSelection() {
                 id="email" 
                 type="email" 
                 placeholder="Enter email for notifications"
-                value={alertEmail}
-                onChange={(e) => setAlertEmail(e.target.value)}
+                value={localAlertEmail}
+                onChange={(e) => setLocalAlertEmail(e.target.value)}
               />
             </div>
 
@@ -343,6 +360,7 @@ export function KpiSelection() {
                           id={`${field.id}-min`} 
                           type="number" 
                           placeholder="Minimum value"
+                          value={localAlertConditions.find(c => c.field_id === field.id)?.min ?? ''}
                           onChange={(e) => handleConditionChange(
                             field.id,
                             'numeric',
@@ -356,6 +374,7 @@ export function KpiSelection() {
                           id={`${field.id}-max`} 
                           type="number" 
                           placeholder="Maximum value"
+                          value={localAlertConditions.find(c => c.field_id === field.id)?.max ?? ''}
                           onChange={(e) => handleConditionChange(
                             field.id,
                             'numeric',
@@ -371,6 +390,7 @@ export function KpiSelection() {
                     <Input 
                       id={`${field.id}-match`} 
                       placeholder="Text to match"
+                      value={localAlertConditions.find(c => c.field_id === field.id)?.match_text ?? ''}
                       onChange={(e) => handleConditionChange(
                         field.id,
                         'text',
@@ -385,30 +405,30 @@ export function KpiSelection() {
                       <div className="flex items-center space-x-2">
                         <input 
                           type="radio" 
-                          id={`${field.id}-boolean-si`} 
+                          id={`${field.id}-true`} 
                           name={`${field.id}-boolean`} 
-                          value="si"
+                          checked={localAlertConditions.find(c => c.field_id === field.id)?.boolean_value === true}
                           onChange={() => handleConditionChange(
                             field.id,
                             'boolean',
                             { boolean_value: true }
                           )}
                         />
-                        <Label htmlFor={`${field.id}-boolean-si`}>Sì</Label>
+                        <Label htmlFor={`${field.id}-true`}>Sì</Label>
                       </div>
                       <div className="flex items-center space-x-2">
                         <input 
                           type="radio" 
-                          id={`${field.id}-boolean-no`} 
+                          id={`${field.id}-false`} 
                           name={`${field.id}-boolean`} 
-                          value="no"
+                          checked={localAlertConditions.find(c => c.field_id === field.id)?.boolean_value === false}
                           onChange={() => handleConditionChange(
                             field.id,
                             'boolean',
                             { boolean_value: false }
                           )}
                         />
-                        <Label htmlFor={`${field.id}-boolean-no`}>No</Label>
+                        <Label htmlFor={`${field.id}-false`}>No</Label>
                       </div>
                     </div>
                   </div>

@@ -217,6 +217,7 @@ export async function updateTaskStatus(taskId: string, status: string): Promise<
 
 // Aggiorna valore task
 export async function updateTaskValue(taskId: string, value: any): Promise<Task> {
+  // Aggiorna il valore della task
   const { data, error } = await (await getSupabaseClient())
     .from("tasks")
     .update({ value })
@@ -225,7 +226,20 @@ export async function updateTaskValue(taskId: string, value: any): Promise<Task>
     .single()
 
   if (error) handleError(error)
-  return toTask(data!)
+  const updatedTask = toTask(data!)
+
+  // Recupera la todolist per device_id
+  const { data: todolist, error: todolistError } = await (await getSupabaseClient())
+    .from("todolist")
+    .select("device_id")
+    .eq("id", updatedTask.todolist_id)
+    .single()
+  if (todolistError) handleError(todolistError)
+
+  // Trigger alert
+  await checkKpiAlerts(updatedTask.kpi_id, todolist.device_id, value)
+
+  return updatedTask
 }
 
 // Elimina una todolist e tutte le sue task

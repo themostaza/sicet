@@ -63,6 +63,11 @@ const menuItemsByRole: Record<Role, Array<{
       label: "Alert"
     },
     {
+      href: "/alerts/logs",
+      icon: <AlertCircle size={20} />,
+      label: "Log Alert"
+    },
+    {
       href: "/admin/preregister",
       icon: <Users size={20} />,
       label: "Pre-registra Utenti"
