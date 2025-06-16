@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { cn } from "@/lib/utils"
 import { isTodolistExpired } from "@/lib/validation/todolist-schemas"
 
-type TimeSlot = "mattina" | "pomeriggio" | "sera" | "notte"
+type TimeSlot = "mattina" | "pomeriggio" | "sera" | "notte" | "giornata"
 type FilterType = "all" | "today" | "overdue" | "future" | "completed"
 
 type TodolistItem = {
@@ -36,6 +36,7 @@ const timeSlotOrder: Record<TimeSlot, number> = {
   pomeriggio: 2,
   sera: 3,
   notte: 4,
+  giornata: 5,
 }
 
 export default function TodolistListClient({ todolistsByFilter, counts, initialFilter }: Props) {

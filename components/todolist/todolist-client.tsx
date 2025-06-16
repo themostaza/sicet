@@ -62,6 +62,7 @@ const TIMESLOT_LABEL: Record<string, string> = {
   pomeriggio: "Pomeriggio (12-18)",
   sera: "Sera (18-22)",
   notte: "Notte (22-6)",
+  giornata: "Giornata (6-20)",
 }
 const labelForSlot = (s: string) => TIMESLOT_LABEL[s] ?? s
 const storageKey = (id: string, day: string, slot: string) =>

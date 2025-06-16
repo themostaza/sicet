@@ -120,6 +120,7 @@ export function DateSelectionSheet() {
                     <SelectItem value="mattina">Mattina (fino alle 14:00)</SelectItem>
                     <SelectItem value="pomeriggio">Pomeriggio (fino alle 22:00)</SelectItem>
                     <SelectItem value="notte">Notte (fino alle 06:00)</SelectItem>
+                    <SelectItem value="giornata">Giornata (fino alle 20:00)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

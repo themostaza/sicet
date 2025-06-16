@@ -55,7 +55,7 @@ export type TodolistIdParams = z.infer<typeof TodolistIdParamsSchema>;
 export type CreateTodolistParams = z.infer<typeof CreateTodolistSchema>;
 
 // Type per gli slot temporali
-export type TimeSlot = "mattina" | "pomeriggio" | "sera" | "notte";
+export type TimeSlot = "mattina" | "pomeriggio" | "sera" | "notte" | "giornata";
 
 // Costante per l'ordine degli slot
 export const timeSlotOrder: Record<TimeSlot, number> = {
@@ -63,6 +63,7 @@ export const timeSlotOrder: Record<TimeSlot, number> = {
   pomeriggio: 2,
   sera: 3,
   notte: 4,
+  giornata: 5,
 };
 
 // Get the current time slot based on the current time
@@ -87,6 +88,7 @@ export function getTimeSlotFromDateTime(dateTimeStr: string): TimeSlot {
   if (hours >= 6 && hours < 12) return "mattina"
   if (hours >= 12 && hours < 18) return "pomeriggio"
   if (hours >= 18 && hours < 22) return "sera"
+  if (hours >= 6 && hours < 17) return "giornata"
   return "notte"
 }
 
@@ -112,6 +114,10 @@ export function getTimeRangeFromSlot(date: string, timeSlot: TimeSlot): { startT
     case "notte":
       startHour = 22
       endHour = 5
+      break
+    case "giornata":
+      startHour = 6
+      endHour = 17
       break
   }
 
