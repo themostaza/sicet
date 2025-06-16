@@ -7,61 +7,76 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
+import { useFormValidation } from '@/hooks/use-form-validation';
+import { validationRules } from '@/lib/validation';
+import { FormField } from '@/components/form/form-field';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
   const router = useRouter();
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
-    try {
-      console.log("LoginPage: Attempting login for:", email);
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+  const validationSchema = {
+    email: [
+      validationRules.required('Email obbligatoria'),
+      validationRules.email('Inserisci un indirizzo email valido')
+    ],
+    password: [
+      validationRules.required('Password obbligatoria'),
+      validationRules.minLength(8, 'La password deve essere di almeno 8 caratteri')
+    ]
+  };
+
+  const {
+    formState: { values, errors, touched },
+    handleChange,
+    handleBlur,
+    handleSubmit: handleFormSubmit,
+    isSubmitting
+  } = useFormValidation({
+    initialValues: {
+      email: '',
+      password: ''
+    },
+    validationSchema,
+    onSubmit: async (values) => {
+      setLoginError(null);
+      const { error } = await supabase.auth.signInWithPassword({
+        email: values.email,
+        password: values.password,
       });
 
-      console.log("LoginPage: Login response:", { data, error });
-
       if (error) {
-        console.error("LoginPage: Login error:", error);
-        toast.error('Credenziali non valide');
+        setLoginError('Email o password non corretti');
         return;
       }
 
-      console.log("LoginPage: Login successful, getting profile...");
-      const { data: profile, error: profileError } = await supabase
+      // Get user role to redirect appropriately
+      const { data: profile, error: roleError } = await supabase
         .from('profiles')
         .select('role')
-        .eq('email', email)
+        .eq('email', values.email)
         .single();
 
-      console.log("LoginPage: Profile response:", { profile, profileError });
-
-      if (profileError) {
-        console.error("LoginPage: Error getting profile:", profileError);
-        toast.error('Errore nel recupero del profilo');
+      if (roleError) {
+        toast.error('Errore nel recupero del ruolo utente');
         return;
       }
 
-      console.log("LoginPage: Redirecting to dashboard...");
-      router.push('/dashboard');
-      router.refresh();
-    } catch (error) {
-      console.error("LoginPage: Unexpected error:", error);
-      toast.error('Si è verificato un errore durante il login');
-    } finally {
-      setLoading(false);
+      // Redirect based on role
+      if (profile?.role === 'admin') {
+        router.push('/admin');
+      } else if (profile?.role === 'operator') {
+        router.push('/operator');
+      } else {
+        router.push('/referrer');
+      }
     }
-  };
+  });
 
   return (
     <div className="container max-w-md mx-auto py-12">
@@ -73,37 +88,36 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium">
-                Email
-              </label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Inserisci la tua email"
-                required
-              />
-            </div>
+          <form onSubmit={handleFormSubmit} className="space-y-4" noValidate>
+            <FormField
+              id="email"
+              name="email"
+              label="Email"
+              value={values.email}
+              onChange={(value) => handleChange('email', value)}
+              onBlur={() => handleBlur('email')}
+              error={touched.email ? errors.email : null}
+              placeholder="Inserisci la tua email"
+            />
 
-            <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-medium">
-                Password
-              </label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Inserisci la tua password"
-                required
-              />
-            </div>
+            <FormField
+              id="password"
+              name="password"
+              label="Password"
+              type="password"
+              value={values.password}
+              onChange={(value) => handleChange('password', value)}
+              onBlur={() => handleBlur('password')}
+              error={touched.password ? errors.password : null}
+              placeholder="Inserisci la tua password"
+            />
 
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Accesso in corso...' : 'Accedi'}
+            {loginError && (
+              <div className="text-red-500 text-sm">{loginError}</div>
+            )}
+
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? 'Accesso in corso...' : 'Accedi'}
             </Button>
           </form>
         </CardContent>

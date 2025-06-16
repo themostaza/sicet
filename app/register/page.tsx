@@ -7,17 +7,123 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { createClientSupabaseClient } from '@/lib/supabase';
+import { useFormValidation } from '@/hooks/use-form-validation';
+import { validationRules, ValidationRule } from '@/lib/validation';
+import { FormField } from '@/components/form/form-field';
 
 const supabase = createClientSupabaseClient();
+
+type RegisterFormValues = {
+  password: string;
+  confirmPassword: string;
+};
 
 export default function RegisterPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const email = searchParams.get('email');
 
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const validationSchema: Record<keyof RegisterFormValues, ValidationRule[]> = {
+    password: [
+      validationRules.required('Password obbligatoria'),
+      validationRules.minLength(8, 'La password deve essere di almeno 8 caratteri'),
+      validationRules.pattern(
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).{8,}$/,
+        'La password deve contenere almeno una lettera maiuscola, una minuscola, un numero e un carattere speciale'
+      )
+    ],
+    confirmPassword: [
+      validationRules.required('Conferma password obbligatoria'),
+      validationRules.custom(
+        (value: string) => value === values.password,
+        'Le password non coincidono'
+      )
+    ]
+  };
+
+  const {
+    formState: { values, errors, touched },
+    handleChange,
+    handleBlur,
+    handleSubmit: handleFormSubmit,
+    isSubmitting,
+    setFieldValue
+  } = useFormValidation<RegisterFormValues>({
+    initialValues: {
+      password: '',
+      confirmPassword: ''
+    },
+    validationSchema,
+    onSubmit: async (values: RegisterFormValues): Promise<void> => {
+      if (!email) {
+        toast.error('Email non valida');
+        return;
+      }
+
+      try {
+        // Check current session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (!session) {
+          const { error: signInError } = await supabase.auth.signInWithPassword({
+            email,
+            password: values.password
+          });
+          
+          if (signInError) {
+            toast.error('Errore durante l\'accesso. Riprova più tardi.');
+            return;
+          }
+        }
+
+        // Update password
+        const { error: updateError } = await supabase.auth.updateUser({
+          password: values.password
+        });
+
+        if (updateError) {
+          toast.error(`Errore nell'aggiornamento della password: ${updateError.message}`);
+          return;
+        }
+
+        // Update profile status to activated
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({ status: 'activated' })
+          .eq('email', email);
+
+        if (profileError) {
+          toast.error(`Errore nell'attivazione del profilo: ${profileError.message}`);
+          return;
+        }
+
+        toast.success('Password impostata con successo!');
+        
+        // Get user role to redirect appropriately
+        const { data: profile, error: roleError } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('email', email)
+          .single();
+
+        if (roleError) {
+          toast.error('Errore nel recupero del ruolo utente');
+          return;
+        }
+
+        // Redirect based on role
+        if (profile?.role === 'admin') {
+          router.push('/admin');
+        } else if (profile?.role === 'operator') {
+          router.push('/operator');
+        } else {
+          router.push('/referrer');
+        }
+      } catch (error) {
+        toast.error('Si è verificato un errore imprevisto');
+      }
+    }
+  });
 
   useEffect(() => {
     // Redirect if no email in URL
@@ -64,113 +170,6 @@ export default function RegisterPage() {
     checkStatus();
   }, [email, router]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email) {
-      console.error("RegisterPage: No email provided");
-      toast.error('Email non valida');
-      return;
-    }
-    setLoading(true);
-    console.log("RegisterPage: Starting password update process for email:", email);
-
-    try {
-      // Validate passwords
-      if (password !== confirmPassword) {
-        console.log("RegisterPage: Passwords do not match");
-        toast.error('Le password non coincidono');
-        setLoading(false);
-        return;
-      }
-
-      if (password.length < 8) {
-        console.log("RegisterPage: Password too short");
-        toast.error('La password deve essere di almeno 8 caratteri');
-        setLoading(false);
-        return;
-      }
-
-      // Check current session
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      console.log("RegisterPage: Current session:", session ? "exists" : "none", "Error:", sessionError);
-
-      if (!session) {
-        console.log("RegisterPage: No active session, attempting to sign in with email");
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        });
-        
-        if (signInError) {
-          console.error("RegisterPage: Sign in error:", signInError);
-          toast.error('Errore durante l\'accesso. Riprova più tardi.');
-          setLoading(false);
-          return;
-        }
-      }
-
-      // Update password
-      console.log("RegisterPage: Attempting to update password");
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: password
-      });
-
-      if (updateError) {
-        console.error("RegisterPage: Password update error:", updateError);
-        toast.error(`Errore nell'aggiornamento della password: ${updateError.message}`);
-        setLoading(false);
-        return;
-      }
-
-      console.log("RegisterPage: Password updated successfully, updating profile status");
-      // Update profile status to activated
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ status: 'activated' })
-        .eq('email', email);
-
-      if (profileError) {
-        console.error("RegisterPage: Profile update error:", profileError);
-        toast.error(`Errore nell'attivazione del profilo: ${profileError.message}`);
-        setLoading(false);
-        return;
-      }
-
-      toast.success('Password impostata con successo!');
-      
-      // Get user role to redirect appropriately
-      console.log("RegisterPage: Getting user role for redirect");
-      const { data: profile, error: roleError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('email', email)
-        .single();
-
-      if (roleError) {
-        console.error("RegisterPage: Error getting role:", roleError);
-        toast.error('Errore nel recupero del ruolo utente');
-        setLoading(false);
-        return;
-      }
-
-      console.log("RegisterPage: Redirecting to role-specific page:", profile?.role);
-      // Redirect based on role
-      if (profile?.role === 'admin') {
-        router.push('/admin');
-      } else if (profile?.role === 'operator') {
-        router.push('/operator');
-      } else {
-        router.push('/referrer');
-      }
-
-    } catch (error) {
-      console.error("RegisterPage: Unexpected error:", error);
-      toast.error('Si è verificato un errore imprevisto');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   if (!email) return null;
 
   return (
@@ -180,52 +179,52 @@ export default function RegisterPage() {
           <CardTitle>Imposta Nuova Password</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium">
-                Email
-              </label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                disabled
-                className="bg-muted"
-              />
-            </div>
+          <form onSubmit={handleFormSubmit} className="space-y-4">
+            <FormField
+              id="email"
+              name="email"
+              label="Email"
+              type="email"
+              value={email || ''}
+              onChange={() => {}}
+              disabled
+              className="bg-muted"
+            />
 
-            <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-medium">
-                Nuova Password
-              </label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Inserisci nuova password"
-                required
-                minLength={8}
-              />
-            </div>
+            <FormField
+              id="password"
+              name="password"
+              label="Nuova Password"
+              type="password"
+              value={values.password}
+              onChange={(value) => {
+                handleChange('password', value);
+                // Revalidate confirm password when password changes
+                if (touched.confirmPassword) {
+                  handleBlur('confirmPassword');
+                }
+              }}
+              onBlur={() => handleBlur('password')}
+              error={touched.password ? errors.password : null}
+              placeholder="Inserisci nuova password"
+              required
+            />
 
-            <div className="space-y-2">
-              <label htmlFor="confirmPassword" className="text-sm font-medium">
-                Conferma Password
-              </label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Conferma nuova password"
-                required
-                minLength={8}
-              />
-            </div>
+            <FormField
+              id="confirmPassword"
+              name="confirmPassword"
+              label="Conferma Password"
+              type="password"
+              value={values.confirmPassword}
+              onChange={(value) => handleChange('confirmPassword', value)}
+              onBlur={() => handleBlur('confirmPassword')}
+              error={touched.confirmPassword ? errors.confirmPassword : null}
+              placeholder="Conferma nuova password"
+              required
+            />
 
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Impostazione password...' : 'Imposta Password'}
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? 'Impostazione password...' : 'Imposta Password'}
             </Button>
           </form>
         </CardContent>

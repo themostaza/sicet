@@ -22,6 +22,9 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { createClient } from '@supabase/supabase-js';
+import { useFormValidation } from '@/hooks/use-form-validation';
+import { validationRules, ValidationRule } from '@/lib/validation';
+import { FormField } from '@/components/form/form-field';
 
 type Role       = 'operator' | 'admin' | 'referrer';
 type Status     = 'registered' | 'activated';
@@ -32,11 +35,97 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+type PreRegisterFormValues = {
+  email: string;
+  role: 'operator' | 'admin' | 'referrer';
+};
+
 export default function PreRegisterPage() {
-  const [email, setEmail]         = useState('');
-  const [role, setRole]           = useState<Role>('operator');
-  const [profiles, setProfiles]   = useState<ProfileRow[]>([]);
-  const [loading, setLoading]     = useState(false);
+  const validationSchema: Record<keyof PreRegisterFormValues, ValidationRule[]> = {
+    email: [
+      validationRules.required('Email obbligatoria'),
+      validationRules.email('Inserisci un indirizzo email valido')
+    ],
+    role: [
+      validationRules.required('Ruolo obbligatorio'),
+      validationRules.custom(
+        (value: string) => ['operator', 'admin', 'referrer'].includes(value),
+        'Ruolo non valido'
+      )
+    ]
+  };
+
+  const {
+    formState: { values, errors, touched },
+    handleChange,
+    handleBlur,
+    handleSubmit: handleFormSubmit,
+    isSubmitting,
+    resetForm
+  } = useFormValidation<PreRegisterFormValues>({
+    initialValues: {
+      email: '',
+      role: 'operator'
+    },
+    validationSchema,
+    onSubmit: async (values: PreRegisterFormValues): Promise<void> => {
+      try {
+        /* già esiste? */
+        const { data: already } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', values.email)
+          .single();
+
+        if (already) { 
+          toast.error('Email già registrata'); 
+          return; 
+        }
+
+        /* 1. inserisci riga profilo */
+        const { error: insErr } = await supabase
+          .from('profiles')
+          .insert([{ email: values.email, role: values.role, status: 'registered' }]);
+
+        if (insErr) { 
+          toast.error('Insert profilo fallito'); 
+          return; 
+        }
+
+        /* 2. chiama endpoint admin per creare user auth */
+        const res = await fetch('/api/admin/create-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: values.email, role: values.role })
+        });
+
+        if (!res.ok) {
+          await supabase.from('profiles').delete().eq('email', values.email);
+          const { error } = await res.json();
+          toast.error(error || 'Errore createUser');
+          return;
+        }
+
+        /* 3. invia mail reset-password con redirect + email */
+        const { error: resetErr } = await supabase.auth.resetPasswordForEmail(values.email, {
+          redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/register?email=${encodeURIComponent(values.email)}`
+        });
+
+        if (resetErr) { 
+          toast.error('Invio mail fallito'); 
+          return; 
+        }
+
+        toast.success('Mail inviata!');
+        resetForm();
+        fetchProfiles();
+      } catch (error) {
+        toast.error('Si è verificato un errore imprevisto');
+      }
+    }
+  });
+
+  const [profiles, setProfiles] = useState<ProfileRow[]>([]);
 
   /* carica elenco profili */
   const fetchProfiles = async () => {
@@ -47,58 +136,6 @@ export default function PreRegisterPage() {
 
     if (error) toast.error('Errore nel recupero utenti');
     else       setProfiles(data ?? []);
-  };
-
-  /* submit nuova preregistrazione */
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      /* già esiste? */
-      const { data: already } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', email)
-        .single();
-
-      if (already) { toast.error('Email già registrata'); return; }
-
-      /* 1. inserisci riga profilo */
-      const { error: insErr } = await supabase
-        .from('profiles')
-        .insert([{ email, role, status: 'registered' }]);
-
-      if (insErr) { toast.error('Insert profilo fallito'); return; }
-
-      /* 2. chiama endpoint admin per creare user auth */
-      const res = await fetch('/api/admin/create-user', {
-        method : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body   : JSON.stringify({ email, role })
-      });
-
-      if (!res.ok) {
-        await supabase.from('profiles').delete().eq('email', email);
-        const { error } = await res.json();
-        toast.error(error || 'Errore createUser');
-        return;
-      }
-
-      /* 3. invia mail reset-password con redirect + email */
-      const { error: resetErr } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/register?email=${encodeURIComponent(email)}`
-      });
-
-      if (resetErr) { toast.error('Invio mail fallito'); return; }
-
-      toast.success('Mail inviata!');
-      setEmail('');
-      setRole('operator');
-      fetchProfiles();
-    } finally {
-      setLoading(false);
-    }
   };
 
   useEffect(() => { fetchProfiles(); }, []);
@@ -114,44 +151,37 @@ export default function PreRegisterPage() {
             <CardTitle>Registra Nuovo Utente</CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <label htmlFor="email" className="text-sm font-medium">
-                  Email
-                </label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Inserisci indirizzo email"
-                  required
-                />
-              </div>
+            <form onSubmit={handleFormSubmit} className="space-y-4" noValidate>
+              <FormField
+                id="email"
+                name="email"
+                label="Email"
+                value={values.email}
+                onChange={(value) => handleChange('email', value)}
+                onBlur={() => handleBlur('email')}
+                error={touched.email ? errors.email : null}
+                placeholder="Inserisci indirizzo email"
+              />
 
-              <div className="space-y-2">
-                <label htmlFor="role" className="text-sm font-medium">
-                  Ruolo
-                </label>
-                <Select
-                  value={role}
-                  onValueChange={(value: 'operator' | 'admin' | 'referrer') =>
-                    setRole(value)
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleziona ruolo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="operator">Operatore</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="referrer">Referente</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <FormField
+                id="role"
+                name="role"
+                label="Ruolo"
+                type="select"
+                value={values.role}
+                onChange={(value) => handleChange('role', value)}
+                onBlur={() => handleBlur('role')}
+                error={touched.role ? errors.role : null}
+                options={[
+                  { value: 'operator', label: 'Operatore' },
+                  { value: 'admin', label: 'Admin' },
+                  { value: 'referrer', label: 'Referente' }
+                ]}
+                required
+              />
 
-              <Button type="submit" disabled={loading}>
-                {loading ? 'Registrazione in corso...' : 'Registra Utente'}
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? 'Registrazione in corso...' : 'Registra Utente'}
               </Button>
             </form>
           </CardContent>
