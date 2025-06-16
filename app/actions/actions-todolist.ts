@@ -26,7 +26,10 @@ import {
   getTimeSlotFromDateTime,
   isTodolistExpired,
   toTask,
-  toTodolist
+  toTodolist,
+  isCustomTimeSlot,
+  type CustomTimeSlot,
+  type TimeSlotValue
 } from "@/lib/validation/todolist-schemas"
 import { checkKpiAlerts } from "./actions-alerts"
 
@@ -275,64 +278,112 @@ export async function deleteTodolist(deviceId: string, date: string, timeSlot: s
 
 // Ottieni tutte le todolist raggruppate per device/data/slot
 export async function getTodolistsGrouped() {
-  const supabase = await createServerSupabaseClient()
-  
-  const { data, error } = await supabase
-    .from("todolist")
-    .select(`
-      id,
-      device_id,
-      scheduled_execution,
-      status,
-      created_at,
-      devices (
-        name
-      ),
-      tasks (
+  try {
+    const supabase = await createServerSupabaseClient()
+    
+    const { data, error } = await supabase
+      .from("todolist")
+      .select(`
         id,
-        kpi_id,
-        status
-      )
-    `)
-    .order("scheduled_execution", { ascending: false })
+        device_id,
+        scheduled_execution,
+        status,
+        created_at,
+        time_slot_type,
+        time_slot_start,
+        time_slot_end,
+        devices (
+          name
+        ),
+        tasks (
+          id,
+          kpi_id,
+          status
+        )
+      `)
+      .order("scheduled_execution", { ascending: false })
 
-  if (error) {
-    console.error("Error fetching todolists:", error)
+    if (error) {
+      console.error("Error fetching todolists:", error)
+      throw new TodolistActionError(
+        "Errore nel recupero delle todolist",
+        "FETCH_ERROR"
+      )
+    }
+
+    if (!data) {
+      return []
+    }
+
+    // Group by device and date
+    const grouped = data.reduce((acc, item) => {
+      try {
+        const date = new Date(item.scheduled_execution).toISOString().split("T")[0]
+        let timeSlotValue: TimeSlotValue
+        
+        // Determina il tipo di time slot
+        if (item.time_slot_type === "custom" && item.time_slot_start !== null && item.time_slot_end !== null) {
+          // Time slot personalizzato
+          const customSlot: CustomTimeSlot = {
+            type: "custom",
+            startHour: item.time_slot_start as number,
+            endHour: item.time_slot_end as number
+          }
+          timeSlotValue = customSlot
+        } else {
+          // Time slot standard
+          const standardSlot = getTimeSlotFromDateTime(item.scheduled_execution)
+          timeSlotValue = standardSlot
+        }
+        
+        // Genera la chiave per il raggruppamento
+        const timeSlotKey = isCustomTimeSlot(timeSlotValue) ? "custom" : timeSlotValue
+        const key = `${item.device_id}-${date}-${timeSlotKey}`
+        
+        if (!acc[key]) {
+          acc[key] = {
+            id: item.id,
+            device_id: item.device_id,
+            device_name: item.devices?.name || "Unknown Device",
+            date,
+            time_slot: timeSlotValue,
+            scheduled_execution: item.scheduled_execution,
+            status: item.status as "pending" | "in_progress" | "completed",
+            count: 0,
+            tasks: []
+          }
+        }
+        
+        if (item.tasks) {
+          acc[key].tasks.push(...item.tasks)
+          acc[key].count = item.tasks.length
+        }
+        
+        return acc
+      } catch (err) {
+        console.error("Error processing todolist item:", err, item)
+        return acc
+      }
+    }, {} as Record<string, {
+      id: string
+      device_id: string
+      device_name: string
+      date: string
+      time_slot: TimeSlotValue
+      scheduled_execution: string
+      status: "pending" | "in_progress" | "completed"
+      count: number
+      tasks: Array<{ id: string; kpi_id: string; status: string }>
+    }>)
+
+    return Object.values(grouped)
+  } catch (err) {
+    console.error("Unexpected error in getTodolistsGrouped:", err)
     throw new TodolistActionError(
-      "Errore nel recupero delle todolist",
-      "FETCH_ERROR"
+      "Errore inatteso nel recupero delle todolist",
+      "UNEXPECTED_ERROR"
     )
   }
-
-  // Group by device and date
-  const grouped = data.reduce((acc, item) => {
-    const date = new Date(item.scheduled_execution).toISOString().split("T")[0]
-    const timeSlot = getTimeSlotFromDateTime(item.scheduled_execution)
-    const key = `${item.device_id}-${date}-${timeSlot}`
-    
-    if (!acc[key]) {
-      acc[key] = {
-        id: item.id,
-        device_id: item.device_id,
-        device_name: item.devices?.name || "Unknown Device",
-        date,
-        time_slot: timeSlot,
-        scheduled_execution: item.scheduled_execution,
-        status: item.status,
-        count: 0,
-        tasks: []
-      }
-    }
-    
-    if (item.tasks) {
-      acc[key].tasks.push(...item.tasks)
-      acc[key].count = item.tasks.length
-    }
-    
-    return acc
-  }, {} as Record<string, any>)
-
-  return Object.values(grouped)
 }
 
 function getCurrentTimeSlot(dateObj: Date): TimeSlot {
@@ -402,12 +453,20 @@ export async function getTodolistsGroupedWithFilters() {
 export async function createTodolist(deviceId: string, date: string, timeSlot: string, kpiId: string): Promise<Task> {
   const { startTime } = getTimeRangeFromSlot(date, timeSlot as TimeSlot)
   
+  // Determine if this is a custom time slot
+  const isCustom = isCustomTimeSlot(timeSlot as TimeSlotValue)
+  
   // First create the todolist
   const todolistData: TablesInsert<"todolist"> = {
     id: generateUUID(),
     device_id: deviceId,
     scheduled_execution: startTime,
-    status: "pending"
+    status: "pending",
+    time_slot_type: isCustom ? "custom" : "standard",
+    ...(isCustom && {
+      time_slot_start: (timeSlot as CustomTimeSlot).startHour,
+      time_slot_end: (timeSlot as CustomTimeSlot).endHour
+    })
   }
   
   const { data: todolist, error: todolistError } = await (await getSupabaseClient())
@@ -451,12 +510,20 @@ export async function createTodolist(deviceId: string, date: string, timeSlot: s
 export async function createMultipleTasks(deviceId: string, date: string, timeSlot: string, kpiIds: string[]): Promise<void> {
   const { startTime } = getTimeRangeFromSlot(date, timeSlot as TimeSlot)
   
+  // Determine if this is a custom time slot
+  const isCustom = isCustomTimeSlot(timeSlot as TimeSlotValue)
+  
   // First create the todolist
   const todolistData: TablesInsert<"todolist"> = {
     id: generateUUID(),
     device_id: deviceId,
     scheduled_execution: startTime,
-    status: "pending"
+    status: "pending",
+    time_slot_type: isCustom ? "custom" : "standard",
+    ...(isCustom && {
+      time_slot_start: (timeSlot as CustomTimeSlot).startHour,
+      time_slot_end: (timeSlot as CustomTimeSlot).endHour
+    })
   }
   
   const { data: todolist, error: todolistError } = await (await getSupabaseClient())

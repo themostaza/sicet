@@ -12,7 +12,7 @@ import { it } from "date-fns/locale"
 import { CalendarIcon, Clock, Plus, X } from "lucide-react"
 import { useTodolist } from "./context"
 import { formatTimeSlot } from "./helpers"
-import { TimeSlot, TimeSlotValue, CustomTimeSlot, isCustomTimeSlot, formatTimeSlotValue } from "@/lib/validation/todolist-schemas"
+import { TimeSlot, TimeSlotValue, CustomTimeSlot, isCustomTimeSlot, formatTimeSlotValue, TIME_SLOT_TOLERANCE, TIME_SLOT_INTERVALS } from "@/lib/validation/todolist-schemas"
 import { CustomTimeSlotPicker } from "./custom-time-slot"
 import {
   Select,
@@ -27,6 +27,29 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
+
+const getTimeSlotLabel = (timeSlot: TimeSlot) => {
+  if (timeSlot === "custom") return "Personalizzato"
+  
+  const interval = TIME_SLOT_INTERVALS[timeSlot]
+  if (!interval) return "Personalizzato"
+
+  const startStr = interval.start.toString().padStart(2, '0')
+  const endStr = interval.end.toString().padStart(2, '0')
+  const endWithTolerance = interval.end + TIME_SLOT_TOLERANCE
+  const endToleranceStr = (endWithTolerance >= 24 ? endWithTolerance - 24 : endWithTolerance).toString().padStart(2, '0')
+
+  const timeSlotNames: Record<TimeSlot, string> = {
+    mattina: "Mattina",
+    pomeriggio: "Pomeriggio",
+    sera: "Sera",
+    notte: "Notte",
+    giornata: "Giornata",
+    custom: "Personalizzato"
+  }
+
+  return `${timeSlotNames[timeSlot]} (${startStr}:00-${endStr}:00, scade alle ${endToleranceStr}:00)`
+}
 
 export function DateSelectionSheet() {
   const {
@@ -152,11 +175,11 @@ export function DateSelectionSheet() {
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="mattina">Mattina (fino alle 14:00)</SelectItem>
-                    <SelectItem value="pomeriggio">Pomeriggio (fino alle 22:00)</SelectItem>
-                    <SelectItem value="notte">Notte (fino alle 06:00)</SelectItem>
-                    <SelectItem value="giornata">Giornata (fino alle 20:00)</SelectItem>
-                    <SelectItem value="custom">Personalizzato</SelectItem>
+                    <SelectItem value="mattina">{getTimeSlotLabel("mattina")}</SelectItem>
+                    <SelectItem value="pomeriggio">{getTimeSlotLabel("pomeriggio")}</SelectItem>
+                    <SelectItem value="notte">{getTimeSlotLabel("notte")}</SelectItem>
+                    <SelectItem value="giornata">{getTimeSlotLabel("giornata")}</SelectItem>
+                    <SelectItem value="custom">{getTimeSlotLabel("custom")}</SelectItem>
                   </SelectContent>
                 </Select>
                 {isCustomTimeSlot(selectedTimeSlot) && (

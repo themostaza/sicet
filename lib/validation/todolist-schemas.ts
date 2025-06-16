@@ -54,6 +54,18 @@ export type TodolistParams = z.infer<typeof TodolistParamsSchema>;
 export type TodolistIdParams = z.infer<typeof TodolistIdParamsSchema>;
 export type CreateTodolistParams = z.infer<typeof CreateTodolistSchema>;
 
+// Costante per la tolleranza degli slot temporali (in ore)
+export const TIME_SLOT_TOLERANCE = 3
+
+// Costanti per gli intervalli orari degli slot temporali
+export const TIME_SLOT_INTERVALS = {
+  mattina: { start: 6, end: 11 },
+  pomeriggio: { start: 12, end: 17 },
+  sera: { start: 18, end: 21 },
+  notte: { start: 22, end: 5 },
+  giornata: { start: 6, end: 17 },
+} as const
+
 // Type per gli slot temporali
 export type TimeSlot = "mattina" | "pomeriggio" | "sera" | "notte" | "giornata" | "custom"
 
@@ -92,32 +104,10 @@ export function getTimeRangeFromSlot(date: string, timeSlot: TimeSlotValue): { s
     startHour = timeSlot.startHour
     endHour = timeSlot.endHour
   } else {
-    switch (timeSlot) {
-      case "mattina":
-        startHour = 6
-        endHour = 11
-        break
-      case "pomeriggio":
-        startHour = 12
-        endHour = 17
-        break
-      case "sera":
-        startHour = 18
-        endHour = 21
-        break
-      case "notte":
-        startHour = 22
-        endHour = 5
-        break
-      case "giornata":
-        startHour = 6
-        endHour = 17
-        break
-      case "custom":
-        // Questo caso non dovrebbe mai verificarsi poiché gestito sopra
-        startHour = 0
-        endHour = 23
-        break
+    const interval = TIME_SLOT_INTERVALS[timeSlot as keyof typeof TIME_SLOT_INTERVALS]
+    if (interval) {
+      startHour = interval.start
+      endHour = interval.end
     }
   }
 
@@ -144,22 +134,24 @@ export function formatTimeSlotValue(timeSlot: TimeSlotValue): string {
     return `Personalizzato (${startStr}:00-${endStr}:00)`
   }
 
-  switch (timeSlot) {
-    case "mattina":
-      return "Mattina (fino alle 14:00)"
-    case "pomeriggio":
-      return "Pomeriggio (fino alle 22:00)"
-    case "sera":
-      return "Sera (fino alle 22:00)"
-    case "notte":
-      return "Notte (fino alle 06:00)"
-    case "giornata":
-      return "Giornata (fino alle 20:00)"
-    case "custom":
-      return "Personalizzato"
-    default:
-      return String(timeSlot)
+  const interval = TIME_SLOT_INTERVALS[timeSlot as keyof typeof TIME_SLOT_INTERVALS]
+  if (!interval) return String(timeSlot)
+
+  const startStr = interval.start.toString().padStart(2, '0')
+  const endStr = interval.end.toString().padStart(2, '0')
+  const endWithTolerance = interval.end + TIME_SLOT_TOLERANCE
+  const endToleranceStr = (endWithTolerance >= 24 ? endWithTolerance - 24 : endWithTolerance).toString().padStart(2, '0')
+
+  const timeSlotNames: Record<TimeSlot, string> = {
+    mattina: "Mattina",
+    pomeriggio: "Pomeriggio",
+    sera: "Sera",
+    notte: "Notte",
+    giornata: "Giornata",
+    custom: "Personalizzato"
   }
+
+  return `${timeSlotNames[timeSlot]} (${startStr}:00-${endStr}:00, scade alle ${endToleranceStr}:00)`
 }
 
 // Get the current time slot based on the current time
@@ -189,20 +181,12 @@ export function getTimeSlotFromDateTime(dateTimeStr: string): TimeSlot {
 }
 
 // Utility per verificare se una todolist è scaduta
-export function isTodolistExpired(scheduledExecution: string, toleranceHours: number = 3): boolean {
+export function isTodolistExpired(scheduledExecution: string): boolean {
   const now = new Date()
-  const executionDate = new Date(scheduledExecution)
-  const timeSlot = getTimeSlotFromDateTime(scheduledExecution)
-  const { endTime } = getTimeRangeFromSlot(
-    executionDate.toISOString().split('T')[0],
-    timeSlot
-  )
-  
-  // Aggiungi le ore di tolleranza alla fine del timeslot
-  const expirationDate = new Date(endTime)
-  expirationDate.setHours(expirationDate.getHours() + toleranceHours)
-  
-  return now > expirationDate
+  const scheduledDate = new Date(scheduledExecution)
+  const toleranceDate = new Date(scheduledDate)
+  toleranceDate.setHours(toleranceDate.getHours() + TIME_SLOT_TOLERANCE)
+  return now > toleranceDate
 }
 
 // Helper functions for converting database rows to types

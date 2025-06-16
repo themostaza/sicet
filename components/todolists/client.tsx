@@ -8,9 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
-import { isTodolistExpired } from "@/lib/validation/todolist-schemas"
+import { TimeSlot, TimeSlotValue, CustomTimeSlot, isCustomTimeSlot, isTodolistExpired } from "@/lib/validation/todolist-schemas"
 
-type TimeSlot = "mattina" | "pomeriggio" | "sera" | "notte" | "giornata"
 type FilterType = "all" | "today" | "overdue" | "future" | "completed"
 
 type TodolistItem = {
@@ -18,7 +17,7 @@ type TodolistItem = {
   device_id: string
   device_name: string
   date: string
-  time_slot: TimeSlot
+  time_slot: TimeSlotValue
   scheduled_execution: string
   status: "pending" | "in_progress" | "completed"
   count: number
@@ -37,6 +36,7 @@ const timeSlotOrder: Record<TimeSlot, number> = {
   sera: 3,
   notte: 4,
   giornata: 5,
+  custom: 6
 }
 
 export default function TodolistListClient({ todolistsByFilter, counts, initialFilter }: Props) {
@@ -85,6 +85,24 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
         <Calendar size={16} /> Da fare
       </span>
     )
+  }
+
+  const formatTimeSlot = (timeSlot: TimeSlotValue) => {
+    if (isCustomTimeSlot(timeSlot)) {
+      const startStr = timeSlot.startHour.toString().padStart(2, '0')
+      const endStr = timeSlot.endHour.toString().padStart(2, '0')
+      return `Personalizzato (${startStr}:00-${endStr}:00)`
+    }
+    const slot = timeSlot as TimeSlot
+    const timeSlotNames: Record<TimeSlot, string> = {
+      mattina: "Mattina",
+      pomeriggio: "Pomeriggio",
+      sera: "Sera",
+      notte: "Notte",
+      giornata: "Giornata",
+      custom: "Personalizzato"
+    }
+    return timeSlotNames[slot]
   }
 
   return (
@@ -173,7 +191,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                       <TableCell className="font-mono text-xs">{item.id}</TableCell>
                       <TableCell>{item.device_name}</TableCell>
                       <TableCell>{item.date}</TableCell>
-                      <TableCell className="capitalize">{item.time_slot}</TableCell>
+                      <TableCell>{formatTimeSlot(item.time_slot)}</TableCell>
                       <TableCell>{getStatusDisplay(item)}</TableCell>
                       <TableCell>{item.count}</TableCell>
                       <TableCell>

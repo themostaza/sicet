@@ -289,8 +289,11 @@ export interface Database {
           scheduled_execution: string
           status: "pending" | "in_progress" | "completed"
           completion_date: string | null
-          created_at: string | null
-          updated_at: string | null
+          created_at: string
+          updated_at: string
+          time_slot_type: "standard" | "custom"
+          time_slot_start: number | null
+          time_slot_end: number | null
         }
         Insert: {
           id?: string
@@ -298,8 +301,11 @@ export interface Database {
           scheduled_execution: string
           status?: "pending" | "in_progress" | "completed"
           completion_date?: string | null
-          created_at?: string | null
-          updated_at?: string | null
+          created_at?: string
+          updated_at?: string
+          time_slot_type?: "standard" | "custom"
+          time_slot_start?: number | null
+          time_slot_end?: number | null
         }
         Update: {
           id?: string
@@ -307,8 +313,11 @@ export interface Database {
           scheduled_execution?: string
           status?: "pending" | "in_progress" | "completed"
           completion_date?: string | null
-          created_at?: string | null
-          updated_at?: string | null
+          created_at?: string
+          updated_at?: string
+          time_slot_type?: "standard" | "custom"
+          time_slot_start?: number | null
+          time_slot_end?: number | null
         }
         Relationships: [
           {
