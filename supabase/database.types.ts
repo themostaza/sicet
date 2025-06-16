@@ -20,6 +20,7 @@ export interface Database {
           qrcode_url: string | null
           tags: string[] | null
           type: string | null
+          deleted: boolean
         }
         Insert: {
           created_at?: string | null
@@ -31,6 +32,7 @@ export interface Database {
           qrcode_url?: string | null
           tags?: string[] | null
           type?: string | null
+          deleted?: boolean
         }
         Update: {
           created_at?: string | null
@@ -42,6 +44,7 @@ export interface Database {
           qrcode_url?: string | null
           tags?: string[] | null
           type?: string | null
+          deleted?: boolean
         }
         Relationships: []
       }
@@ -52,6 +55,7 @@ export interface Database {
           id: string
           name: string
           value: Json | null
+          deleted: boolean
         }
         Insert: {
           created_at?: string | null
@@ -59,6 +63,7 @@ export interface Database {
           id: string
           name: string
           value?: Json | null
+          deleted?: boolean
         }
         Update: {
           created_at?: string | null
@@ -66,6 +71,7 @@ export interface Database {
           id?: string
           name?: string
           value?: Json | null
+          deleted?: boolean
         }
         Relationships: []
       }

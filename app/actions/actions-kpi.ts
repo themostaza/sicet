@@ -131,6 +131,7 @@ export async function getKpis(
   const { data, count, error } = await (await supabase())
     .from("kpis")
     .select("*", { count: "exact" })
+    .eq("deleted", false)
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -146,6 +147,7 @@ export async function getKpi(id: string): Promise<Kpi | null> {
     .from("kpis")
     .select("*")
     .eq("id", id)
+    .eq("deleted", false)
     .maybeSingle();
 
   if (error) handlePostgrestError(error);
@@ -213,7 +215,7 @@ export async function updateKpi(raw: unknown): Promise<Kpi> {
 }
 
 export async function deleteKpi(id: string): Promise<void> {
-  // Get KPI info before deleting for logging
+  // Soft delete: set deleted=true
   const { data: kpiData } = await (await supabase())
     .from("kpis")
     .select("name, description")
@@ -222,7 +224,7 @@ export async function deleteKpi(id: string): Promise<void> {
 
   const { error } = await (await supabase())
     .from("kpis")
-    .delete()
+    .update({ deleted: true })
     .eq("id", id);
 
   if (error) handlePostgrestError(error);

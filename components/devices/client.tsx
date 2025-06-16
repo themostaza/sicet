@@ -3,7 +3,7 @@
 import { useState, useDeferredValue, useMemo, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { QrCode, Edit, Plus, MapPin, Info } from "lucide-react"
+import { QrCode, Edit, Plus, MapPin, Info, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { QRCodeModal } from "@/components/qr-code-modal"
 import {
@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/accordion"
 import type { Device } from "@/lib/validation/device-schemas"
 import { getDevices } from "@/app/actions/actions-device"
+import { DeviceDeleteDialog } from "@/components/device/device-delete-dialog"
+import { createBrowserClient } from "@supabase/ssr"
 
 interface Props {
   initialDevices: Device[]
@@ -28,6 +30,7 @@ export default function DeviceList({ initialDevices }: Props) {
   const [hasMore, setHasMore] = useState(true)
   const [loading, setLoading] = useState(false)
   const loaderRef = useRef<HTMLDivElement | null>(null)
+  const [role, setRole] = useState<string | null>(null)
 
   const list = useMemo(() => {
     const term = deferred.toLowerCase()
@@ -67,6 +70,22 @@ export default function DeviceList({ initialDevices }: Props) {
     observer.observe(loaderRef.current)
     return () => observer.disconnect()
   }, [loaderRef.current, hasMore, loading])
+
+  useEffect(() => {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return setRole(null)
+      supabase
+        .from("profiles")
+        .select("role")
+        .eq("email", user.email)
+        .single()
+        .then(({ data: profile }) => setRole(profile?.role ?? null))
+    })
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -168,6 +187,18 @@ export default function DeviceList({ initialDevices }: Props) {
                       <Button variant="outline" size="sm" onClick={() => openQr(d)}>
                         <QrCode className="w-4 h-4 mr-2" /> QR Code
                       </Button>
+                      {role === "admin" && (
+                        <DeviceDeleteDialog
+                          onDelete={async () => {
+                            await fetch(`/api/device/delete?id=${d.id}`, { method: "POST" })
+                            setDevices((prev) => prev.filter((dev) => dev.id !== d.id))
+                          }}
+                        >
+                          <Button variant="destructive" size="sm">
+                            <Trash2 className="w-4 h-4 mr-2" /> Elimina
+                          </Button>
+                        </DeviceDeleteDialog>
+                      )}
                     </div>
                   </div>
                 </AccordionContent>

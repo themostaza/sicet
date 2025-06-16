@@ -3,7 +3,7 @@
 import { useState, useDeferredValue, useMemo, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Edit, Plus, Info, Hash, HashIcon, Type, Minus, Plus as PlusIcon, CheckCircle2, XCircle } from "lucide-react"
+import { Edit, Plus, Info, Hash, HashIcon, Type, Minus, Plus as PlusIcon, CheckCircle2, XCircle, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import {
   Accordion,
@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/accordion"
 import type { Kpi } from "@/app/actions/actions-kpi"
 import { getKpis } from "@/app/actions/actions-kpi"
+import { KpiDeleteDialog } from "@/components/kpi/kpi-delete-dialog"
+import { createBrowserClient } from "@supabase/ssr"
 
 interface Props {
   initialKpis: Kpi[]
@@ -26,6 +28,7 @@ export default function KpiList({ initialKpis }: Props) {
   const [hasMore, setHasMore] = useState(true)
   const [loading, setLoading] = useState(false)
   const loaderRef = useRef<HTMLDivElement | null>(null)
+  const [role, setRole] = useState<string | null>(null)
 
   const list = useMemo(() => {
     const term = deferred.toLowerCase()
@@ -62,6 +65,22 @@ export default function KpiList({ initialKpis }: Props) {
     observer.observe(loaderRef.current)
     return () => observer.disconnect()
   }, [loaderRef.current, hasMore, loading])
+
+  useEffect(() => {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return setRole(null)
+      supabase
+        .from("profiles")
+        .select("role")
+        .eq("email", user.email)
+        .single()
+        .then(({ data: profile }) => setRole(profile?.role ?? null))
+    })
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -209,6 +228,18 @@ export default function KpiList({ initialKpis }: Props) {
                       >
                         <Edit className="w-4 h-4 mr-2" /> Modifica
                       </Button>
+                      {role === "admin" && (
+                        <KpiDeleteDialog
+                          onDelete={async () => {
+                            await fetch(`/api/kpi/delete?id=${k.id}`, { method: "POST" })
+                            setKpis((prev) => prev.filter((kpi) => kpi.id !== k.id))
+                          }}
+                        >
+                          <Button variant="destructive" size="sm">
+                            <Trash2 className="w-4 h-4 mr-2" /> Elimina
+                          </Button>
+                        </KpiDeleteDialog>
+                      )}
                     </div>
                   </div>
                 </AccordionContent>

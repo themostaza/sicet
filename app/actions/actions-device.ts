@@ -113,6 +113,7 @@ export async function getDevices(
   const { data, count, error } = await (await supabase())
     .from("devices")
     .select("*", { count: "exact" })
+    .eq("deleted", false)
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -128,6 +129,7 @@ export async function getDevice(id: string): Promise<Device | null> {
     .from("devices")
     .select("*")
     .eq("id", id)
+    .eq("deleted", false)
     .maybeSingle();
 
   if (error) handlePostgrestError(error);
@@ -192,8 +194,8 @@ export async function updateDevice(raw: unknown): Promise<Device> {
 }
 
 export async function deleteDevice(id: string): Promise<void> {
-  // Get device info before deleting for logging
-  const { data: deviceData } = await (await supabase())
+  // Soft delete: set deleted=true
+  const { data: deviceData, error: fetchError } = await (await supabase())
     .from("devices")
     .select("name, location")
     .eq("id", id)
@@ -201,7 +203,7 @@ export async function deleteDevice(id: string): Promise<void> {
 
   const { error } = await (await supabase())
     .from("devices")
-    .delete()
+    .update({ deleted: true })
     .eq("id", id);
 
   if (error) handlePostgrestError(error);
