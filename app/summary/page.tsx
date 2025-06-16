@@ -117,11 +117,10 @@ export default function ActivityDashboard() {
         setIsLoading(true);
         setError(null);
 
-        // Recupera la sessione utente dal client SSR
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) throw new Error('Errore di autenticazione: ' + sessionError.message);
-        if (!session || !session.user) throw new Error('Utente non autenticato');
-        const user = session.user;
+        // Recupera l'utente dal client SSR
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError) throw new Error('Errore di autenticazione: ' + userError.message);
+        if (!user) throw new Error('Utente non autenticato');
 
         // Recupera il profilo
         const { data: profile, error: profileError } = await supabase

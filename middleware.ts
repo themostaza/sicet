@@ -1,6 +1,8 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
+import type { CookieOptions } from '@supabase/ssr'
+
+type Role = 'admin' | 'operator' | 'referrer'
 
 // Define route permissions for each role
 const rolePermissions = {
@@ -13,8 +15,6 @@ const rolePermissions = {
   ],
   referrer: ['/summary'] // Referrer can only access summary page
 } as const
-
-type Role = keyof typeof rolePermissions
 
 // Helper function to check if a path matches a pattern
 function pathMatches(pattern: string, path: string): boolean {
@@ -48,40 +48,8 @@ function hasAccess(role: Role, path: string, referer?: string): boolean {
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
   
-  // Create a Supabase client using the SSR package with recommended cookie methods
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get: (name: string) => {
-          const cookie = req.cookies.get(name)
-          return cookie?.value
-        },
-        set: (name: string, value: string, options: CookieOptions) => {
-          try {
-            // Ensure the value is a string before setting
-            const stringValue = typeof value === 'string' ? value : JSON.stringify(value)
-            res.cookies.set({
-              name,
-              value: stringValue,
-              ...options,
-            })
-          } catch (error) {
-            console.error('Error setting cookie:', error)
-          }
-        },
-        remove: (name: string, options: CookieOptions) => {
-          res.cookies.set({
-            name,
-            value: '',
-            ...options,
-            maxAge: 0
-          })
-        }
-      }
-    }
-  )
+  // Create a Supabase client using our existing server client function
+  const supabase = await createServerSupabaseClient()
 
   // Get the current path and referer
   const path = req.nextUrl.pathname
@@ -94,14 +62,19 @@ export async function middleware(req: NextRequest) {
   if (publicRoutes.includes(path)) {
     // For public routes, we still need to check if user is authenticated
     // to redirect them if they try to access login/register while logged in
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user }, error } = await supabase.auth.getUser()
+    
+    if (error) {
+      // If there's an error getting the user, allow access to public routes
+      return res
+    }
     
     if (user) {
       // Get user role to determine where to redirect
       const { data: profile } = await supabase
         .from('profiles')
         .select('role')
-        .eq('email', user.email)
+        .eq('email', user.email ?? '')
         .single()
 
       // If user is authenticated and trying to access login/register, redirect based on role
@@ -131,7 +104,7 @@ export async function middleware(req: NextRequest) {
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('role')
-    .eq('email', user.email)
+    .eq('email', user.email ?? '')
     .single()
 
   if (profileError || !profile) {

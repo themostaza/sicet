@@ -25,6 +25,7 @@ import { createClient } from '@supabase/supabase-js';
 import { useFormValidation } from '@/hooks/use-form-validation';
 import { validationRules, ValidationRule } from '@/lib/validation';
 import { FormField } from '@/components/form/form-field';
+import { UserDeleteDialog } from '@/app/admin/user-delete-dialog';
 
 type Role       = 'operator' | 'admin' | 'referrer';
 type Status     = 'registered' | 'activated';
@@ -144,9 +145,9 @@ export default function PreRegisterPage() {
     <div className="container mx-auto py-6">
       <h1 className="text-2xl font-bold mb-6">Pre-registra Utenti</h1>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Form Card */}
-        <Card>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Form Card - now takes 1/4 of the space */}
+        <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle>Registra Nuovo Utente</CardTitle>
           </CardHeader>
@@ -180,46 +181,63 @@ export default function PreRegisterPage() {
                 required
               />
 
-              <Button type="submit" disabled={isSubmitting}>
+              <Button type="submit" disabled={isSubmitting} className="w-full">
                 {isSubmitting ? 'Registrazione in corso...' : 'Registra Utente'}
               </Button>
             </form>
           </CardContent>
         </Card>
 
-        {/* Table Card */}
-        <Card>
+        {/* Table Card - now takes 3/4 of the space */}
+        <Card className="lg:col-span-3">
           <CardHeader>
             <CardTitle>Utenti Registrati</CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Ruolo</TableHead>
-                  <TableHead>Stato</TableHead>
-                  <TableHead>Data Registrazione</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {profiles.map((profile) => (
-                  <TableRow key={profile.id}>
-                    <TableCell>{profile.email}</TableCell>
-                    <TableCell className="capitalize">
-                      {profile.role === 'operator' ? 'Operatore' :
-                       profile.role === 'admin' ? 'Admin' : 'Referente'}
-                    </TableCell>
-                    <TableCell className="capitalize">
-                      {profile.status === 'registered' ? 'Registrato' : 'Attivato'}
-                    </TableCell>
-                    <TableCell>
-                      {new Date(profile.created_at).toLocaleDateString()}
-                    </TableCell>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[30%]">Email</TableHead>
+                    <TableHead className="w-[20%]">Ruolo</TableHead>
+                    <TableHead className="w-[20%]">Stato</TableHead>
+                    <TableHead className="w-[20%]">Data Registrazione</TableHead>
+                    <TableHead className="w-[10%] text-right">Azioni</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {profiles.map((profile) => (
+                    <TableRow key={profile.id}>
+                      <TableCell className="font-medium">{profile.email}</TableCell>
+                      <TableCell className="capitalize">
+                        {profile.role === 'operator' ? 'Operatore' :
+                         profile.role === 'admin' ? 'Admin' : 'Referente'}
+                      </TableCell>
+                      <TableCell className="capitalize">
+                        {profile.status === 'registered' ? 'Registrato' : 'Attivato'}
+                      </TableCell>
+                      <TableCell>
+                        {new Date(profile.created_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <UserDeleteDialog 
+                          userId={profile.id} 
+                          userEmail={profile.email} 
+                          onDelete={() => {
+                            // Force a re-render by creating a new array
+                            fetchProfiles().then(() => {
+                              // Additional check to ensure the table is updated
+                              const updatedProfiles = profiles.filter(p => p.id !== profile.id);
+                              setProfiles(updatedProfiles);
+                            });
+                          }} 
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
       </div>

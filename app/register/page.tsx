@@ -62,10 +62,15 @@ export default function RegisterPage() {
       }
 
       try {
-        // Check current session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        // Check current user
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-        if (!session) {
+        if (userError) {
+          toast.error('Errore durante la verifica dell\'utente. Riprova più tardi.');
+          return;
+        }
+
+        if (!user) {
           const { error: signInError } = await supabase.auth.signInWithPassword({
             email,
             password: values.password
