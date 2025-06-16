@@ -28,6 +28,12 @@ export default async function TodolistPage() {
       userRole = profile?.role ?? null
     }
 
+    // Fetch devices list
+    const { data: devices } = await supabase
+      .from('devices')
+      .select('id, name')
+      .order('name')
+
     const { filtered, counts } = await getTodolistsGroupedWithFilters()
 
     return (
@@ -36,6 +42,7 @@ export default async function TodolistPage() {
         counts={counts}
         initialFilter="all"
         userRole={userRole}
+        devices={devices || []}
       />
     )
   } catch (error) {
