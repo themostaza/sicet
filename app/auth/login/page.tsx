@@ -19,6 +19,7 @@ export default function LoginPage() {
   );
 
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
 
   const validationSchema = {
     email: [
@@ -36,7 +37,8 @@ export default function LoginPage() {
     handleChange,
     handleBlur,
     handleSubmit: handleFormSubmit,
-    isSubmitting
+    isSubmitting,
+    validateFields
   } = useFormValidation({
     initialValues: {
       email: '',
@@ -78,6 +80,46 @@ export default function LoginPage() {
     }
   });
 
+  const handleResetPassword = async () => {
+    // Validate email field
+    const emailValidation = validateFields();
+    if (!emailValidation || !values.email) {
+      toast.error('Inserisci un indirizzo email valido');
+      return;
+    }
+
+    setIsResettingPassword(true);
+    try {
+      // Check if user exists
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', values.email)
+        .single();
+
+      if (!profile) {
+        toast.error('Email non registrata');
+        return;
+      }
+
+      // Send reset password email
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(values.email, {
+        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/register?email=${encodeURIComponent(values.email)}&source=user`
+      });
+
+      if (resetError) {
+        toast.error('Errore nell\'invio della mail di reset');
+        return;
+      }
+
+      toast.success('Email di reset password inviata!');
+    } catch (error) {
+      toast.error('Si è verificato un errore imprevisto');
+    } finally {
+      setIsResettingPassword(false);
+    }
+  };
+
   return (
     <div className="container max-w-md mx-auto py-12">
       <Card>
@@ -116,9 +158,21 @@ export default function LoginPage() {
               <div className="text-red-500 text-sm">{loginError}</div>
             )}
 
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? 'Accesso in corso...' : 'Accedi'}
-            </Button>
+            <div className="flex flex-col gap-2">
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? 'Accesso in corso...' : 'Accedi'}
+              </Button>
+              
+              <Button 
+                type="button" 
+                variant="outline" 
+                className="w-full" 
+                onClick={handleResetPassword}
+                disabled={isResettingPassword || !values.email}
+              >
+                {isResettingPassword ? 'Invio in corso...' : 'Reset Password'}
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>

@@ -22,6 +22,7 @@ export default function RegisterPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const email = searchParams.get('email');
+  const source = searchParams.get('source');
 
   const validationSchema: Record<keyof RegisterFormValues, ValidationRule[]> = {
     password: [
@@ -86,18 +87,20 @@ export default function RegisterPage() {
           return;
         }
 
-        // Update profile status to activated
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({ status: 'activated' })
-          .eq('email', email);
+        // Update profile status to activated - only for preregistration
+        if (source !== 'user') {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .update({ status: 'activated' })
+            .eq('email', email);
 
-        if (profileError) {
-          toast.error(`Errore nell'attivazione del profilo: ${profileError.message}`);
-          return;
+          if (profileError) {
+            toast.error(`Errore nell'attivazione del profilo: ${profileError.message}`);
+            return;
+          }
         }
 
-        toast.success('Password impostata con successo!');
+        toast.success(source === 'user' ? 'Password aggiornata con successo!' : 'Password impostata con successo!');
         
         // Get user role to redirect appropriately
         const { data: profile, error: roleError } = await supabase
@@ -111,13 +114,19 @@ export default function RegisterPage() {
           return;
         }
 
-        // Redirect based on role
-        if (profile?.role === 'admin') {
-          router.push('/admin');
-        } else if (profile?.role === 'operator') {
-          router.push('/operator');
+        // Redirect based on role and source
+        if (source === 'user') {
+          // For user-initiated password reset, redirect to login
+          router.push('/auth/login');
         } else {
-          router.push('/referrer');
+          // For preregistration, redirect based on role
+          if (profile?.role === 'admin') {
+            router.push('/admin');
+          } else if (profile?.role === 'operator') {
+            router.push('/operator');
+          } else {
+            router.push('/referrer');
+          }
         }
       } catch (error) {
         toast.error('Si è verificato un errore imprevisto');
@@ -153,22 +162,24 @@ export default function RegisterPage() {
     }
     // --- FINE PATCH ---
 
-    // Check if user is already activated
-    const checkStatus = async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('status')
-        .eq('email', email)
-        .single();
+    // Check if user is already activated - only for preregistration
+    if (source !== 'user') {
+      const checkStatus = async () => {
+        const { data } = await supabase
+          .from('profiles')
+          .select('status')
+          .eq('email', email)
+          .single();
 
-      if (data?.status === 'activated') {
-        toast.error('Account già attivato');
-        router.push('/');
-      }
-    };
+        if (data?.status === 'activated') {
+          toast.error('Account già attivato');
+          router.push('/');
+        }
+      };
 
-    checkStatus();
-  }, [email, router]);
+      checkStatus();
+    }
+  }, [email, router, source]);
 
   if (!email) return null;
 
@@ -176,7 +187,9 @@ export default function RegisterPage() {
     <div className="container max-w-md mx-auto py-12">
       <Card>
         <CardHeader>
-          <CardTitle>Imposta Nuova Password</CardTitle>
+          <CardTitle>
+            {source === 'user' ? 'Reset Password' : 'Imposta Nuova Password'}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleFormSubmit} className="space-y-4">
@@ -224,7 +237,7 @@ export default function RegisterPage() {
             />
 
             <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? 'Impostazione password...' : 'Imposta Password'}
+              {isSubmitting ? 'Impostazione password...' : source === 'user' ? 'Reset Password' : 'Imposta Password'}
             </Button>
           </form>
         </CardContent>
