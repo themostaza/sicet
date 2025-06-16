@@ -5,8 +5,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { getDevices } from "@/app/actions/actions-device"
 import { getKpis } from "@/app/actions/actions-kpi"
 import { 
-  Device, KPI, DateTimeEntry, ValidationErrors, TimeSlot,
-  mapDbDeviceToDevice, mapDbKpiToKpi
+  Device, KPI, DateTimeEntry, ValidationErrors, TimeSlot, TimeSlotValue, CustomTimeSlot, isCustomTimeSlot
 } from "./types"
 import { toggle, areEqual } from "./helpers"
 import { format } from "date-fns"
@@ -35,7 +34,7 @@ interface TodolistContextType {
   manualSelectedDevices: Set<string>
   selectedKpis: Set<string>
   dateEntries: DateTimeEntry[]
-  defaultTimeSlot: TimeSlot
+  defaultTimeSlot: TimeSlotValue
   intervalDays: number
   startDate: Date | null
   monthsToRepeat: number
@@ -78,7 +77,7 @@ interface TodolistContextType {
   setManualSelectedDevices: (devices: Set<string>) => void
   setSelectedKpis: (kpis: Set<string>) => void
   setDateEntries: (entries: DateTimeEntry[]) => void
-  setDefaultTimeSlot: (slot: TimeSlot) => void
+  setDefaultTimeSlot: (timeSlot: TimeSlotValue) => void
   setIntervalDays: (days: number) => void
   setStartDate: (date: Date | null) => void
   setMonthsToRepeat: (months: number) => void
@@ -91,10 +90,10 @@ interface TodolistContextType {
   clearAllTags: () => void
   handleToggleAllDevices: () => void
   handleToggleAllKpis: () => void
-  updateDateEntry: (date: Date, timeSlot: TimeSlot) => void
+  updateDateEntry: (date: Date, timeSlot: TimeSlotValue) => void
   removeDateEntry: (index: number) => void
   applyIntervalSelection: () => void
-  updateExistingDateEntry: (index: number, newDate: Date, newTimeSlot: TimeSlot) => void
+  updateExistingDateEntry: (index: number, newDate: Date, newTimeSlot: TimeSlotValue) => void
   
   // New fields
   alertConditions: AlertCondition[]
@@ -122,7 +121,7 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
   const [manualSelectedDevices, setManualSelectedDevices] = useState<Set<string>>(new Set())
   const [selectedKpis, setSelectedKpis] = useState<Set<string>>(new Set())
   const [dateEntries, setDateEntries] = useState<DateTimeEntry[]>([])
-  const [defaultTimeSlot, setDefaultTimeSlot] = useState<TimeSlot>("mattina")
+  const [defaultTimeSlot, setDefaultTimeSlot] = useState<TimeSlotValue>("mattina")
   const [intervalDays, setIntervalDays] = useState(7)
   const [startDate, setStartDate] = useState<Date | null>(null)
   const [monthsToRepeat, setMonthsToRepeat] = useState(1)
@@ -383,7 +382,7 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
   }, [allKpiSelected, filteredKpis])
   
   // Aggiorna o aggiungi una data entry
-  const updateDateEntry = useCallback((date: Date, timeSlot: TimeSlot) => {
+  const updateDateEntry = useCallback((date: Date, timeSlot: TimeSlotValue) => {
     if (!date) return;
     
     // Normalize date to avoid timezone issues
@@ -398,7 +397,9 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
       const existingIndex = prev.findIndex(
         entry => 
           format(entry.date, "yyyy-MM-dd") === dateStr &&
-          entry.timeSlot === timeSlot
+          (isCustomTimeSlot(timeSlot) && isCustomTimeSlot(entry.timeSlot)
+            ? timeSlot.startHour === entry.timeSlot.startHour && timeSlot.endHour === entry.timeSlot.endHour
+            : entry.timeSlot === timeSlot)
       )
       
       if (existingIndex >= 0) {
@@ -492,7 +493,7 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
   }, [startDate, setStartDate])
 
   // Add a new function specifically for updating an existing date entry
-  const updateExistingDateEntry = useCallback((index: number, newDate: Date, newTimeSlot: TimeSlot) => {
+  const updateExistingDateEntry = useCallback((index: number, newDate: Date, newTimeSlot: TimeSlotValue) => {
     setDateEntries(prev => {
       if (index < 0 || index >= prev.length) return prev
       

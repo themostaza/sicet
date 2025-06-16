@@ -12,7 +12,8 @@ import { it } from "date-fns/locale"
 import { CalendarIcon, Clock, Plus, X } from "lucide-react"
 import { useTodolist } from "./context"
 import { formatTimeSlot } from "./helpers"
-import { TimeSlot } from "./types"
+import { TimeSlot, TimeSlotValue, CustomTimeSlot, isCustomTimeSlot, formatTimeSlotValue } from "@/lib/validation/todolist-schemas"
+import { CustomTimeSlotPicker } from "./custom-time-slot"
 import {
   Select,
   SelectContent,
@@ -48,13 +49,39 @@ export function DateSelectionSheet() {
   /**
    * TEMP STATES
    */
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlot>(defaultTimeSlot)
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlotValue>(defaultTimeSlot)
+  const [customTimeSlot, setCustomTimeSlot] = useState<CustomTimeSlot | undefined>(
+    isCustomTimeSlot(defaultTimeSlot) ? defaultTimeSlot : undefined
+  )
   const [tempSelectedDate, setTempSelectedDate] = useState<Date | undefined>(new Date())
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
 
   /**
    * HANDLERS
    */
+  const handleTimeSlotChange = (value: string) => {
+    if (value === "custom") {
+      // Se non c'è già un custom time slot, ne creiamo uno di default
+      if (!customTimeSlot) {
+        const defaultCustomSlot: CustomTimeSlot = {
+          type: "custom",
+          startHour: 9,
+          endHour: 17
+        }
+        setCustomTimeSlot(defaultCustomSlot)
+        setSelectedTimeSlot(defaultCustomSlot)
+      }
+      return
+    }
+    setSelectedTimeSlot(value as TimeSlot)
+    setCustomTimeSlot(undefined)
+  }
+
+  const handleCustomTimeSlotChange = (value: CustomTimeSlot) => {
+    setCustomTimeSlot(value)
+    setSelectedTimeSlot(value)
+  }
+
   const handleAddDate = () => {
     if (!tempSelectedDate) return
     const validDate = new Date(tempSelectedDate)
@@ -112,17 +139,34 @@ export function DateSelectionSheet() {
                 <Label htmlFor="timeSlot" className="mb-2 block">
                   Fascia oraria
                 </Label>
-                <Select value={selectedTimeSlot} onValueChange={(v) => setSelectedTimeSlot(v as TimeSlot)}>
+                <Select 
+                  value={isCustomTimeSlot(selectedTimeSlot) ? "custom" : selectedTimeSlot} 
+                  onValueChange={handleTimeSlotChange}
+                >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Seleziona fascia oraria" />
+                    <SelectValue placeholder="Seleziona fascia oraria">
+                      {isCustomTimeSlot(selectedTimeSlot) 
+                        ? `Personalizzato (${selectedTimeSlot.startHour.toString().padStart(2, '0')}:00-${selectedTimeSlot.endHour.toString().padStart(2, '0')}:00)`
+                        : undefined
+                      }
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="mattina">Mattina (fino alle 14:00)</SelectItem>
                     <SelectItem value="pomeriggio">Pomeriggio (fino alle 22:00)</SelectItem>
                     <SelectItem value="notte">Notte (fino alle 06:00)</SelectItem>
                     <SelectItem value="giornata">Giornata (fino alle 20:00)</SelectItem>
+                    <SelectItem value="custom">Personalizzato</SelectItem>
                   </SelectContent>
                 </Select>
+                {isCustomTimeSlot(selectedTimeSlot) && (
+                  <div className="mt-2">
+                    <CustomTimeSlotPicker
+                      value={selectedTimeSlot}
+                      onChange={handleCustomTimeSlotChange}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* -------- Intervallo giorni -------- */}
@@ -236,7 +280,7 @@ export function DateSelectionSheet() {
                       <td className="py-2">
                         <span className="flex items-center">
                           <Clock className="h-3 w-3 inline mr-1" />
-                          {formatTimeSlot(entry.timeSlot)}
+                          {formatTimeSlotValue(entry.timeSlot)}
                         </span>
                       </td>
                       <td className="py-2 text-right">

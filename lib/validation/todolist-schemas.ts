@@ -55,7 +55,17 @@ export type TodolistIdParams = z.infer<typeof TodolistIdParamsSchema>;
 export type CreateTodolistParams = z.infer<typeof CreateTodolistSchema>;
 
 // Type per gli slot temporali
-export type TimeSlot = "mattina" | "pomeriggio" | "sera" | "notte" | "giornata";
+export type TimeSlot = "mattina" | "pomeriggio" | "sera" | "notte" | "giornata" | "custom"
+
+// Interfaccia per i timeslot personalizzati
+export interface CustomTimeSlot {
+  type: "custom"
+  startHour: number
+  endHour: number
+}
+
+// Type union per tutti i possibili tipi di timeslot
+export type TimeSlotValue = TimeSlot | CustomTimeSlot
 
 // Costante per l'ordine degli slot
 export const timeSlotOrder: Record<TimeSlot, number> = {
@@ -64,7 +74,93 @@ export const timeSlotOrder: Record<TimeSlot, number> = {
   sera: 3,
   notte: 4,
   giornata: 5,
-};
+  custom: 6,
+}
+
+// Utility per verificare se un timeslot è personalizzato
+export function isCustomTimeSlot(timeSlot: TimeSlotValue): timeSlot is CustomTimeSlot {
+  return typeof timeSlot === "object" && timeSlot.type === "custom"
+}
+
+// Utility per ottenere il range temporale da una data e uno slot
+export function getTimeRangeFromSlot(date: string, timeSlot: TimeSlotValue): { startTime: string; endTime: string } {
+  const baseDate = new Date(date)
+  let startHour = 0
+  let endHour = 23
+
+  if (isCustomTimeSlot(timeSlot)) {
+    startHour = timeSlot.startHour
+    endHour = timeSlot.endHour
+  } else {
+    switch (timeSlot) {
+      case "mattina":
+        startHour = 6
+        endHour = 11
+        break
+      case "pomeriggio":
+        startHour = 12
+        endHour = 17
+        break
+      case "sera":
+        startHour = 18
+        endHour = 21
+        break
+      case "notte":
+        startHour = 22
+        endHour = 5
+        break
+      case "giornata":
+        startHour = 6
+        endHour = 17
+        break
+      case "custom":
+        // Questo caso non dovrebbe mai verificarsi poiché gestito sopra
+        startHour = 0
+        endHour = 23
+        break
+    }
+  }
+
+  const startTime = new Date(baseDate)
+  startTime.setHours(startHour, 0, 0, 0)
+
+  const endTime = new Date(baseDate)
+  if (endHour < startHour) {
+    endTime.setDate(endTime.getDate() + 1)
+  }
+  endTime.setHours(endHour, 59, 59, 999)
+
+  return {
+    startTime: startTime.toISOString(),
+    endTime: endTime.toISOString()
+  }
+}
+
+// Utility per formattare un timeslot per la visualizzazione
+export function formatTimeSlotValue(timeSlot: TimeSlotValue): string {
+  if (isCustomTimeSlot(timeSlot)) {
+    const startStr = timeSlot.startHour.toString().padStart(2, '0')
+    const endStr = timeSlot.endHour.toString().padStart(2, '0')
+    return `Personalizzato (${startStr}:00-${endStr}:00)`
+  }
+
+  switch (timeSlot) {
+    case "mattina":
+      return "Mattina (fino alle 14:00)"
+    case "pomeriggio":
+      return "Pomeriggio (fino alle 22:00)"
+    case "sera":
+      return "Sera (fino alle 22:00)"
+    case "notte":
+      return "Notte (fino alle 06:00)"
+    case "giornata":
+      return "Giornata (fino alle 20:00)"
+    case "custom":
+      return "Personalizzato"
+    default:
+      return String(timeSlot)
+  }
+}
 
 // Get the current time slot based on the current time
 export function getCurrentTimeSlot(date: Date): TimeSlot {
@@ -90,50 +186,6 @@ export function getTimeSlotFromDateTime(dateTimeStr: string): TimeSlot {
   if (hours >= 18 && hours < 22) return "sera"
   if (hours >= 6 && hours < 17) return "giornata"
   return "notte"
-}
-
-// Utility per ottenere il range temporale da una data e uno slot
-export function getTimeRangeFromSlot(date: string, timeSlot: TimeSlot): { startTime: string; endTime: string } {
-  const baseDate = new Date(date)
-  let startHour = 0
-  let endHour = 23
-
-  switch (timeSlot) {
-    case "mattina":
-      startHour = 6
-      endHour = 11
-      break
-    case "pomeriggio":
-      startHour = 12
-      endHour = 17
-      break
-    case "sera":
-      startHour = 18
-      endHour = 21
-      break
-    case "notte":
-      startHour = 22
-      endHour = 5
-      break
-    case "giornata":
-      startHour = 6
-      endHour = 17
-      break
-  }
-
-  const startTime = new Date(baseDate)
-  startTime.setHours(startHour, 0, 0, 0)
-
-  const endTime = new Date(baseDate)
-  if (timeSlot === "notte") {
-    endTime.setDate(endTime.getDate() + 1)
-  }
-  endTime.setHours(endHour, 59, 59, 999)
-
-  return {
-    startTime: startTime.toISOString(),
-    endTime: endTime.toISOString()
-  }
 }
 
 // Utility per verificare se una todolist è scaduta

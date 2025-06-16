@@ -7,7 +7,7 @@ import { format } from "date-fns"
 import { it } from "date-fns/locale"
 import { AlertCircle, Clock, Plus, Settings, X } from "lucide-react"
 import { useTodolist } from "./context"
-import { formatTimeSlot } from "./helpers"
+import { formatTimeSlotValue } from "@/lib/validation/todolist-schemas"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 export function DateSelection() {
@@ -61,7 +61,7 @@ export function DateSelection() {
                     <TableCell>
                       <span className="flex items-center">
                         <Clock className="h-3 w-3 mr-1" />
-                        {formatTimeSlot(entry.timeSlot)}
+                        {formatTimeSlotValue(entry.timeSlot)}
                       </span>
                     </TableCell>
                   </TableRow>
