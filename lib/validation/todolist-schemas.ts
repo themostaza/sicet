@@ -130,6 +130,23 @@ export function getTimeRangeFromSlot(date: string, timeSlot: TimeSlot): { startT
   }
 }
 
+// Utility per verificare se una todolist è scaduta
+export function isTodolistExpired(scheduledExecution: string, toleranceHours: number = 3): boolean {
+  const now = new Date()
+  const executionDate = new Date(scheduledExecution)
+  const timeSlot = getTimeSlotFromDateTime(scheduledExecution)
+  const { endTime } = getTimeRangeFromSlot(
+    executionDate.toISOString().split('T')[0],
+    timeSlot
+  )
+  
+  // Aggiungi le ore di tolleranza alla fine del timeslot
+  const expirationDate = new Date(endTime)
+  expirationDate.setHours(expirationDate.getHours() + toleranceHours)
+  
+  return now > expirationDate
+}
+
 // Helper functions for converting database rows to types
 export const toTask = (row: {
   id: string

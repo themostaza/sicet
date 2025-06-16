@@ -3,11 +3,12 @@
 import React from "react"
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, AlertTriangle, ArrowRight, CheckCircle2, Plus } from "lucide-react"
+import { Calendar, AlertTriangle, ArrowRight, CheckCircle2, Plus, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
+import { isTodolistExpired } from "@/lib/validation/todolist-schemas"
 
 type TimeSlot = "mattina" | "pomeriggio" | "sera" | "notte"
 type FilterType = "all" | "today" | "overdue" | "future" | "completed"
@@ -18,8 +19,10 @@ type TodolistItem = {
   device_name: string
   date: string
   time_slot: TimeSlot
-  status: string
+  scheduled_execution: string
+  status: "pending" | "in_progress" | "completed"
   count: number
+  tasks: { id: string; kpi_id: string; status: string }[]
 }
 
 interface Props {
@@ -47,6 +50,40 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
 
   const handleCreateTodolist = () => {
     router.push("/todolist/new")
+  }
+
+  const getStatusDisplay = (todolist: TodolistItem) => {
+    const isExpired = todolist.status !== "completed" && isTodolistExpired(todolist.scheduled_execution)
+    
+    if (todolist.status === "completed") {
+      return (
+        <span className="inline-flex items-center gap-1 text-green-600">
+          <CheckCircle2 size={16} /> Completata
+        </span>
+      )
+    }
+    
+    if (isExpired) {
+      return (
+        <span className="inline-flex items-center gap-1 text-red-600">
+          <Clock size={16} /> Scaduta
+        </span>
+      )
+    }
+    
+    if (todolist.status === "in_progress") {
+      return (
+        <span className="inline-flex items-center gap-1 text-yellow-600">
+          <AlertTriangle size={16} /> In corso
+        </span>
+      )
+    }
+    
+    return (
+      <span className="inline-flex items-center gap-1 text-muted-foreground">
+        <Calendar size={16} /> Da fare
+      </span>
+    )
   }
 
   return (
@@ -119,42 +156,31 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                     Nessuna todolist trovata.
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((item) => (
-                  <TableRow
-                    key={item.id}
-                    className="cursor-pointer"
-                    onClick={() => handleRowClick(item)}
-                  >
-                    <TableCell className="font-mono text-xs">{item.id}</TableCell>
-                    <TableCell>{item.device_name}</TableCell>
-                    <TableCell>{item.date}</TableCell>
-                    <TableCell>{item.time_slot}</TableCell>
-                    <TableCell>
-                      {item.status === "completed" ? (
-                        <span className="inline-flex items-center gap-1 text-green-600">
-                          <CheckCircle2 size={16} /> Completata
-                        </span>
-                      ) : item.status === "in_progress" ? (
-                        <span className="inline-flex items-center gap-1 text-yellow-600">
-                          <AlertTriangle size={16} /> In corso
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-muted-foreground">
-                          <Calendar size={16} /> Da fare
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell>{item.count}</TableCell>
-                    <TableCell>
-                      <ArrowRight size={18} className="text-muted-foreground" />
-                    </TableCell>
-                  </TableRow>
-                ))
+                filtered.map((item) => {
+                  const isExpired = item.status !== "completed" && isTodolistExpired(item.scheduled_execution)
+                  return (
+                    <TableRow
+                      key={item.id}
+                      className={`cursor-pointer ${isExpired ? 'opacity-75' : ''}`}
+                      onClick={() => handleRowClick(item)}
+                    >
+                      <TableCell className="font-mono text-xs">{item.id}</TableCell>
+                      <TableCell>{item.device_name}</TableCell>
+                      <TableCell>{item.date}</TableCell>
+                      <TableCell className="capitalize">{item.time_slot}</TableCell>
+                      <TableCell>{getStatusDisplay(item)}</TableCell>
+                      <TableCell>{item.count}</TableCell>
+                      <TableCell>
+                        <ArrowRight size={18} className="text-muted-foreground" />
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
               )}
             </TableBody>
           </Table>

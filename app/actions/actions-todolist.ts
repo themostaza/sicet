@@ -10,16 +10,21 @@ import type { TablesInsert } from "@/supabase/database.types"
 import type { Database } from "@/supabase/database.types"
 import type { PostgrestError } from "@supabase/supabase-js"
 import {
-  Task,
+  TodolistSchema,
   TaskSchema,
   TodolistParamsSchema,
   CreateTodolistSchema,
   TodolistIdParamsSchema,
   type Todolist,
+  type Task,
+  type TodolistParams,
+  type TodolistIdParams,
+  type CreateTodolistParams,
   type TimeSlot,
   timeSlotOrder,
   getTimeRangeFromSlot,
   getTimeSlotFromDateTime,
+  isTodolistExpired,
   toTask,
   toTodolist
 } from "@/lib/validation/todolist-schemas"
@@ -270,160 +275,64 @@ export async function deleteTodolist(deviceId: string, date: string, timeSlot: s
 
 // Ottieni tutte le todolist raggruppate per device/data/slot
 export async function getTodolistsGrouped() {
-  try {
-    const supabase = await getSupabaseClient();
-    if (!supabase) {
-      throw new TodolistActionError(
-        "Impossibile connettersi al database",
-        "DATABASE_CONNECTION_ERROR"
-      );
-    }
-
-    // First verify authentication
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError) {
-      console.error("Authentication error:", authError);
-      throw new TodolistActionError(
-        "Errore di autenticazione. Effettua nuovamente il login.",
-        "AUTH_ERROR"
-      );
-    }
-    if (!user) {
-      throw new TodolistActionError(
-        "Utente non autenticato. Effettua il login.",
-        "AUTH_ERROR"
-      );
-    }
-
-    const { data, error } = await supabase
-      .from("todolist")
-      .select(`
+  const supabase = await createServerSupabaseClient()
+  
+  const { data, error } = await supabase
+    .from("todolist")
+    .select(`
+      id,
+      device_id,
+      scheduled_execution,
+      status,
+      created_at,
+      devices (
+        name
+      ),
+      tasks (
         id,
-        device_id,
-        scheduled_execution,
-        status,
-        created_at,
-        tasks (
-          id,
-          kpi_id,
-          status
-        )
-      `)
-      .order("scheduled_execution", { ascending: false })
+        kpi_id,
+        status
+      )
+    `)
+    .order("scheduled_execution", { ascending: false })
 
-    if (error) {
-      // Log the full error object for debugging
-      console.error("Error fetching todolists - Full error:", {
-        code: error.code,
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        error
-      });
-
-      // Check for specific error codes
-      switch (error.code) {
-        case "PGRST301":
-          throw new TodolistActionError(
-            "Errore di autenticazione. Effettua nuovamente il login.",
-            "AUTH_ERROR"
-          );
-        case "PGRST302":
-          throw new TodolistActionError(
-            "Non hai i permessi necessari per accedere alle todolist.",
-            "PERMISSION_ERROR"
-          );
-        case "PGRST116":
-          // No data found is not an error in this case
-          return [];
-        default:
-          throw new TodolistActionError(
-            error.message || "Errore nel recupero delle todolist",
-            "DATABASE_ERROR"
-          );
-      }
-    }
-
-    // Arricchisci con device_name
-    const todolistsArray = (data ?? []) as TodolistWithTasks[]
-    if (todolistsArray.length === 0) {
-      return [];
-    }
-
-    const deviceIds = [...new Set(todolistsArray.map(item => item.device_id))]
-    let devicesMap: Record<string, { id: string; name: string }> = {}
-    
-    if (deviceIds.length > 0) {
-      const { data: devicesData, error: devicesError } = await supabase
-        .from("devices")
-        .select("id, name")
-        .in("id", deviceIds)
-
-      if (devicesError) {
-        console.error("Error fetching devices - Full error:", {
-          code: devicesError.code,
-          message: devicesError.message,
-          details: devicesError.details,
-          hint: devicesError.hint,
-          error: devicesError
-        });
-
-        throw new TodolistActionError(
-          devicesError.message || "Errore nel recupero dei dispositivi",
-          "DATABASE_ERROR"
-        )
-      }
-
-      devicesMap = Object.fromEntries((devicesData ?? []).map(d => [d.id, d]))
-    }
-
-    return todolistsArray.map(item => ({
-      id: item.id,
-      device_id: item.device_id,
-      device_name: devicesMap[item.device_id]?.name || "Dispositivo sconosciuto",
-      date: item.scheduled_execution.split("T")[0],
-      time_slot: getTimeSlotFromDateTime(item.scheduled_execution),
-      status: item.status,
-      count: item.tasks.length,
-      tasks: item.tasks
-    }))
-  } catch (error) {
-    // Log the full error for debugging
-    console.error("[getTodolistsGrouped] Unexpected error - Full error details:", {
-      name: error instanceof Error ? error.name : "Unknown",
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      error,
-      // Add additional context
-      isTodolistActionError: error instanceof TodolistActionError,
-      isPostgrestError: error && typeof error === 'object' && 'code' in error,
-      errorType: error ? typeof error : 'undefined',
-      errorKeys: error && typeof error === 'object' ? Object.keys(error) : []
-    });
-
-    if (error instanceof TodolistActionError) {
-      throw error;
-    }
-
-    // If it's a PostgrestError but wasn't caught earlier, wrap it
-    if (error && typeof error === 'object' && 'code' in error) {
-      const pgError = error as PostgrestError;
-      throw new TodolistActionError(
-        pgError.message || "Errore nel recupero delle todolist",
-        "DATABASE_ERROR"
-      );
-    }
-
-    // For any other type of error, include the original error message if available
-    const errorMessage = error instanceof Error 
-      ? `Errore inatteso: ${error.message}`
-      : "Errore inatteso nel recupero delle todolist";
-    
+  if (error) {
+    console.error("Error fetching todolists:", error)
     throw new TodolistActionError(
-      errorMessage,
-      "UNEXPECTED_ERROR"
-    );
+      "Errore nel recupero delle todolist",
+      "FETCH_ERROR"
+    )
   }
+
+  // Group by device and date
+  const grouped = data.reduce((acc, item) => {
+    const date = new Date(item.scheduled_execution).toISOString().split("T")[0]
+    const timeSlot = getTimeSlotFromDateTime(item.scheduled_execution)
+    const key = `${item.device_id}-${date}-${timeSlot}`
+    
+    if (!acc[key]) {
+      acc[key] = {
+        id: item.id,
+        device_id: item.device_id,
+        device_name: item.devices?.name || "Unknown Device",
+        date,
+        time_slot: timeSlot,
+        scheduled_execution: item.scheduled_execution,
+        status: item.status,
+        count: 0,
+        tasks: []
+      }
+    }
+    
+    if (item.tasks) {
+      acc[key].tasks.push(...item.tasks)
+      acc[key].count = item.tasks.length
+    }
+    
+    return acc
+  }, {} as Record<string, any>)
+
+  return Object.values(grouped)
 }
 
 function getCurrentTimeSlot(dateObj: Date): TimeSlot {
@@ -443,11 +352,8 @@ function getTimeSlotWithDelay(dateObj: Date, delayHours: number = 3): TimeSlot {
 export async function getTodolistsGroupedWithFilters() {
   try {
     const todolists = await getTodolistsGrouped();
-
     const now = new Date();
     const today = now.toISOString().split("T")[0];
-    const currentTimeSlot = getCurrentTimeSlot(now);
-    const delayedTimeSlot = getTimeSlotWithDelay(now);
 
     const filtered = {
       all: todolists,
@@ -455,19 +361,18 @@ export async function getTodolistsGroupedWithFilters() {
         (item) =>
           item.date === today &&
           item.status !== "completed" &&
-          !(timeSlotOrder[item.time_slot as TimeSlot] < timeSlotOrder[delayedTimeSlot])
+          !isTodolistExpired(item.scheduled_execution)
       ),
       overdue: todolists.filter(
         (item) =>
           item.status !== "completed" &&
-          (new Date(item.date) < new Date(today) ||
-            (item.date === today && timeSlotOrder[item.time_slot as TimeSlot] < timeSlotOrder[delayedTimeSlot]))
+          isTodolistExpired(item.scheduled_execution)
       ),
       future: todolists.filter(
         (item) =>
           item.status !== "completed" &&
-          (new Date(item.date) > new Date(today) ||
-            (item.date === today && timeSlotOrder[item.time_slot as TimeSlot] > timeSlotOrder[delayedTimeSlot]))
+          new Date(item.date) > new Date(today) &&
+          !isTodolistExpired(item.scheduled_execution)
       ),
       completed: todolists.filter((item) => item.status === "completed"),
     };
@@ -654,4 +559,53 @@ export async function completeTodolist(todolistId: string): Promise<void> {
   });
   
   revalidatePath("/todolist")
+}
+
+export async function getTodolistByDeviceAndTimeSlot(deviceId: string, startTime: string) {
+  const supabase = await createServerSupabaseClient()
+  const { data, error } = await supabase
+    .from("todolist")
+    .select("id")
+    .eq("device_id", deviceId)
+    .eq("scheduled_execution", startTime)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single()
+
+  if (error) {
+    console.error("Error fetching todolist:", error)
+    return null
+  }
+
+  return data
+}
+
+export async function getTodolistsForDeviceToday(deviceId: string, today: string) {
+  const supabase = await createServerSupabaseClient()
+  
+  // Get the start and end of today
+  const startOfDay = new Date(today)
+  startOfDay.setHours(0, 0, 0, 0)
+  const endOfDay = new Date(today)
+  endOfDay.setHours(23, 59, 59, 999)
+
+  const { data, error } = await supabase
+    .from("todolist")
+    .select(`
+      id,
+      scheduled_execution,
+      status,
+      created_at
+    `)
+    .eq("device_id", deviceId)
+    .gte("scheduled_execution", startOfDay.toISOString())
+    .lte("scheduled_execution", endOfDay.toISOString())
+    .order("scheduled_execution", { ascending: true })
+
+  if (error) {
+    console.error("Error fetching todolists:", error)
+    return null
+  }
+
+  return data
 }
