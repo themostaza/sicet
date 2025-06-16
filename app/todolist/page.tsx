@@ -1,7 +1,8 @@
+import { createServerSupabaseClient } from "@/lib/supabase-server"
 import { getTodolistsGroupedWithFilters } from "@/app/actions/actions-todolist"
-import TodolistListClient from "@/components/todolists/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { AlertCircle } from "lucide-react"
+import TodolistListClient from "@/components/todolists/client"
 
 type TimeSlot = "mattina" | "pomeriggio" | "sera" | "notte";
 
@@ -14,13 +15,27 @@ const timeSlotOrder: Record<TimeSlot, number> = {
 
 export default async function TodolistPage() {
   try {
-    const { filtered, counts } = await getTodolistsGroupedWithFilters();
+    const supabase = await createServerSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    let userRole = null
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('email', user.email)
+        .single()
+      userRole = profile?.role ?? null
+    }
+
+    const { filtered, counts } = await getTodolistsGroupedWithFilters()
 
     return (
       <TodolistListClient
         todolistsByFilter={filtered}
         counts={counts}
         initialFilter="all"
+        userRole={userRole}
       />
     )
   } catch (error) {

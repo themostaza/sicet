@@ -1,6 +1,6 @@
 "use client"
 
-import React from "react"
+import React, { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Calendar, AlertTriangle, ArrowRight, CheckCircle2, Plus, Clock } from "lucide-react"
@@ -17,17 +17,17 @@ type TodolistItem = {
   device_id: string
   device_name: string
   date: string
-  time_slot: TimeSlotValue
+  time_slot: TimeSlot
+  status: string
   scheduled_execution: string
-  status: "pending" | "in_progress" | "completed"
   count: number
-  tasks: { id: string; kpi_id: string; status: string }[]
 }
 
-interface Props {
+type Props = {
   todolistsByFilter: Record<FilterType, TodolistItem[]>
   counts: Record<FilterType, number>
   initialFilter: FilterType
+  userRole: string | null
 }
 
 const timeSlotOrder: Record<TimeSlot, number> = {
@@ -39,18 +39,27 @@ const timeSlotOrder: Record<TimeSlot, number> = {
   custom: 6
 }
 
-export default function TodolistListClient({ todolistsByFilter, counts, initialFilter }: Props) {
+export default function TodolistListClient({ todolistsByFilter, counts, initialFilter, userRole }: Props) {
   const router = useRouter()
-  const [activeFilter, setActiveFilter] = React.useState<FilterType>(initialFilter)
+  const [activeFilter, setActiveFilter] = useState<FilterType>(userRole === 'operator' ? 'today' : initialFilter)
 
+  const isOperator = userRole === 'operator'
   const filtered = todolistsByFilter[activeFilter]
 
   const handleRowClick = (todolist: TodolistItem) => {
-    router.push(`/todolist/view/${todolist.id}/${todolist.device_id}/${todolist.date}/${todolist.time_slot}`)
+    if (isOperator) {
+      if (activeFilter === 'today' || activeFilter === 'completed') {
+        router.push(`/todolist/view/${todolist.id}/${todolist.device_id}/${todolist.date}/${todolist.time_slot}`)
+      }
+    } else {
+      router.push(`/todolist/view/${todolist.id}/${todolist.device_id}/${todolist.date}/${todolist.time_slot}`)
+    }
   }
 
   const handleCreateTodolist = () => {
-    router.push("/todolist/new")
+    if (!isOperator) {
+      router.push("/todolist/new")
+    }
   }
 
   const getStatusDisplay = (todolist: TodolistItem) => {
@@ -109,21 +118,25 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Todolist</CardTitle>
-        <Button onClick={handleCreateTodolist} className="ml-auto" variant="default">
-          <Plus className="mr-2 h-4 w-4" /> Crea Todolist
-        </Button>
+        {!isOperator && (
+          <Button onClick={handleCreateTodolist}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nuova Todolist
+          </Button>
+        )}
       </CardHeader>
       <CardContent>
-        {/* Filtri */}
-        <div className="flex flex-wrap gap-2 mb-6">
-          <Button
-            variant={activeFilter === "all" ? "default" : "outline"}
-            onClick={() => setActiveFilter("all")}
-            size="sm"
-            className={activeFilter === "all" ? "bg-blue-500 hover:bg-blue-600" : ""}
-          >
-            Tutte <Badge className="ml-2" variant={activeFilter === "all" ? "outline" : "secondary"}>{counts.all}</Badge>
-          </Button>
+        <div className="flex flex-wrap gap-2 mb-4">
+          {!isOperator && (
+            <Button
+              variant={activeFilter === "all" ? "default" : "outline"}
+              onClick={() => setActiveFilter("all")}
+              size="sm"
+              className={activeFilter === "all" ? "bg-blue-500 hover:bg-blue-600" : ""}
+            >
+              Tutte <Badge className="ml-2" variant={activeFilter === "all" ? "outline" : "secondary"}>{counts.all}</Badge>
+            </Button>
+          )}
           <Button
             variant={activeFilter === "today" ? "default" : "outline"}
             onClick={() => setActiveFilter("today")}
@@ -132,22 +145,26 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
           >
             Oggi <Badge className="ml-2" variant={activeFilter === "today" ? "outline" : "secondary"}>{counts.today}</Badge>
           </Button>
-          <Button
-            variant={activeFilter === "overdue" ? "default" : "outline"}
-            onClick={() => setActiveFilter("overdue")}
-            size="sm"
-            className={activeFilter === "overdue" ? "bg-red-500 hover:bg-red-600" : ""}
-          >
-            Scadute <Badge className="ml-2" variant={activeFilter === "overdue" ? "outline" : "secondary"}>{counts.overdue}</Badge>
-          </Button>
-          <Button
-            variant={activeFilter === "future" ? "default" : "outline"}
-            onClick={() => setActiveFilter("future")}
-            size="sm"
-            className={activeFilter === "future" ? "bg-purple-500 hover:bg-purple-600" : ""}
-          >
-            Future <Badge className="ml-2" variant={activeFilter === "future" ? "outline" : "secondary"}>{counts.future}</Badge>
-          </Button>
+          {!isOperator && (
+            <>
+              <Button
+                variant={activeFilter === "overdue" ? "default" : "outline"}
+                onClick={() => setActiveFilter("overdue")}
+                size="sm"
+                className={activeFilter === "overdue" ? "bg-red-500 hover:bg-red-600" : ""}
+              >
+                Scadute <Badge className="ml-2" variant={activeFilter === "overdue" ? "outline" : "secondary"}>{counts.overdue}</Badge>
+              </Button>
+              <Button
+                variant={activeFilter === "future" ? "default" : "outline"}
+                onClick={() => setActiveFilter("future")}
+                size="sm"
+                className={activeFilter === "future" ? "bg-purple-500 hover:bg-purple-600" : ""}
+              >
+                Future <Badge className="ml-2" variant={activeFilter === "future" ? "outline" : "secondary"}>{counts.future}</Badge>
+              </Button>
+            </>
+          )}
           <Button
             variant={activeFilter === "completed" ? "default" : "outline"}
             onClick={() => setActiveFilter("completed")}
@@ -158,12 +175,10 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
           </Button>
         </div>
 
-        {/* Tabella */}
         <div className="rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>ID</TableHead>
                 <TableHead>Dispositivo</TableHead>
                 <TableHead>Data</TableHead>
                 <TableHead>Fascia</TableHead>
@@ -175,27 +190,30 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                     Nessuna todolist trovata.
                   </TableCell>
                 </TableRow>
               ) : (
                 filtered.map((item) => {
                   const isExpired = item.status !== "completed" && isTodolistExpired(item.scheduled_execution)
+                  const canClick = !isOperator || (activeFilter === 'today' || activeFilter === 'completed')
                   return (
                     <TableRow
                       key={item.id}
-                      className={`cursor-pointer ${isExpired ? 'opacity-75' : ''}`}
-                      onClick={() => handleRowClick(item)}
+                      className={cn(
+                        canClick && 'cursor-pointer',
+                        isExpired && 'opacity-75'
+                      )}
+                      onClick={() => canClick && handleRowClick(item)}
                     >
-                      <TableCell className="font-mono text-xs">{item.id}</TableCell>
                       <TableCell>{item.device_name}</TableCell>
                       <TableCell>{item.date}</TableCell>
                       <TableCell>{formatTimeSlot(item.time_slot)}</TableCell>
                       <TableCell>{getStatusDisplay(item)}</TableCell>
                       <TableCell>{item.count}</TableCell>
                       <TableCell>
-                        <ArrowRight size={18} className="text-muted-foreground" />
+                        {canClick && <ArrowRight size={18} className="text-muted-foreground" />}
                       </TableCell>
                     </TableRow>
                   )

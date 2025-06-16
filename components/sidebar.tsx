@@ -78,6 +78,11 @@ const menuItemsByRole: Record<Role, Array<{
       href: "/devices",
       icon: <Layers size={20} />,
       label: "Punti di Controllo"
+    },
+    {
+      href: "/todolist",
+      icon: <ClipboardList size={20} />,
+      label: "Todolist"
     }
   ],
   referrer: [
