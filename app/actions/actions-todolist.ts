@@ -342,7 +342,7 @@ export async function deleteTodolistById(todolistId: string): Promise<void> {
   revalidatePath("/todolist")
 }
 
-// Ottieni tutte le todolist raggruppate per device/data/slot
+// Ottieni tutte le todolist individualmente (senza raggruppamento)
 export async function getTodolistsGrouped() {
   try {
     const supabase = await createServerSupabaseClient()
@@ -381,8 +381,8 @@ export async function getTodolistsGrouped() {
       return []
     }
 
-    // Group by device and date
-    const grouped = data.reduce((acc, item) => {
+    // Process each todolist individually without grouping
+    const processedTodolists = data.map((item) => {
       try {
         const date = new Date(item.scheduled_execution).toISOString().split("T")[0]
         let timeSlotValue: TimeSlotValue
@@ -406,38 +406,25 @@ export async function getTodolistsGrouped() {
           timeSlotValue = standardSlot
         }
         
-        // Genera la chiave per il raggruppamento
-        const timeSlotKey = isCustomTimeSlot(timeSlotValue) ? "custom" : timeSlotValue
-        const key = `${item.device_id}-${date}-${timeSlotKey}`
-        
-        if (!acc[key]) {
-          acc[key] = {
-            id: item.id,
-            device_id: item.device_id,
-            device_name: item.devices?.name || "Unknown Device",
-            date,
-            time_slot: timeSlotValue,
-            scheduled_execution: item.scheduled_execution,
-            status: item.status as "pending" | "in_progress" | "completed",
-            count: 0,
-            time_slot_type: item.time_slot_type,
-            time_slot_start: item.time_slot_start,
-            time_slot_end: item.time_slot_end,
-            tasks: []
-          }
+        return {
+          id: item.id,
+          device_id: item.device_id,
+          device_name: item.devices?.name || "Unknown Device",
+          date,
+          time_slot: timeSlotValue,
+          scheduled_execution: item.scheduled_execution,
+          status: item.status as "pending" | "in_progress" | "completed",
+          count: item.tasks ? item.tasks.length : 0,
+          time_slot_type: item.time_slot_type,
+          time_slot_start: item.time_slot_start,
+          time_slot_end: item.time_slot_end,
+          tasks: item.tasks || []
         }
-        
-        if (item.tasks) {
-          acc[key].tasks.push(...item.tasks)
-          acc[key].count = item.tasks.length
-        }
-        
-        return acc
       } catch (err) {
         console.error("Error processing todolist item:", err, item)
-        return acc
+        return null
       }
-    }, {} as Record<string, {
+    }).filter(Boolean) as Array<{
       id: string
       device_id: string
       device_name: string
@@ -450,9 +437,9 @@ export async function getTodolistsGrouped() {
       time_slot_start: number | null
       time_slot_end: number | null
       tasks: Array<{ id: string; kpi_id: string; status: string }>
-    }>)
+    }>
 
-    return Object.values(grouped)
+    return processedTodolists
   } catch (err) {
     console.error("Unexpected error in getTodolistsGrouped:", err)
     throw new TodolistActionError(
@@ -690,39 +677,6 @@ export async function createMultipleTasks(
   });
   
   revalidatePath("/todolist")
-}
-
-// Check for existing tasks with the same date-device-KPI tuple
-export async function checkExistingTasks(deviceId: string, date: string, timeSlot: string, kpiIds: string[]): Promise<{ exists: boolean; existingTasks: Task[] }> {
-  const { startTime } = getTimeRangeFromSlot(date, timeSlot)
-  
-  // First check if todolist exists
-  const { data: todolist } = await (await getSupabaseClient())
-    .from("todolist")
-    .select("id")
-    .eq("device_id", deviceId)
-    .eq("scheduled_execution", startTime)
-    .single()
-
-  if (!todolist) {
-    return { exists: false, existingTasks: [] }
-  }
-  
-  // Then check for tasks with the same KPIs
-  const { data, error } = await (await getSupabaseClient())
-    .from("tasks")
-    .select("*")
-    .eq("todolist_id", todolist.id)
-    .in("kpi_id", kpiIds)
-  
-  if (error) handleError(error)
-  
-  const existingTasks = (data ?? []).map(toTask)
-  
-  return {
-    exists: existingTasks.length > 0,
-    existingTasks
-  }
 }
 
 // Completa una todolist e tutte le sue task
