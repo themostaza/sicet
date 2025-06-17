@@ -554,16 +554,32 @@ export async function createTodolist(
 
   // If alert is enabled and email is provided, create the alert
   if (alertEnabled && email) {
-    const alertData: TablesInsert<"todolist_alert"> = {
-      todolist_id: todolist!.id,
-      email
+    // Check if an alert already exists for this todolist
+    const { data: existingAlert, error: checkError } = await (await getSupabaseClient())
+      .from("todolist_alert")
+      .select("id")
+      .eq("todolist_id", todolist!.id)
+      .single()
+
+    if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
+      console.error("Error checking existing alert:", checkError)
     }
 
-    const { error: alertError } = await (await getSupabaseClient())
-      .from("todolist_alert")
-      .insert(alertData)
+    // Only create alert if one doesn't already exist
+    if (!existingAlert) {
+      const alertData: TablesInsert<"todolist_alert"> = {
+        todolist_id: todolist!.id,
+        email
+      }
 
-    if (alertError) handleError(alertError)
+      const { error: alertError } = await (await getSupabaseClient())
+        .from("todolist_alert")
+        .insert(alertData)
+
+      if (alertError) handleError(alertError)
+    } else {
+      console.log(`Alert already exists for todolist ${todolist!.id}, skipping creation`)
+    }
   }
   
   // Then create the task
@@ -639,16 +655,32 @@ export async function createMultipleTasks(
 
   // If alert is enabled and email is provided, create the alert
   if (alertEnabled && email) {
-    const alertData: TablesInsert<"todolist_alert"> = {
-      todolist_id: todolist!.id,
-      email
+    // Check if an alert already exists for this todolist
+    const { data: existingAlert, error: checkError } = await (await getSupabaseClient())
+      .from("todolist_alert")
+      .select("id")
+      .eq("todolist_id", todolist!.id)
+      .single()
+
+    if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
+      console.error("Error checking existing alert:", checkError)
     }
 
-    const { error: alertError } = await (await getSupabaseClient())
-      .from("todolist_alert")
-      .insert(alertData)
+    // Only create alert if one doesn't already exist
+    if (!existingAlert) {
+      const alertData: TablesInsert<"todolist_alert"> = {
+        todolist_id: todolist!.id,
+        email
+      }
 
-    if (alertError) handleError(alertError)
+      const { error: alertError } = await (await getSupabaseClient())
+        .from("todolist_alert")
+        .insert(alertData)
+
+      if (alertError) handleError(alertError)
+    } else {
+      console.log(`Alert already exists for todolist ${todolist!.id}, skipping creation`)
+    }
   }
   
   // Then create all tasks

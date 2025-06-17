@@ -104,20 +104,19 @@ function TodolistCreationForm() {
         }
       }
 
-      // Create todolists for each date and KPI
+      // Create todolists for each date with all selected KPIs
       for (const entry of dateEntries) {
-        for (const kpiId of selectedKpis) {
-          todolistPromises.push(
-            createTodolist(
-              deviceId,
-              format(entry.date, "yyyy-MM-dd"),
-              isCustomTimeSlot(entry.timeSlot) ? customTimeSlotToString(entry.timeSlot) : entry.timeSlot,
-              kpiId,
-              alertEnabled,
-              email
-            )
+        const kpiIds = Array.from(selectedKpis)
+        todolistPromises.push(
+          createMultipleTasks(
+            deviceId,
+            format(entry.date, "yyyy-MM-dd"),
+            isCustomTimeSlot(entry.timeSlot) ? customTimeSlotToString(entry.timeSlot) : entry.timeSlot,
+            kpiIds,
+            alertEnabled,
+            email
           )
-        }
+        )
       }
     }
     

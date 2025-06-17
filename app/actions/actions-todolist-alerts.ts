@@ -31,6 +31,7 @@ interface OverdueTodolist {
   alert: {
     id: string
     email: string
+    // TODO: Add is_active: boolean after database migration
   } | null
   tasks: Array<{
     id: string
@@ -216,6 +217,24 @@ export async function sendTodolistOverdueNotification(todolist: OverdueTodolist)
 
     if (logError) {
       console.error("Error logging todolist alert:", logError)
+    }
+
+    // Try to disable the alert after successfully sending the email
+    try {
+      // For now, delete the alert after sending the email
+      // This will prevent the alert from being triggered again
+      const { error: deleteError } = await supabase
+        .from("todolist_alert")
+        .delete()
+        .eq("id", todolist.alert.id)
+
+      if (deleteError) {
+        console.error("Error deleting todolist alert:", deleteError)
+      } else {
+        console.log(`Alert ${todolist.alert.id} deleted after sending email for todolist ${todolist.id}`)
+      }
+    } catch (disableError) {
+      console.error("Error in alert delete logic:", disableError)
     }
 
   } catch (error) {
