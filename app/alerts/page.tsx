@@ -1,8 +1,9 @@
 import { createServerSupabaseClient } from "@/lib/supabase-server"
-import { AlertCircle, BellRing, Trash2 } from "lucide-react"
+import { AlertCircle, BellRing, Trash2, Clock, CheckSquare } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { format } from "date-fns"
 import { it } from "date-fns/locale"
 import { Database } from "@/supabase/database.types"
@@ -13,13 +14,15 @@ import { AlertActions } from "./alert-actions"
 import { AlertDelete } from "./alert-delete"
 import { SupabaseClient } from "@supabase/supabase-js"
 
-type Alert = Database['public']['Tables']['kpi_alerts']['Row'] & {
+type KpiAlert = Database['public']['Tables']['kpi_alerts']['Row'] & {
   kpis: Database['public']['Tables']['kpis']['Row'] | null
+  devices: Database['public']['Tables']['devices']['Row'] | null
 }
 
-type AlertLog = Database['public']['Tables']['kpi_alert_logs']['Row'] & {
-  kpi_alerts: Database['public']['Tables']['kpi_alerts']['Row'] | null
-  kpis: Database['public']['Tables']['kpis']['Row'] | null
+type TodolistAlert = Database['public']['Tables']['todolist_alert']['Row'] & {
+  todolist: Database['public']['Tables']['todolist']['Row'] & {
+    devices: Database['public']['Tables']['devices']['Row'] | null
+  } | null
 }
 
 type AlertCondition = {
@@ -35,8 +38,8 @@ type AlertCondition = {
 const supabase = async (): Promise<SupabaseClient<Database>> =>
   await createServerSupabaseClient();
 
-async function getAlerts(): Promise<Alert[]> {
-  const supabase = createServerSupabaseClient()
+async function getKpiAlerts(): Promise<KpiAlert[]> {
+  const supabase = await createServerSupabaseClient()
   
   const { data: alerts, error } = await supabase
     .from('kpi_alerts')
@@ -54,44 +57,45 @@ async function getAlerts(): Promise<Alert[]> {
     .order('created_at', { ascending: false })
 
   if (error) {
-    console.error('Error fetching alerts:', error)
+    console.error('Error fetching KPI alerts:', error)
     return []
   }
 
-  return alerts as Alert[]
+  return alerts as KpiAlert[]
 }
 
-async function getAlertLogs(): Promise<AlertLog[]> {
-  const supabase = createServerSupabaseClient()
+async function getTodolistAlerts(): Promise<TodolistAlert[]> {
+  const supabase = await createServerSupabaseClient()
   
-  const { data: logs, error } = await supabase
-    .from('kpi_alert_logs')
+  const { data: alerts, error } = await supabase
+    .from('todolist_alert')
     .select(`
       *,
-      kpi_alerts (
-        email,
-        conditions
-      ),
-      kpis (
-        name,
-        description
-      ),
-      devices (
-        name,
-        location
+      todolist (
+        id,
+        device_id,
+        scheduled_execution,
+        status,
+        time_slot_type,
+        time_slot_start,
+        time_slot_end,
+        devices (
+          name,
+          location
+        )
       )
     `)
-    .order('triggered_at', { ascending: false })
+    .order('created_at', { ascending: false })
 
   if (error) {
-    console.error('Error fetching alert logs:', error)
+    console.error('Error fetching todolist alerts:', error)
     return []
   }
 
-  return logs as AlertLog[]
+  return alerts as TodolistAlert[]
 }
 
-function renderKpiConditions(alert: Alert) {
+function renderKpiConditions(alert: KpiAlert) {
   // Cast sicuro dei campi del KPI
   const fields = Array.isArray(alert.kpis?.value)
     ? (alert.kpis.value as any[]).filter(f => f && typeof f === 'object' && 'id' in f && 'name' in f)
@@ -127,7 +131,6 @@ function renderKpiConditions(alert: Alert) {
       {/* Se nessun campo del KPI ha una condizione, mostra tutte le condizioni raw */}
       {fields.length === 0 && conditions.map((cond: any, idx: number) => (
         <li key={idx} className="text-xs bg-gray-50 rounded px-2 py-1 whitespace-nowrap truncate">
-          {/* <span className="font-semibold">{cond.field_id}</span> */}
           {cond.type === 'numeric' && (
             <>
               {cond.min !== undefined && <> Min: <span className="font-mono">{cond.min}</span></>}
@@ -147,85 +150,77 @@ function renderKpiConditions(alert: Alert) {
   );
 }
 
+function formatTimeSlot(todolist: any) {
+  if (todolist.time_slot_type === 'custom') {
+    const start = todolist.time_slot_start?.toString().padStart(2, '0') || '00'
+    const end = todolist.time_slot_end?.toString().padStart(2, '0') || '00'
+    return `Personalizzato (${start}:00-${end}:00)`
+  }
+  
+  // For standard time slots, we need to determine which one based on the scheduled time
+  const hour = new Date(todolist.scheduled_execution).getHours()
+  if (hour >= 6 && hour < 12) return 'Mattina (06:00-11:00)'
+  if (hour >= 12 && hour < 18) return 'Pomeriggio (12:00-17:00)'
+  if (hour >= 18 && hour < 22) return 'Sera (18:00-21:00)'
+  if (hour >= 6 && hour < 17) return 'Giornata (06:00-17:00)'
+  return 'Notte (22:00-05:00)'
+}
+
 export default async function AlertsPage() {
   const client = await supabase();
   
-  // Fetch alerts with their related KPIs
-  const { data: alerts, error: alertsError } = await client
-    .from('kpi_alerts')
-    .select(`
-      *,
-      kpis (
-        id,
-        name,
-        description
-      )
-    `)
-    .order('created_at', { ascending: false })
-
-  if (alertsError) {
-    console.error('Error fetching alerts:', alertsError)
-    return <div>Error loading alerts</div>
-  }
-
-  // Fetch alert logs with their related alerts and KPIs
-  const { data: alertLogs, error: logsError } = await client
-    .from('kpi_alert_logs')
-    .select(`
-      *,
-      kpi_alerts (
-        id,
-        email,
-        conditions
-      ),
-      kpis (
-        id,
-        name,
-        description
-      )
-    `)
-    .order('triggered_at', { ascending: false })
-
-  if (logsError) {
-    console.error('Error fetching alert logs:', {
-      error: logsError,
-      message: logsError.message,
-      details: logsError.details,
-      hint: logsError.hint
-    })
-    return <div>Error loading alert logs: {logsError.message}</div>
-  }
+  // Fetch KPI alerts
+  const kpiAlerts = await getKpiAlerts()
+  
+  // Fetch todolist alerts
+  const todolistAlerts = await getTodolistAlerts()
 
   return (
     <div className="container mx-auto py-6">
-      <h1 className="text-2xl font-bold mb-6">Alerts</h1>
+      <h1 className="text-2xl font-bold mb-6">Gestione Alert</h1>
       
-      <div className="flex flex-col md:flex-row gap-6">
-        <div className="flex-1">
+      <Tabs defaultValue="kpi-alerts" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="kpi-alerts" className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4" />
+            Alert KPI
+          </TabsTrigger>
+          <TabsTrigger value="todolist-alerts" className="flex items-center gap-2">
+            <CheckSquare className="h-4 w-4" />
+            Alert Todolist
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="kpi-alerts" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Active Alerts</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5" />
+                Alert KPI Attivi
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              {alerts && alerts.length > 0 ? (
+              {kpiAlerts && kpiAlerts.length > 0 ? (
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>KPI</TableHead>
+                        <TableHead>Dispositivo</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Controlli</TableHead>
-                        <TableHead>Created</TableHead>
-                        <TableHead>Actions</TableHead>
+                        <TableHead>Creato</TableHead>
+                        <TableHead>Azioni</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {(alerts as Alert[]).map((alert) => (
+                      {kpiAlerts.map((alert) => (
                         <TableRow key={alert.id}>
-                          <TableCell>{alert.kpis?.name || 'Unknown KPI'}</TableCell>
+                          <TableCell>{alert.kpis?.name || 'KPI sconosciuto'}</TableCell>
+                          <TableCell>{alert.devices?.name || 'Dispositivo sconosciuto'}</TableCell>
                           <TableCell>{alert.email}</TableCell>
                           <TableCell>{renderKpiConditions(alert)}</TableCell>
-                          <TableCell>{alert.created_at ? new Date(alert.created_at).toLocaleString() : 'N/A'}</TableCell>
+                          <TableCell>{alert.created_at ? new Date(alert.created_at).toLocaleString('it-IT') : 'N/A'}</TableCell>
                           <TableCell>
                             <Button variant="ghost" size="icon">
                               <Trash2 className="h-4 w-4" />
@@ -237,14 +232,78 @@ export default async function AlertsPage() {
                   </Table>
                 </div>
               ) : (
-                <div className="text-center py-4 text-muted-foreground">
-                  No active alerts
+                <div className="text-center py-8 text-muted-foreground">
+                  <AlertCircle className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p>Nessun alert KPI attivo</p>
                 </div>
               )}
             </CardContent>
           </Card>
-        </div>
-      </div>
+        </TabsContent>
+
+        <TabsContent value="todolist-alerts" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CheckSquare className="h-5 w-5" />
+                Alert Todolist Attivi
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {todolistAlerts && todolistAlerts.length > 0 ? (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Dispositivo</TableHead>
+                        <TableHead>Data Programmata</TableHead>
+                        <TableHead>Fascia Oraria</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Stato</TableHead>
+                        <TableHead>Creato</TableHead>
+                        <TableHead>Azioni</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {todolistAlerts.map((alert) => (
+                        <TableRow key={alert.id}>
+                          <TableCell>{alert.todolist?.devices?.name || 'Dispositivo sconosciuto'}</TableCell>
+                          <TableCell>
+                            {alert.todolist?.scheduled_execution 
+                              ? format(new Date(alert.todolist.scheduled_execution), 'dd/MM/yyyy', { locale: it })
+                              : 'N/A'
+                            }
+                          </TableCell>
+                          <TableCell>
+                            {alert.todolist ? formatTimeSlot(alert.todolist) : 'N/A'}
+                          </TableCell>
+                          <TableCell>{alert.email}</TableCell>
+                          <TableCell>
+                            <Badge variant={alert.todolist?.status === 'completed' ? 'default' : 'secondary'}>
+                              {alert.todolist?.status === 'completed' ? 'Completata' : 'In corso'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{alert.created_at ? new Date(alert.created_at).toLocaleString('it-IT') : 'N/A'}</TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="icon">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <CheckSquare className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p>Nessun alert todolist attivo</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 } 

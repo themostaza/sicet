@@ -54,8 +54,8 @@ export function DeviceSelection() {
                 {selectedDevicesArray.map((device: Device) => (
                   <TableRow key={device.id}>
                     <TableCell className="font-medium">{device.id}</TableCell>
-                    <TableCell>{device.nome}</TableCell>
-                    <TableCell className="hidden md:table-cell">{device.posizione || "-"}</TableCell>
+                    <TableCell>{device.name}</TableCell>
+                    <TableCell className="hidden md:table-cell">{device.location || "-"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

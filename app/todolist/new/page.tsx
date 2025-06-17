@@ -10,7 +10,9 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import { createTodolist, createMultipleTasks, checkExistingTasks } from "@/app/actions/actions-todolist"
 import { createAlert } from "@/app/actions/actions-alerts"
 import { format } from "date-fns"
-import { timeSlotToScheduledTime, Device, KPI } from "@/components/todolist/new/types"
+import { timeSlotToScheduledTime } from "@/components/todolist/new/types"
+import { formatTimeSlotValue } from "@/lib/validation/todolist-schemas"
+import type { Device, KPI, DateTimeEntry, TimeSlotValue } from "@/components/todolist/new/types"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
@@ -43,6 +45,8 @@ function TodolistCreationForm() {
     dateEntries,
     alertConditions,
     alertEmail,
+    email,
+    alertEnabled,
     devices,
     kpis,
     errors,
@@ -87,13 +91,13 @@ function TodolistCreationForm() {
               checkExistingTasks(
                 deviceId,
                 format(entry.date, "yyyy-MM-dd"),
-                entry.timeSlot,
+                formatTimeSlotValue(entry.timeSlot),
                 [kpiId]
               ).then(result => ({
                 deviceId,
                 kpiId,
                 date: format(entry.date, "yyyy-MM-dd"),
-                timeSlot: entry.timeSlot,
+                timeSlot: formatTimeSlotValue(entry.timeSlot),
                 exists: result.exists
               }))
             )
@@ -107,7 +111,12 @@ function TodolistCreationForm() {
       if (existingTasks.length > 0) {
         setExistingTasksDialog({
           open: true,
-          tasks: existingTasks,
+          tasks: existingTasks.map(({ deviceId, kpiId, date, timeSlot }) => ({
+            deviceId,
+            kpiId,
+            date,
+            timeSlot
+          })),
           proceedWithoutCreating: false
         })
         setIsSubmitting(false)
@@ -139,40 +148,31 @@ function TodolistCreationForm() {
           console.log(`Queueing alert creation for KPI ${kpiId} and device ${deviceId}`)
           alertPromises.push(
             createAlert(kpiId, deviceId, alertEmail, alertConditions)
-              .then(() => {
-                console.log(`Successfully created alert for KPI ${kpiId} and device ${deviceId}`)
-              })
-              .catch(error => {
-                console.error(`Error creating alert for KPI ${kpiId} and device ${deviceId}:`, error)
-                toast({
-                  title: "Errore nella creazione dell'alert",
-                  description: `Impossibile creare l'alert per il controllo ${kpiId}. Riprova più tardi.`,
-                  variant: "destructive",
-                })
-              })
           )
         }
       }
 
-      // Create one todolist per device/date with all selected KPIs
+      // Create todolists for each date and KPI
       for (const entry of dateEntries) {
-        const formattedDate = format(entry.date, "yyyy-MM-dd")
-        
-        // Skip if this combination exists in existingTasks
-        const exists = existingTasksDialog.tasks.some(
-          task => 
-            task.deviceId === deviceId && 
-            task.date === formattedDate && 
-            task.timeSlot === entry.timeSlot
-        )
-        
-        if (!exists) {
+        for (const kpiId of selectedKpis) {
+          // Skip if this task exists and we're not overwriting
+          if (existingTasksDialog.tasks.some(t => 
+            t.deviceId === deviceId && 
+            t.kpiId === kpiId && 
+            t.date === format(entry.date, "yyyy-MM-dd") && 
+            t.timeSlot === formatTimeSlotValue(entry.timeSlot)
+          ) && !existingTasksDialog.proceedWithoutCreating) {
+            continue
+          }
+
           todolistPromises.push(
-            createMultipleTasks(
+            createTodolist(
               deviceId,
-              formattedDate,
-              entry.timeSlot,
-              Array.from(selectedKpis)
+              format(entry.date, "yyyy-MM-dd"),
+              formatTimeSlotValue(entry.timeSlot),
+              kpiId,
+              alertEnabled,
+              email
             )
           )
         }
@@ -275,8 +275,12 @@ function TodolistCreationForm() {
               <TableBody>
                 {existingTasksDialog.tasks.map((task, index) => (
                   <TableRow key={index}>
-                    <TableCell>{devices.find((d: Device) => d.id === task.deviceId)?.nome || task.deviceId}</TableCell>
-                    <TableCell>{kpis.find((k: KPI) => k.id === task.kpiId)?.nome || task.kpiId}</TableCell>
+                    <TableCell>
+                      {devices.find(d => d.id === task.deviceId)?.name}
+                    </TableCell>
+                    <TableCell>
+                      {kpis.find(k => k.id === task.kpiId)?.name}
+                    </TableCell>
                     <TableCell>{task.date}</TableCell>
                     <TableCell>{task.timeSlot}</TableCell>
                   </TableRow>

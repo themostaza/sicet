@@ -8,6 +8,7 @@ export type AlertEmailData = {
   deviceName: string;
   deviceLocation?: string | null;
   triggeredValue: any;
+  email: string;
   conditions: Array<{
     type: 'numeric' | 'text' | 'boolean';
     min?: number;
@@ -34,74 +35,60 @@ export type TodolistOverdueEmailData = {
   }>;
 }
 
-export async function sendAlertEmail(email: string, data: AlertEmailData) {
+export async function sendAlertEmail(data: AlertEmailData): Promise<void> {
   const { kpiName, kpiDescription, deviceName, deviceLocation, triggeredValue, conditions } = data;
 
-  // Format conditions for email
-  const formattedConditions = conditions.map(condition => {
-    if (condition.type === 'numeric') {
-      const parts = [];
-      if (condition.min !== undefined) parts.push(`min: ${condition.min}`);
-      if (condition.max !== undefined) parts.push(`max: ${condition.max}`);
-      return `Valore numerico: ${parts.join(', ')}`;
-    }
-    if (condition.type === 'text') {
-      return `Testo: deve contenere "${condition.match_text}"`;
-    }
-    if (condition.type === 'boolean') {
-      return `Booleano: deve essere ${condition.boolean_value ? 'vero' : 'falso'}`;
-    }
-    return '';
-  }).join('\n');
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #dc2626;">🚨 Alert Attivato</h2>
+      
+      <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 20px; margin: 20px 0;">
+        <h3 style="margin-top: 0; color: #dc2626;">Dettagli del Controllo</h3>
+        <p><strong>Controllo:</strong> ${kpiName}</p>
+        ${kpiDescription ? `<p><strong>Descrizione:</strong> ${kpiDescription}</p>` : ''}
+        <p><strong>Punto di Controllo:</strong> ${deviceName}</p>
+        ${deviceLocation ? `<p><strong>Posizione:</strong> ${deviceLocation}</p>` : ''}
+        <p><strong>Valore Rilevato:</strong> ${JSON.stringify(triggeredValue)}</p>
+      </div>
 
-  // Format the triggered value
-  const formattedValue = typeof triggeredValue === 'object' 
-    ? JSON.stringify(triggeredValue, null, 2)
-    : String(triggeredValue);
+      <div style="background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 20px; margin: 20px 0;">
+        <h3 style="margin-top: 0; color: #0369a1;">Condizioni di Alert</h3>
+        <ul style="list-style-type: none; padding: 0;">
+          ${conditions.map(condition => {
+            let conditionText = '';
+            if (condition.type === 'numeric') {
+              if (condition.min !== undefined && condition.max !== undefined) {
+                conditionText = `Valore tra ${condition.min} e ${condition.max}`;
+              } else if (condition.min !== undefined) {
+                conditionText = `Valore maggiore di ${condition.min}`;
+              } else if (condition.max !== undefined) {
+                conditionText = `Valore minore di ${condition.max}`;
+              }
+            } else if (condition.type === 'text') {
+              conditionText = `Testo contiene: "${condition.match_text}"`;
+            } else if (condition.type === 'boolean') {
+              conditionText = `Valore: ${condition.boolean_value ? 'Vero' : 'Falso'}`;
+            }
+            return `<li style="margin: 5px 0;">• ${conditionText}</li>`;
+          }).join('')}
+        </ul>
+      </div>
+
+      <p style="color: #6b7280; font-size: 14px;">
+        Questo alert è stato generato automaticamente dal sistema di monitoraggio.
+      </p>
+    </div>
+  `;
 
   try {
-    const { data: emailData, error } = await resend.emails.send({
-      from: 'SICET Alerts <onboarding@resend.dev>',
-      to: email,
-      subject: `[SICET Alert] ${kpiName} - ${deviceName}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #dc2626;">⚠️ Alert SICET</h2>
-          
-          <div style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; margin: 16px 0;">
-            <h3 style="margin-top: 0;">Dettagli del Controllo</h3>
-            <p><strong>Nome:</strong> ${kpiName}</p>
-            ${kpiDescription ? `<p><strong>Descrizione:</strong> ${kpiDescription}</p>` : ''}
-            <p><strong>Punto di Controllo:</strong> ${deviceName}</p>
-            ${deviceLocation ? `<p><strong>Ubicazione:</strong> ${deviceLocation}</p>` : ''}
-          </div>
-
-          <div style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; margin: 16px 0;">
-            <h3 style="margin-top: 0;">Condizioni dell'Alert</h3>
-            <pre style="white-space: pre-wrap; background-color: #fff; padding: 8px; border-radius: 4px;">${formattedConditions}</pre>
-          </div>
-
-          <div style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; margin: 16px 0;">
-            <h3 style="margin-top: 0;">Valore Rilevato</h3>
-            <pre style="white-space: pre-wrap; background-color: #fff; padding: 8px; border-radius: 4px;">${formattedValue}</pre>
-          </div>
-
-          <div style="color: #6b7280; font-size: 14px; margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
-            <p>Questo è un messaggio automatico generato dal sistema SICET.</p>
-            <p>Non rispondere a questa email.</p>
-          </div>
-        </div>
-      `,
+    await resend.emails.send({
+      from: 'SICET <noreply@sicet.com>',
+      to: [data.email],
+      subject: `🚨 Alert: ${kpiName} - ${deviceName}`,
+      html: htmlContent,
     });
-
-    if (error) {
-      console.error('Error sending email:', error);
-      throw error;
-    }
-
-    return emailData;
   } catch (error) {
-    console.error('Failed to send email:', error);
+    console.error('Error sending alert email:', error);
     throw error;
   }
 }

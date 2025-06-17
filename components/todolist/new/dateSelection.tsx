@@ -9,6 +9,7 @@ import { AlertCircle, Clock, Plus, Settings, X } from "lucide-react"
 import { useTodolist } from "./context"
 import { formatTimeSlotValue } from "@/lib/validation/todolist-schemas"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Switch } from "@/components/ui/switch"
 
 export function DateSelection() {
   const { 
@@ -16,7 +17,9 @@ export function DateSelection() {
     isDateSheetOpen, 
     setIsDateSheetOpen,
     removeDateEntry,
-    errors 
+    errors,
+    alertEnabled,
+    email
   } = useTodolist()
 
   return (
@@ -50,6 +53,7 @@ export function DateSelection() {
                 <TableRow>
                   <TableHead>Data</TableHead>
                   <TableHead>Orario</TableHead>
+                  <TableHead>Notifiche</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -63,6 +67,19 @@ export function DateSelection() {
                         <Clock className="h-3 w-3 mr-1" />
                         {formatTimeSlotValue(entry.timeSlot)}
                       </span>
+                    </TableCell>
+                    <TableCell>
+                      {alertEnabled ? (
+                        <div className="flex items-center text-sm">
+                          <span className="inline-flex items-center gap-1.5">
+                            <div className="h-2 w-2 rounded-full bg-green-500"></div>
+                            <span className="text-xs">Alert attivo</span>
+                          </span>
+                          <span className="ml-2 text-xs text-muted-foreground">({email})</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Alert disattivato</span>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

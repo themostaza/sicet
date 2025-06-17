@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { createAlert } from "@/app/actions/actions-alerts"
 import { toast } from "@/components/ui/use-toast"
+import { KPI } from "./types"
+import { useToast } from "@/components/ui/use-toast"
 
 // Define types for KPI and field
 interface KpiField {
@@ -26,14 +28,6 @@ interface KpiField {
   required?: boolean;
 }
 
-interface Kpi {
-  id: string;
-  nome: string;
-  descrizione?: string | null;
-  fields?: KpiField[];
-  value?: any;
-}
-
 // Define types for alert conditions
 interface AlertCondition {
   field_id: string;
@@ -45,6 +39,7 @@ interface AlertCondition {
 }
 
 export function KpiSelection() {
+  const { toast } = useToast()
   const { 
     selectedKpisArray, 
     selectedKpis, 
@@ -59,7 +54,7 @@ export function KpiSelection() {
   } = useTodolist()
   
   const [isAlertSheetOpen, setIsAlertSheetOpen] = useState(false)
-  const [selectedKpiForAlert, setSelectedKpiForAlert] = useState<Kpi | null>(null)
+  const [selectedKpiForAlert, setSelectedKpiForAlert] = useState<KPI | null>(null)
   // Add state to track conditions per KPI
   const [kpiAlertConditions, setKpiAlertConditions] = useState<Record<string, { email: string, conditions: AlertCondition[] }>>({})
 
@@ -68,12 +63,7 @@ export function KpiSelection() {
   const [localAlertConditions, setLocalAlertConditions] = useState<AlertCondition[]>([]);
 
   // Create fields from KPI value data
-  const getKpiFields = (kpi: Kpi): KpiField[] => {
-    // If kpi already has fields defined, use those
-    if (kpi.fields && kpi.fields.length > 0) {
-      return kpi.fields;
-    }
-    
+  const getKpiFields = (kpi: KPI): KpiField[] => {
     // Check if kpi has value property with field definitions
     if (kpi.value) {
       const fields: KpiField[] = [];
@@ -81,9 +71,9 @@ export function KpiSelection() {
       // Handle array of fields
       if (Array.isArray(kpi.value)) {
         return kpi.value.map((field: any) => ({
-          id: field.id || `${kpi.id}-${field.name.toLowerCase().replace(/\s+/g, '_')}`,
-          name: field.name,
-          description: field.description,
+          id: field.id || `${kpi.id}-${String(field.name || '').toLowerCase().replace(/\s+/g, '_')}`,
+          name: String(field.name || ''),
+          description: field.description ? String(field.description) : undefined,
           type: mapFieldType(field.type),
           min: field.min,
           max: field.max,
@@ -93,15 +83,16 @@ export function KpiSelection() {
       } 
       // Handle single field object
       else if (typeof kpi.value === 'object' && kpi.value !== null) {
+        const valueObj = kpi.value as any;
         return [{
-          id: kpi.value.id || `${kpi.id}-${(kpi.value.name || 'value').toLowerCase().replace(/\s+/g, '_')}`,
-          name: kpi.value.name || 'Valore',
-          description: kpi.value.description,
-          type: mapFieldType(kpi.value.type),
-          min: kpi.value.min,
-          max: kpi.value.max,
-          required: kpi.value.required,
-          matchAlert: kpi.value.type === 'text'
+          id: valueObj.id || `${kpi.id}-${String(valueObj.name || 'value').toLowerCase().replace(/\s+/g, '_')}`,
+          name: String(valueObj.name || 'Valore'),
+          description: valueObj.description ? String(valueObj.description) : undefined,
+          type: mapFieldType(valueObj.type),
+          min: valueObj.min,
+          max: valueObj.max,
+          required: valueObj.required,
+          matchAlert: valueObj.type === 'text'
         }];
       }
     }
@@ -143,7 +134,7 @@ export function KpiSelection() {
     }
   };
 
-  const handleOpenAlertSheet = (kpi: Kpi) => {
+  const handleOpenAlertSheet = (kpi: KPI) => {
     setSelectedKpiForAlert(kpi)
     // Carica condizioni/email solo per questo KPI
     if (kpiAlertConditions[kpi.id]) {
@@ -273,23 +264,17 @@ export function KpiSelection() {
                   if (alertInfo && alertInfo.conditions && alertInfo.conditions.length > 0 && alertInfo.email) {
                     alertSummary = `${alertInfo.conditions.length} condizione${alertInfo.conditions.length > 1 ? 'i' : ''}, email: ${alertInfo.email}`
                   }
-                  // Mappo sempre il KPI per garantire compatibilità
-                  const mappedKpi = {
-                    ...kpi,
-                    nome: (kpi as any).nome || (kpi as any).name || '',
-                    descrizione: (kpi as any).descrizione || (kpi as any).description || '',
-                  }
                   return (
                     <TableRow key={kpi.id}>
-                      <TableCell>{mappedKpi.nome}</TableCell>
-                      <TableCell className="hidden md:table-cell">{mappedKpi.descrizione || "-"}</TableCell>
+                      <TableCell>{kpi.name}</TableCell>
+                      <TableCell className="hidden md:table-cell">{kpi.description || "-"}</TableCell>
                       <TableCell>{alertSummary}</TableCell>
                       <TableCell>
                         <Button 
                           type="button" 
                           variant="outline" 
                           size="sm"
-                          onClick={() => handleOpenAlertSheet(mappedKpi)}
+                          onClick={() => handleOpenAlertSheet(kpi)}
                         >
                           <BellRing className="h-4 w-4 mr-2" />
                           Imposta Alert
@@ -325,7 +310,7 @@ export function KpiSelection() {
         <SheetContent className="sm:max-w-md">
           <SheetHeader>
             <SheetTitle>
-              {selectedKpiForAlert && `Imposta alert per il controllo ${(selectedKpiForAlert as any).nome || (selectedKpiForAlert as any).name}`}
+              {selectedKpiForAlert && `Imposta alert per il controllo ${(selectedKpiForAlert as any).name || (selectedKpiForAlert as any).name}`}
             </SheetTitle>
           </SheetHeader>
           

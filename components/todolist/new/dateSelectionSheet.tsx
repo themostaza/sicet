@@ -27,6 +27,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
+import { Switch } from "@/components/ui/switch"
 
 const getTimeSlotLabel = (timeSlot: TimeSlot) => {
   if (timeSlot === "custom") return "Personalizzato"
@@ -67,6 +68,10 @@ export function DateSelectionSheet() {
     monthsToRepeat,
     setMonthsToRepeat,
     applyIntervalSelection,
+    email,
+    setEmail,
+    alertEnabled,
+    setAlertEnabled,
   } = useTodolist()
 
   /**
@@ -157,6 +162,32 @@ export function DateSelectionSheet() {
         <Card className="border-none shadow-none">
           <CardContent className="p-0">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+              {/* -------- Email e Alert -------- */}
+              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                <div>
+                  <Label htmlFor="email" className="mb-2 block">
+                    Email per notifiche
+                  </Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="Inserisci email per le notifiche"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+                <div className="flex items-end">
+                  <div className="flex items-center space-x-2">
+                    <Label htmlFor="alertEnabled" className="mb-0">Abilita notifiche</Label>
+                    <Switch
+                      id="alertEnabled"
+                      checked={alertEnabled}
+                      onCheckedChange={setAlertEnabled}
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* -------- Fascia oraria -------- */}
               <div>
                 <Label htmlFor="timeSlot" className="mb-2 block">
@@ -290,6 +321,7 @@ export function DateSelectionSheet() {
                 <tr className="border-b">
                   <th className="text-left pb-2">Data</th>
                   <th className="text-left pb-2">Fascia oraria</th>
+                  <th className="text-left pb-2">Notifiche</th>
                   <th className="text-right pb-2">Azioni</th>
                 </tr>
               </thead>
@@ -305,6 +337,20 @@ export function DateSelectionSheet() {
                           <Clock className="h-3 w-3 inline mr-1" />
                           {formatTimeSlotValue(entry.timeSlot)}
                         </span>
+                      </td>
+                      <td className="py-2">
+                        {alertEnabled ? (
+                          <div className="flex items-center text-sm">
+                            <Switch
+                              checked={alertEnabled}
+                              className="scale-75 origin-left"
+                              onCheckedChange={setAlertEnabled}
+                            />
+                            <span className="ml-2 text-xs text-muted-foreground">{email}</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Disattivate</span>
+                        )}
                       </td>
                       <td className="py-2 text-right">
                         <Button

@@ -138,11 +138,11 @@ export function DeviceSelectionSheet() {
                             }
                             setManualSelectedDevices(newSet)
                           }}
-                          aria-label={`Select ${device.nome}`}
+                          aria-label={`Select ${device.name}`}
                         />
                       </TableCell>
-                      <TableCell className="font-medium">{device.nome}</TableCell>
-                      <TableCell className="hidden md:table-cell">{device.posizione || "-"}</TableCell>
+                      <TableCell className="font-medium">{device.name}</TableCell>
+                      <TableCell className="hidden md:table-cell">{device.location || "-"}</TableCell>
                       <TableCell className="hidden lg:table-cell">
                         <div className="flex flex-wrap gap-1">
                           {device.tags && device.tags.length > 0 ? (

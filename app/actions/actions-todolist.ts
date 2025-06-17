@@ -464,7 +464,14 @@ export async function getTodolistsGroupedWithFilters() {
 }
 
 // Crea una todolist e le sue task
-export async function createTodolist(deviceId: string, date: string, timeSlot: string, kpiId: string): Promise<Task> {
+export async function createTodolist(
+  deviceId: string, 
+  date: string, 
+  timeSlot: string, 
+  kpiId: string,
+  alertEnabled?: boolean,
+  email?: string
+): Promise<Task> {
   const { startTime } = getTimeRangeFromSlot(date, timeSlot as TimeSlot)
   
   // Determine if this is a custom time slot
@@ -478,8 +485,8 @@ export async function createTodolist(deviceId: string, date: string, timeSlot: s
     status: "pending",
     time_slot_type: isCustom ? "custom" : "standard",
     ...(isCustom && {
-      time_slot_start: (timeSlot as CustomTimeSlot).startHour,
-      time_slot_end: (timeSlot as CustomTimeSlot).endHour
+      time_slot_start: (timeSlot as unknown as CustomTimeSlot).startHour,
+      time_slot_end: (timeSlot as unknown as CustomTimeSlot).endHour
     })
   }
   
@@ -490,6 +497,20 @@ export async function createTodolist(deviceId: string, date: string, timeSlot: s
     .single()
   
   if (todolistError) handleError(todolistError)
+
+  // If alert is enabled and email is provided, create the alert
+  if (alertEnabled && email) {
+    const alertData: TablesInsert<"todolist_alert"> = {
+      todolist_id: todolist!.id,
+      email
+    }
+
+    const { error: alertError } = await (await getSupabaseClient())
+      .from("todolist_alert")
+      .insert(alertData)
+
+    if (alertError) handleError(alertError)
+  }
   
   // Then create the task
   const taskData: TablesInsert<"tasks"> = {
@@ -513,7 +534,9 @@ export async function createTodolist(deviceId: string, date: string, timeSlot: s
     device_id: deviceId,
     kpi_id: kpiId,
     scheduled_execution: startTime,
-    time_slot: timeSlot
+    time_slot: timeSlot,
+    alert_enabled: alertEnabled,
+    alert_email: email
   });
   
   revalidatePath("/todolist")
@@ -521,7 +544,14 @@ export async function createTodolist(deviceId: string, date: string, timeSlot: s
 }
 
 // Utility per creare multiple task in una todolist
-export async function createMultipleTasks(deviceId: string, date: string, timeSlot: string, kpiIds: string[]): Promise<void> {
+export async function createMultipleTasks(
+  deviceId: string, 
+  date: string, 
+  timeSlot: string, 
+  kpiIds: string[],
+  alertEnabled?: boolean,
+  email?: string
+): Promise<void> {
   const { startTime } = getTimeRangeFromSlot(date, timeSlot as TimeSlot)
   
   // Determine if this is a custom time slot
@@ -535,8 +565,8 @@ export async function createMultipleTasks(deviceId: string, date: string, timeSl
     status: "pending",
     time_slot_type: isCustom ? "custom" : "standard",
     ...(isCustom && {
-      time_slot_start: (timeSlot as CustomTimeSlot).startHour,
-      time_slot_end: (timeSlot as CustomTimeSlot).endHour
+      time_slot_start: (timeSlot as unknown as CustomTimeSlot).startHour,
+      time_slot_end: (timeSlot as unknown as CustomTimeSlot).endHour
     })
   }
   
@@ -547,9 +577,23 @@ export async function createMultipleTasks(deviceId: string, date: string, timeSl
     .single()
   
   if (todolistError) handleError(todolistError)
+
+  // If alert is enabled and email is provided, create the alert
+  if (alertEnabled && email) {
+    const alertData: TablesInsert<"todolist_alert"> = {
+      todolist_id: todolist!.id,
+      email
+    }
+
+    const { error: alertError } = await (await getSupabaseClient())
+      .from("todolist_alert")
+      .insert(alertData)
+
+    if (alertError) handleError(alertError)
+  }
   
   // Then create all tasks
-  const tasksToInsert: TablesInsert<"tasks">[] = kpiIds.map(kpiId => ({
+  const tasksData: TablesInsert<"tasks">[] = kpiIds.map(kpiId => ({
     id: generateUUID(),
     todolist_id: todolist!.id,
     kpi_id: kpiId,
@@ -557,24 +601,21 @@ export async function createMultipleTasks(deviceId: string, date: string, timeSl
     value: null
   }))
   
-  const { data: tasks, error: taskError } = await (await getSupabaseClient())
+  const { error: tasksError } = await (await getSupabaseClient())
     .from("tasks")
-    .insert(tasksToInsert)
-    .select()
+    .insert(tasksData)
   
-  if (taskError) handleError(taskError)
+  if (tasksError) handleError(tasksError)
   
-  // Log activities for each created task
-  if (tasks) {
-    await Promise.all(tasks.map(task => 
-      logCurrentUserActivity('create_todolist', 'task', task.id, {
-        device_id: deviceId,
-        kpi_id: task.kpi_id,
-        scheduled_execution: startTime,
-        time_slot: timeSlot
-      })
-    ));
-  }
+  // Log the activity
+  await logCurrentUserActivity('create_todolist', 'todolist', todolist!.id, {
+    device_id: deviceId,
+    kpi_count: kpiIds.length,
+    scheduled_execution: startTime,
+    time_slot: timeSlot,
+    alert_enabled: alertEnabled,
+    alert_email: email
+  });
   
   revalidatePath("/todolist")
 }

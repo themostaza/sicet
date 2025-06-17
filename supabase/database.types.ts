@@ -335,6 +335,80 @@ export interface Database {
           }
         ]
       }
+      todolist_alert: {
+        Row: {
+          id: string
+          todolist_id: string
+          email: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          todolist_id: string
+          email: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          todolist_id?: string
+          email?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "todolist_alert_todolist_id_fkey"
+            columns: ["todolist_id"]
+            referencedRelation: "todolist"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      todolist_alert_logs: {
+        Row: {
+          id: string
+          todolist_id: string
+          alert_id: string
+          email: string
+          sent_at: string
+          error_message: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          todolist_id: string
+          alert_id: string
+          email: string
+          sent_at?: string
+          error_message?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          todolist_id?: string
+          alert_id?: string
+          email?: string
+          sent_at?: string
+          error_message?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "todolist_alert_logs_todolist_id_fkey"
+            columns: ["todolist_id"]
+            referencedRelation: "todolist"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "todolist_alert_logs_alert_id_fkey"
+            columns: ["alert_id"]
+            referencedRelation: "todolist_alert"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never

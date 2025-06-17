@@ -107,15 +107,15 @@ export function KpiSelectionSheet() {
                             }
                             setSelectedKpis(newSet)
                           }}
-                          aria-label={`Select ${kpi.nome}`}
+                          aria-label={`Select ${kpi.name}`}
                         />
                       </TableCell>
-                      <TableCell className="font-medium">{kpi.nome}</TableCell>
+                      <TableCell className="font-medium">{kpi.name}</TableCell>
                       <TableCell className="hidden md:table-cell text-xs text-gray-500">
                         {kpi.id}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">
-                        {kpi.descrizione || "-"}
+                        {kpi.description || "-"}
                       </TableCell>
                     </TableRow>
                   )

@@ -29,6 +29,12 @@ interface TodolistContextType {
   isSubmitting: boolean
   deviceId: string | null
   
+  // Email e Alert
+  email: string
+  setEmail: (email: string) => void
+  alertEnabled: boolean
+  setAlertEnabled: (enabled: boolean) => void
+
   // Selezioni utente
   selectedTags: Set<string>
   manualSelectedDevices: Set<string>
@@ -137,43 +143,61 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
   const [errors, setErrors] = useState<ValidationErrors>({})
   const [selectedDates, setSelectedDates] = useState<Date[]>([])
   
+  // Email e Alert
+  const [email, setEmail] = useState("")
+  const [alertEnabled, setAlertEnabled] = useState(false)
+
   // New fields
   const [alertConditions, setAlertConditions] = useState<AlertCondition[]>([])
   const [alertEmail, setAlertEmail] = useState("")
 
-  // Fetch Dati Iniziale
+  // Caricamento dati iniziale
   useEffect(() => {
-    ;(async () => {
+    const loadData = async () => {
       try {
         const [devicesResponse, kpisResponse] = await Promise.all([
           getDevices({ limit: 100 }),
           getKpis({ limit: 100 })
         ])
         
-        // Assicuriamoci che mapDbDeviceToDevice e mapDbKpiToKpi siano compatibili con i tipi restituiti
+        // Map devices to expected format
         const mappedDevices = devicesResponse.devices.map(device => ({
           id: device.id,
-          nome: device.name,
-          posizione: device.location,
-          tags: device.tags || []
-        }));
-        
+          name: device.name,
+          location: device.location || null,
+          model: device.model || null,
+          type: device.type || null,
+          description: device.description || null,
+          qrcode_url: device.qrcodeUrl || null,
+          tags: device.tags || null,
+          created_at: null,
+          deleted: false
+        }))
+
+        // Map KPIs to expected format
         const mappedKpis = kpisResponse.kpis.map(kpi => ({
           id: kpi.id,
-          nome: kpi.name,
-          descrizione: kpi.description,
-          value: kpi.value
-        }));
-        
+          name: kpi.name,
+          description: kpi.description,
+          value: kpi.value,
+          created_at: kpi.created_at,
+          deleted: false
+        }))
+
         setDevices(mappedDevices)
         setKpis(mappedKpis)
-      } catch (error) {
-        console.error("Errore nel caricamento dei dati:", error)
-        toast({ title: "Errore", description: "Impossibile caricare i dati", variant: "destructive" })
-      } finally {
         setIsLoading(false)
+      } catch (error) {
+        console.error("Error loading data:", error)
+        toast({
+          title: "Errore",
+          description: "Impossibile caricare i dati. Riprova più tardi.",
+          variant: "destructive"
+        })
       }
-    })()
+    }
+    
+    loadData()
   }, [toast])
 
   // Computazioni derivate - Tags
@@ -235,9 +259,9 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
     
     return devices.filter(device => {
       const matchesSearch = !deviceSearchTerm || 
-        device.nome.toLowerCase().includes(deviceSearchTerm.toLowerCase()) ||
+        device.name.toLowerCase().includes(deviceSearchTerm.toLowerCase()) ||
         device.id.toLowerCase().includes(deviceSearchTerm.toLowerCase()) ||
-        (device.posizione && device.posizione.toLowerCase().includes(deviceSearchTerm.toLowerCase()))
+        (device.location && device.location.toLowerCase().includes(deviceSearchTerm.toLowerCase()))
       
       const matchesTags = selectedTags.size === 0 || 
         (device.tags && [...selectedTags].every(tag => device.tags?.includes(tag)))
@@ -251,9 +275,9 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
     if (!kpiSearchTerm) return kpis
     
     return kpis.filter(kpi => 
-      kpi.nome.toLowerCase().includes(kpiSearchTerm.toLowerCase()) ||
+      kpi.name.toLowerCase().includes(kpiSearchTerm.toLowerCase()) ||
       kpi.id.toLowerCase().includes(kpiSearchTerm.toLowerCase()) ||
-      (kpi.descrizione && kpi.descrizione.toLowerCase().includes(kpiSearchTerm.toLowerCase()))
+      (kpi.description && kpi.description.toLowerCase().includes(kpiSearchTerm.toLowerCase()))
     )
   }, [kpis, kpiSearchTerm])
   
@@ -579,7 +603,11 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
     updateDateEntry, removeDateEntry, applyIntervalSelection, updateExistingDateEntry,
     
     // New fields
-    alertConditions, setAlertConditions, alertEmail, setAlertEmail
+    alertConditions, setAlertConditions, alertEmail, setAlertEmail,
+    email,
+    setEmail,
+    alertEnabled,
+    setAlertEnabled
   }
 
   return <TodolistContext.Provider value={contextValue}>{children}</TodolistContext.Provider>
