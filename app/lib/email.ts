@@ -37,6 +37,10 @@ export type TodolistOverdueEmailData = {
 export async function sendAlertEmail(email: string, data: AlertEmailData) {
   const { kpiName, kpiDescription, deviceName, deviceLocation, triggeredValue, conditions } = data;
 
+  console.log('Sending KPI alert email to:', email);
+  console.log('Email data:', { kpiName, deviceName, triggeredValue });
+  console.log('Conditions:', conditions);
+
   // Format conditions for email
   const formattedConditions = conditions.map(condition => {
     if (condition.type === 'numeric') {
@@ -59,49 +63,50 @@ export async function sendAlertEmail(email: string, data: AlertEmailData) {
     ? JSON.stringify(triggeredValue, null, 2)
     : String(triggeredValue);
 
+  console.log('Formatted conditions:', formattedConditions);
+  console.log('Formatted value:', formattedValue);
+
+  // Create a simpler HTML email to avoid potential issues
+  const simpleHtml = `
+    <div>
+      <h2>⚠️ Alert SICET</h2>
+      <p><strong>Nome:</strong> ${kpiName}</p>
+      <p><strong>Punto di Controllo:</strong> ${deviceName}</p>
+      <p><strong>Valore Rilevato:</strong> ${formattedValue}</p>
+      <p><strong>Condizioni:</strong></p>
+      <pre>${formattedConditions}</pre>
+    </div>
+  `;
+
   try {
+    console.log('Attempting to send email via Resend...');
+    console.log('Email payload:', {
+      from: 'SICET Alerts <onboarding@resend.dev>',
+      to: [email],
+      subject: `[SICET Alert] ${kpiName} - ${deviceName}`,
+      htmlLength: simpleHtml.length
+    });
+
     const { data: emailData, error } = await resend.emails.send({
       from: 'SICET Alerts <onboarding@resend.dev>',
-      to: email,
+      to: [email],
       subject: `[SICET Alert] ${kpiName} - ${deviceName}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #dc2626;">⚠️ Alert SICET</h2>
-          
-          <div style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; margin: 16px 0;">
-            <h3 style="margin-top: 0;">Dettagli del Controllo</h3>
-            <p><strong>Nome:</strong> ${kpiName}</p>
-            ${kpiDescription ? `<p><strong>Descrizione:</strong> ${kpiDescription}</p>` : ''}
-            <p><strong>Punto di Controllo:</strong> ${deviceName}</p>
-            ${deviceLocation ? `<p><strong>Ubicazione:</strong> ${deviceLocation}</p>` : ''}
-          </div>
-
-          <div style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; margin: 16px 0;">
-            <h3 style="margin-top: 0;">Condizioni dell'Alert</h3>
-            <pre style="white-space: pre-wrap; background-color: #fff; padding: 8px; border-radius: 4px;">${formattedConditions}</pre>
-          </div>
-
-          <div style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; margin: 16px 0;">
-            <h3 style="margin-top: 0;">Valore Rilevato</h3>
-            <pre style="white-space: pre-wrap; background-color: #fff; padding: 8px; border-radius: 4px;">${formattedValue}</pre>
-          </div>
-
-          <div style="color: #6b7280; font-size: 14px; margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
-            <p>Questo è un messaggio automatico generato dal sistema SICET.</p>
-            <p>Non rispondere a questa email.</p>
-          </div>
-        </div>
-      `,
+      html: simpleHtml,
     });
 
     if (error) {
-      console.error('Error sending email:', error);
+      console.error('Resend API error:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
       throw error;
     }
 
+    console.log('KPI alert email sent successfully:', emailData);
     return emailData;
   } catch (error) {
-    console.error('Failed to send email:', error);
+    console.error('Failed to send KPI alert email:', error);
+    console.error('Error type:', typeof error);
+    console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
+    console.error('Full error object:', JSON.stringify(error, null, 2));
     throw error;
   }
 }
