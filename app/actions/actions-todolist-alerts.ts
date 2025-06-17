@@ -8,6 +8,7 @@ import {
   TIME_SLOT_TOLERANCE, 
   TIME_SLOT_INTERVALS, 
   isCustomTimeSlot,
+  minutesToTime,
   type TimeSlotValue 
 } from "@/lib/validation/todolist-schemas"
 import { sendTodolistOverdueEmail } from "@/app/lib/email"
@@ -61,13 +62,18 @@ function calculateTodolistDeadline(
   const scheduledDate = new Date(scheduledExecution)
   
   if (timeSlotType === "custom" && timeSlotStart !== null && timeSlotEnd !== null) {
-    // For custom time slots, deadline is end time + tolerance
+    // For custom time slots, convert minutes to hours and minutes
+    const endTime = minutesToTime(timeSlotEnd)
     const deadline = new Date(scheduledDate)
-    deadline.setHours(timeSlotEnd + TIME_SLOT_TOLERANCE, 0, 0, 0)
+    
+    // Add tolerance hours but keep the exact minutes
+    const deadlineHour = endTime.hour + TIME_SLOT_TOLERANCE
+    deadline.setHours(deadlineHour, endTime.minute, 0, 0)
     
     // If the deadline goes past midnight, add a day
-    if (deadline.getHours() < timeSlotEnd) {
+    if (deadlineHour >= 24) {
       deadline.setDate(deadline.getDate() + 1)
+      deadline.setHours(deadlineHour - 24, endTime.minute, 0, 0)
     }
     
     return deadline
@@ -149,23 +155,23 @@ export async function getOverdueTodolists(): Promise<OverdueTodolist[]> {
         id,
         kpi_id,
         status,
-        kpi:kpis (
+        kpi:kpis!tasks_kpi_id_fkey (
           name,
           description
         )
       )
     `)
     .eq("status", "pending")
-    .not("todolist_alert", "is", null)
 
   if (error) handleError(error)
 
   if (!data) return []
 
-  // Filter for overdue todolists with incomplete tasks
+  // Filter for overdue todolists with alerts and incomplete tasks
   return data
     .filter(todolist => 
       todolist.alert && 
+      todolist.alert.length > 0 &&
       isTodolistOverdue(todolist) && 
       !areAllTasksCompleted(todolist.tasks)
     )
@@ -241,23 +247,50 @@ export async function sendTodolistOverdueNotification(todolist: OverdueTodolist)
 export async function processOverdueTodolists(): Promise<{
   processed: number
   errors: number
+  details: Array<{
+    todolistId: string
+    deviceName: string
+    email: string
+    status: "sent" | "error"
+    errorMessage?: string
+  }>
 }> {
   try {
     const overdueTodolists = await getOverdueTodolists()
     let processed = 0
     let errors = 0
+    const details: Array<{
+      todolistId: string
+      deviceName: string
+      email: string
+      status: "sent" | "error"
+      errorMessage?: string
+    }> = []
 
     for (const todolist of overdueTodolists) {
       try {
         await sendTodolistOverdueNotification(todolist)
         processed++
+        details.push({
+          todolistId: todolist.id,
+          deviceName: todolist.device.name,
+          email: todolist.alert?.email || "N/A",
+          status: "sent"
+        })
       } catch (error) {
         console.error(`Error processing overdue todolist ${todolist.id}:`, error)
         errors++
+        details.push({
+          todolistId: todolist.id,
+          deviceName: todolist.device.name,
+          email: todolist.alert?.email || "N/A",
+          status: "error",
+          errorMessage: error instanceof Error ? error.message : "Unknown error"
+        })
       }
     }
 
-    return { processed, errors }
+    return { processed, errors, details }
   } catch (error) {
     console.error("Error processing overdue todolists:", error)
     throw error

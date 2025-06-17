@@ -82,7 +82,7 @@ export async function sendAlertEmail(data: AlertEmailData): Promise<void> {
 
   try {
     await resend.emails.send({
-      from: 'SICET <noreply@sicet.com>',
+      from: 'SICET Alerts <onboarding@resend.dev>',
       to: [data.email],
       subject: `🚨 Alert: ${kpiName} - ${deviceName}`,
       html: htmlContent,
@@ -167,7 +167,7 @@ export async function sendTodolistOverdueEmail(data: TodolistOverdueEmailData): 
 
   try {
     await resend.emails.send({
-      from: 'SICET <noreply@sicet.com>',
+      from: 'SICET Alerts <onboarding@resend.dev>',
       to: [email],
       subject: `⚠️ Todolist Scaduta: ${deviceName}`,
       html: htmlContent,

@@ -10,9 +10,12 @@ import { Badge } from "@/components/ui/badge"
 
 type Todolist = {
   id: string
+  device_id: string
   scheduled_execution: string
   status: "pending" | "in_progress" | "completed"
   created_at: string
+  time_slot_type: "standard" | "custom"
+  time_slot_end: number | null
 }
 
 type TodolistSelectorProps = {
@@ -40,8 +43,8 @@ export function TodolistSelector({ todolists, deviceId, today }: TodolistSelecto
 
   // Filtra le todolist: prima quelle non scadute, poi quelle scadute
   const sortedTodolists = [...todolists].sort((a, b) => {
-    const aExpired = isTodolistExpired(a.scheduled_execution)
-    const bExpired = isTodolistExpired(b.scheduled_execution)
+    const aExpired = isTodolistExpired(a.scheduled_execution, a.time_slot_type, a.time_slot_end)
+    const bExpired = isTodolistExpired(b.scheduled_execution, b.time_slot_type, b.time_slot_end)
     
     if (aExpired === bExpired) {
       // Se entrambe sono scadute o non scadute, ordina per data di esecuzione
@@ -79,7 +82,7 @@ export function TodolistSelector({ todolists, deviceId, today }: TodolistSelecto
         {sortedTodolists.map((todolist) => {
           const timeSlot = getTimeSlotFromDateTime(todolist.scheduled_execution)
           const formattedTime = format(new Date(todolist.scheduled_execution), "HH:mm", { locale: it })
-          const isExpired = isTodolistExpired(todolist.scheduled_execution)
+          const isExpired = isTodolistExpired(todolist.scheduled_execution, todolist.time_slot_type, todolist.time_slot_end)
           const status = isExpired ? "expired" : todolist.status
           
           return (

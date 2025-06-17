@@ -3,25 +3,30 @@ import { processOverdueTodolists } from '@/app/actions/actions-todolist-alerts'
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify the request is from a legitimate cron job
-    const authHeader = request.headers.get('authorization')
-    const expectedToken = process.env.CRON_SECRET_TOKEN
-    
-    if (!expectedToken || authHeader !== `Bearer ${expectedToken}`) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+    // Verify the request is from a legitimate cron job (only in production)
+    if (process.env.NODE_ENV === 'production') {
+      const authHeader = request.headers.get('authorization')
+      const expectedToken = process.env.CRON_SECRET_TOKEN
+      
+      if (!expectedToken || authHeader !== `Bearer ${expectedToken}`) {
+        return NextResponse.json(
+          { error: 'Unauthorized' },
+          { status: 401 }
+        )
+      }
     }
 
     // Process overdue todolists
     const result = await processOverdueTodolists()
     
+    console.log(`Cron job processed ${result.processed} overdue todolists with ${result.errors} errors`)
+    
     return NextResponse.json({
       success: true,
       message: `Processed ${result.processed} overdue todolists with ${result.errors} errors`,
       processed: result.processed,
-      errors: result.errors
+      errors: result.errors,
+      timestamp: new Date().toISOString()
     })
 
   } catch (error) {
@@ -46,7 +51,8 @@ export async function GET() {
       success: true,
       message: `Processed ${result.processed} overdue todolists with ${result.errors} errors`,
       processed: result.processed,
-      errors: result.errors
+      errors: result.errors,
+      timestamp: new Date().toISOString()
     })
 
   } catch (error) {

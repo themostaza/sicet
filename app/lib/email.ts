@@ -179,12 +179,17 @@ export async function sendTodolistOverdueEmail(data: TodolistOverdueEmailData): 
   `;
 
   try {
-    await resend.emails.send({
-      from: 'SICET <noreply@sicet.com>',
+    console.log('Sending todolist overdue email to:', email);
+    console.log('Email data:', { todolistId, deviceName, scheduledExecution });
+    
+    const result = await resend.emails.send({
+      from: 'SICET Alerts <onboarding@resend.dev>',
       to: [email],
       subject: `⚠️ Todolist Scaduta: ${deviceName}`,
       html: htmlContent,
     });
+    
+    console.log('Email sent successfully:', result);
   } catch (error) {
     console.error('Error sending todolist overdue email:', error);
     throw error;

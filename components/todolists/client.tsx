@@ -25,6 +25,9 @@ type TodolistItem = {
   scheduled_execution: string
   status: "pending" | "in_progress" | "completed"
   count: number
+  time_slot_type: "standard" | "custom"
+  time_slot_start: number | null
+  time_slot_end: number | null
   tasks: Array<{
     id: string
     kpi_id: string
@@ -155,7 +158,11 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
   }
 
   const getStatusDisplay = (todolist: TodolistItem) => {
-    const isExpired = todolist.status !== "completed" && isTodolistExpired(todolist.scheduled_execution)
+    const isExpired = todolist.status !== "completed" && isTodolistExpired(
+      todolist.scheduled_execution, 
+      todolist.time_slot_type, 
+      todolist.time_slot_end
+    )
     
     if (todolist.status === "completed") {
       return (
@@ -190,9 +197,9 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
 
   const formatTimeSlot = (timeSlot: TimeSlotValue) => {
     if (isCustomTimeSlot(timeSlot)) {
-      const startStr = timeSlot.startHour.toString().padStart(2, '0')
-      const endStr = timeSlot.endHour.toString().padStart(2, '0')
-      return `Personalizzato (${startStr}:00-${endStr}:00)`
+      const startStr = `${timeSlot.startHour.toString().padStart(2, '0')}:${(timeSlot.startMinute || 0).toString().padStart(2, '0')}`
+      const endStr = `${timeSlot.endHour.toString().padStart(2, '0')}:${(timeSlot.endMinute || 0).toString().padStart(2, '0')}`
+      return `Personalizzato (${startStr}-${endStr})`
     }
     const slot = timeSlot as TimeSlot
     const timeSlotNames: Record<TimeSlot, string> = {
@@ -369,7 +376,11 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                 </TableRow>
               ) : (
                 filtered.map((item) => {
-                  const isExpired = item.status !== "completed" && isTodolistExpired(item.scheduled_execution)
+                  const isExpired = item.status !== "completed" && isTodolistExpired(
+                    item.scheduled_execution, 
+                    item.time_slot_type, 
+                    item.time_slot_end
+                  )
                   const canClick = !isOperator || (activeFilter === 'today' || activeFilter === 'completed')
                   return (
                     <TableRow

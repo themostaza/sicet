@@ -64,7 +64,38 @@ const TIMESLOT_LABEL: Record<string, string> = {
   notte: "Notte (22-6)",
   giornata: "Giornata (6-20)",
 }
-const labelForSlot = (s: string) => TIMESLOT_LABEL[s] ?? s
+
+const labelForSlot = (s: string) => {
+  // Check if it's a standard time slot
+  if (s in TIMESLOT_LABEL) {
+    return TIMESLOT_LABEL[s]
+  }
+  
+  // Check if it's a custom time slot string (e.g., "custom:90-1020")
+  if (s.startsWith('custom:')) {
+    const parts = s.split(':')[1]?.split('-')
+    if (parts && parts.length === 2) {
+      const startMinutes = parseInt(parts[0])
+      const endMinutes = parseInt(parts[1])
+      
+      if (!isNaN(startMinutes) && !isNaN(endMinutes)) {
+        const startHours = Math.floor(startMinutes / 60)
+        const startMins = startMinutes % 60
+        const endHours = Math.floor(endMinutes / 60)
+        const endMins = endMinutes % 60
+        
+        const startTime = `${startHours.toString().padStart(2, '0')}:${startMins.toString().padStart(2, '0')}`
+        const endTime = `${endHours.toString().padStart(2, '0')}:${endMins.toString().padStart(2, '0')}`
+        
+        return `Personalizzato (${startTime}-${endTime})`
+      }
+    }
+  }
+  
+  // Fallback to original string
+  return s
+}
+
 const storageKey = (id: string, day: string, slot: string) =>
   `todolist-${id}-${day}-${slot}`
 

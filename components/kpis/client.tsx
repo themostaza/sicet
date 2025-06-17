@@ -11,7 +11,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion"
-import type { Kpi } from "@/app/actions/actions-kpi"
+import type { Kpi } from "@/lib/validation/kpi-schemas"
 import { getKpis } from "@/app/actions/actions-kpi"
 import { KpiDeleteDialog } from "@/components/kpi/kpi-delete-dialog"
 import { createBrowserClient } from "@supabase/ssr"

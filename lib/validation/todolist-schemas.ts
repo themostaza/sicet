@@ -74,10 +74,12 @@ export interface CustomTimeSlot {
   type: "custom"
   startHour: number
   endHour: number
+  startMinute?: number
+  endMinute?: number
 }
 
 // Type union per tutti i possibili tipi di timeslot
-export type TimeSlotValue = TimeSlot | CustomTimeSlot
+export type TimeSlotValue = TimeSlot | CustomTimeSlot | string
 
 // Costante per l'ordine degli slot
 export const timeSlotOrder: Record<TimeSlot, number> = {
@@ -87,6 +89,19 @@ export const timeSlotOrder: Record<TimeSlot, number> = {
   notte: 4,
   giornata: 5,
   custom: 6,
+}
+
+// Utility per convertire ore e minuti in minuti totali della giornata
+export function timeToMinutes(hour: number, minute: number = 0): number {
+  return hour * 60 + minute
+}
+
+// Utility per convertire minuti totali in ore e minuti
+export function minutesToTime(minutes: number): { hour: number, minute: number } {
+  return {
+    hour: Math.floor(minutes / 60),
+    minute: minutes % 60
+  }
 }
 
 // Utility per verificare se un timeslot è personalizzato
@@ -106,41 +121,69 @@ export function parseCustomTimeSlotString(timeSlot: string): CustomTimeSlot | nu
   const parts = timeSlot.split("_")
   if (parts.length !== 3) return null
   
-  const startHour = parseInt(parts[1])
-  const endHour = parseInt(parts[2])
+  const startMinutes = parseInt(parts[1])
+  const endMinutes = parseInt(parts[2])
   
-  if (isNaN(startHour) || isNaN(endHour) || startHour < 0 || startHour > 23 || endHour < 0 || endHour > 23) {
+  if (isNaN(startMinutes) || isNaN(endMinutes) || startMinutes < 0 || startMinutes > 1439 || endMinutes < 0 || endMinutes > 1439) {
     return null
   }
   
+  const startTime = minutesToTime(startMinutes)
+  const endTime = minutesToTime(endMinutes)
+  
   return {
     type: "custom",
-    startHour,
-    endHour
+    startHour: startTime.hour,
+    endHour: endTime.hour,
+    startMinute: startTime.minute,
+    endMinute: endTime.minute
   }
 }
 
 // Utility per convertire un CustomTimeSlot in stringa
 export function customTimeSlotToString(timeSlot: CustomTimeSlot): string {
-  return `custom_${timeSlot.startHour}_${timeSlot.endHour}`
+  const startMinutes = timeToMinutes(timeSlot.startHour, timeSlot.startMinute || 0)
+  const endMinutes = timeToMinutes(timeSlot.endHour, timeSlot.endMinute || 0)
+  return `custom_${startMinutes}_${endMinutes}`
 }
 
 // Utility per ottenere il range temporale da una data e uno slot
-export function getTimeRangeFromSlot(date: string, timeSlot: TimeSlotValue | string): { startTime: string; endTime: string } {
+export function getTimeRangeFromSlot(
+  date: string, 
+  timeSlot: TimeSlotValue | string,
+  isFromDatabase: boolean = false
+): { startTime: string; endTime: string } {
   const baseDate = new Date(date)
   let startHour = 0
+  let startMinute = 0
   let endHour = 23
+  let endMinute = 59
 
   // Handle string-based custom timeslot
   if (typeof timeSlot === "string" && isCustomTimeSlotString(timeSlot)) {
     const customSlot = parseCustomTimeSlotString(timeSlot)
     if (customSlot) {
       startHour = customSlot.startHour
+      startMinute = customSlot.startMinute || 0
       endHour = customSlot.endHour
+      endMinute = customSlot.endMinute || 0
     }
   } else if (isCustomTimeSlot(timeSlot)) {
-    startHour = timeSlot.startHour
-    endHour = timeSlot.endHour
+    if (isFromDatabase) {
+      // Se i valori vengono dal database, sono già in minuti
+      const startTime = minutesToTime(timeSlot.startHour) // startHour contiene i minuti dal DB
+      const endTime = minutesToTime(timeSlot.endHour) // endHour contiene i minuti dal DB
+      startHour = startTime.hour
+      startMinute = startTime.minute
+      endHour = endTime.hour
+      endMinute = endTime.minute
+    } else {
+      // Se i valori vengono dall'UI, sono ore e minuti
+      startHour = timeSlot.startHour
+      startMinute = timeSlot.startMinute || 0
+      endHour = timeSlot.endHour
+      endMinute = timeSlot.endMinute || 0
+    }
   } else {
     const interval = TIME_SLOT_INTERVALS[timeSlot as keyof typeof TIME_SLOT_INTERVALS]
     if (interval) {
@@ -150,13 +193,13 @@ export function getTimeRangeFromSlot(date: string, timeSlot: TimeSlotValue | str
   }
 
   const startTime = new Date(baseDate)
-  startTime.setHours(startHour, 0, 0, 0)
+  startTime.setHours(startHour, startMinute, 0, 0)
 
   const endTime = new Date(baseDate)
-  if (endHour < startHour) {
+  if (endHour < startHour || (endHour === startHour && endMinute < startMinute)) {
     endTime.setDate(endTime.getDate() + 1)
   }
-  endTime.setHours(endHour, 59, 59, 999)
+  endTime.setHours(endHour, endMinute, 59, 999)
 
   return {
     startTime: startTime.toISOString(),
@@ -167,29 +210,56 @@ export function getTimeRangeFromSlot(date: string, timeSlot: TimeSlotValue | str
 // Utility per formattare un timeslot per la visualizzazione
 export function formatTimeSlotValue(timeSlot: TimeSlotValue): string {
   if (isCustomTimeSlot(timeSlot)) {
-    const startStr = timeSlot.startHour.toString().padStart(2, '0')
-    const endStr = timeSlot.endHour.toString().padStart(2, '0')
-    return `Personalizzato (${startStr}:00-${endStr}:00)`
+    const startStr = `${timeSlot.startHour.toString().padStart(2, '0')}:${(timeSlot.startMinute || 0).toString().padStart(2, '0')}`
+    const endStr = `${timeSlot.endHour.toString().padStart(2, '0')}:${(timeSlot.endMinute || 0).toString().padStart(2, '0')}`
+    
+    // Calculate deadline with tolerance
+    const endMinutes = timeToMinutes(timeSlot.endHour, timeSlot.endMinute || 0)
+    const deadlineMinutes = endMinutes + (TIME_SLOT_TOLERANCE * 60)
+    const deadlineTime = minutesToTime(deadlineMinutes)
+    const deadlineStr = `${deadlineTime.hour.toString().padStart(2, '0')}:${deadlineTime.minute.toString().padStart(2, '0')}`
+    
+    return `Personalizzato (${startStr}-${endStr}, scade alle ${deadlineStr})`
   }
 
-  const interval = TIME_SLOT_INTERVALS[timeSlot as keyof typeof TIME_SLOT_INTERVALS]
-  if (!interval) return String(timeSlot)
-
-  const startStr = interval.start.toString().padStart(2, '0')
-  const endStr = interval.end.toString().padStart(2, '0')
-  const endWithTolerance = interval.end + TIME_SLOT_TOLERANCE
-  const endToleranceStr = (endWithTolerance >= 24 ? endWithTolerance - 24 : endWithTolerance).toString().padStart(2, '0')
-
-  const timeSlotNames: Record<TimeSlot, string> = {
-    mattina: "Mattina",
-    pomeriggio: "Pomeriggio",
-    sera: "Sera",
-    notte: "Notte",
-    giornata: "Giornata",
-    custom: "Personalizzato"
+  // Handle custom timeslot strings
+  if (typeof timeSlot === "string" && isCustomTimeSlotString(timeSlot)) {
+    const customSlot = parseCustomTimeSlotString(timeSlot)
+    if (customSlot) {
+      const startStr = `${customSlot.startHour.toString().padStart(2, '0')}:${(customSlot.startMinute || 0).toString().padStart(2, '0')}`
+      const endStr = `${customSlot.endHour.toString().padStart(2, '0')}:${(customSlot.endMinute || 0).toString().padStart(2, '0')}`
+      
+      // Calculate deadline with tolerance
+      const endMinutes = timeToMinutes(customSlot.endHour, customSlot.endMinute || 0)
+      const deadlineMinutes = endMinutes + (TIME_SLOT_TOLERANCE * 60)
+      const deadlineTime = minutesToTime(deadlineMinutes)
+      const deadlineStr = `${deadlineTime.hour.toString().padStart(2, '0')}:${deadlineTime.minute.toString().padStart(2, '0')}`
+      
+      return `Personalizzato (${startStr}-${endStr}, scade alle ${deadlineStr})`
+    }
   }
 
-  return `${timeSlotNames[timeSlot]} (${startStr}:00-${endStr}:00, scade alle ${endToleranceStr}:00)`
+  // Handle standard timeslots
+  if (typeof timeSlot === "string" && timeSlot in TIME_SLOT_INTERVALS) {
+    const interval = TIME_SLOT_INTERVALS[timeSlot as keyof typeof TIME_SLOT_INTERVALS]
+    const startStr = interval.start.toString().padStart(2, '0')
+    const endStr = interval.end.toString().padStart(2, '0')
+    const endWithTolerance = interval.end + TIME_SLOT_TOLERANCE
+    const endToleranceStr = (endWithTolerance >= 24 ? endWithTolerance - 24 : endWithTolerance).toString().padStart(2, '0')
+
+    const timeSlotNames: Record<TimeSlot, string> = {
+      mattina: "Mattina",
+      pomeriggio: "Pomeriggio",
+      sera: "Sera",
+      notte: "Notte",
+      giornata: "Giornata",
+      custom: "Personalizzato"
+    }
+
+    return `${timeSlotNames[timeSlot as TimeSlot]} (${startStr}:00-${endStr}:00, scade alle ${endToleranceStr}:00)`
+  }
+
+  return String(timeSlot)
 }
 
 // Get the current time slot based on the current time
@@ -219,12 +289,32 @@ export function getTimeSlotFromDateTime(dateTimeStr: string): TimeSlot {
 }
 
 // Utility per verificare se una todolist è scaduta
-export function isTodolistExpired(scheduledExecution: string): boolean {
+export function isTodolistExpired(scheduledExecution: string, timeSlotType?: "standard" | "custom", timeSlotEnd?: number | null): boolean {
   const now = new Date()
   const scheduledDate = new Date(scheduledExecution)
-  const toleranceDate = new Date(scheduledDate)
-  toleranceDate.setHours(toleranceDate.getHours() + TIME_SLOT_TOLERANCE)
-  return now > toleranceDate
+  
+  if (timeSlotType === "custom" && timeSlotEnd !== null && timeSlotEnd !== undefined) {
+    // For custom timeslots, calculate deadline based on end minutes
+    const endTime = minutesToTime(timeSlotEnd)
+    const deadline = new Date(scheduledDate)
+    
+    // Add tolerance hours but keep the exact minutes
+    const deadlineHour = endTime.hour + TIME_SLOT_TOLERANCE
+    deadline.setHours(deadlineHour, endTime.minute, 0, 0)
+    
+    // If the deadline goes past midnight, add a day
+    if (deadlineHour >= 24) {
+      deadline.setDate(deadline.getDate() + 1)
+      deadline.setHours(deadlineHour - 24, endTime.minute, 0, 0)
+    }
+    
+    return now > deadline
+  } else {
+    // For standard timeslots, use the old logic
+    const toleranceDate = new Date(scheduledDate)
+    toleranceDate.setHours(toleranceDate.getHours() + TIME_SLOT_TOLERANCE)
+    return now > toleranceDate
+  }
 }
 
 // Helper functions for converting database rows to types
@@ -262,4 +352,31 @@ export const toTodolist = (row: {
   status: row.status,
   created_at: row.created_at ?? undefined,
   updated_at: row.updated_at ?? row.created_at ?? new Date().toISOString()
-}) 
+})
+
+// Utility per convertire valori del database in CustomTimeSlot
+export function databaseTimeSlotToCustomTimeSlot(
+  timeSlotStart: number | null, 
+  timeSlotEnd: number | null
+): CustomTimeSlot | null {
+  if (timeSlotStart === null || timeSlotEnd === null) return null
+  
+  const startTime = minutesToTime(timeSlotStart)
+  const endTime = minutesToTime(timeSlotEnd)
+  
+  return {
+    type: "custom",
+    startHour: startTime.hour,
+    startMinute: startTime.minute,
+    endHour: endTime.hour,
+    endMinute: endTime.minute
+  }
+}
+
+// Utility per convertire un CustomTimeSlot in valori per il database
+export function customTimeSlotToDatabaseValues(timeSlot: CustomTimeSlot): { start: number; end: number } {
+  return {
+    start: timeToMinutes(timeSlot.startHour, timeSlot.startMinute || 0),
+    end: timeToMinutes(timeSlot.endHour, timeSlot.endMinute || 0)
+  }
+} 

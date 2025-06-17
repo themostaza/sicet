@@ -1,9 +1,10 @@
 "use client"
 
 import { useRef, useEffect } from "react"
-import { Checkbox, CheckboxProps } from "@/components/ui/checkbox"
+import { Checkbox } from "@/components/ui/checkbox"
+import type { ComponentPropsWithoutRef } from "react"
 
-interface CustomCheckboxProps extends CheckboxProps {
+interface CustomCheckboxProps extends ComponentPropsWithoutRef<typeof Checkbox> {
   indeterminate?: boolean
 }
 

@@ -36,9 +36,10 @@ export const timeSlotToScheduledTime = (date: Date, timeSlot: TimeSlotValue): st
   const dateStr = date.toISOString().split('T')[0]
   
   if (isCustomTimeSlot(timeSlot)) {
-    // Per i timeslot personalizzati, usa l'ora di inizio
+    // Per i timeslot personalizzati, usa l'ora e minuti di inizio
     const startHour = timeSlot.startHour.toString().padStart(2, '0')
-    return `${dateStr}T${startHour}:00:00`
+    const startMinute = (timeSlot.startMinute || 0).toString().padStart(2, '0')
+    return `${dateStr}T${startHour}:${startMinute}:00`
   }
   
   // Per i timeslot standard

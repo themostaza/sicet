@@ -152,9 +152,19 @@ function renderKpiConditions(alert: KpiAlert) {
 
 function formatTimeSlot(todolist: any) {
   if (todolist.time_slot_type === 'custom') {
-    const start = todolist.time_slot_start?.toString().padStart(2, '0') || '00'
-    const end = todolist.time_slot_end?.toString().padStart(2, '0') || '00'
-    return `Personalizzato (${start}:00-${end}:00)`
+    // Convert minutes to HH:MM format
+    const startMinutes = todolist.time_slot_start || 0
+    const endMinutes = todolist.time_slot_end || 0
+    
+    const startHours = Math.floor(startMinutes / 60)
+    const startMins = startMinutes % 60
+    const endHours = Math.floor(endMinutes / 60)
+    const endMins = endMinutes % 60
+    
+    const startTime = `${startHours.toString().padStart(2, '0')}:${startMins.toString().padStart(2, '0')}`
+    const endTime = `${endHours.toString().padStart(2, '0')}:${endMins.toString().padStart(2, '0')}`
+    
+    return `Personalizzato (${startTime}-${endTime})`
   }
   
   // For standard time slots, we need to determine which one based on the scheduled time

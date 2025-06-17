@@ -17,29 +17,45 @@ interface CustomTimeSlotProps {
 export function CustomTimeSlotPicker({ value, onChange, trigger }: CustomTimeSlotProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [startHour, setStartHour] = useState(value?.startHour ?? 9)
+  const [startMinute, setStartMinute] = useState(value?.startMinute ?? 0)
   const [endHour, setEndHour] = useState(value?.endHour ?? 17)
+  const [endMinute, setEndMinute] = useState(value?.endMinute ?? 0)
 
   const handleSave = () => {
     onChange({
       type: "custom",
       startHour,
-      endHour
+      startMinute,
+      endHour,
+      endMinute
     })
     setIsOpen(false)
   }
 
-  const handleStartHourChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseInt(e.target.value)
-    if (val >= 0 && val <= 23) {
-      setStartHour(val)
+  const handleStartTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const timeValue = e.target.value
+    const [hours, minutes] = timeValue.split(':').map(Number)
+    if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+      setStartHour(hours)
+      setStartMinute(minutes)
     }
   }
 
-  const handleEndHourChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseInt(e.target.value)
-    if (val >= 0 && val <= 23) {
-      setEndHour(val)
+  const handleEndTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const timeValue = e.target.value
+    const [hours, minutes] = timeValue.split(':').map(Number)
+    if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+      setEndHour(hours)
+      setEndMinute(minutes)
     }
+  }
+
+  const formatTimeForDisplay = (hour: number, minute: number) => {
+    return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
+  }
+
+  const formatTimeForInput = (hour: number, minute: number) => {
+    return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
   }
 
   return (
@@ -49,7 +65,7 @@ export function CustomTimeSlotPicker({ value, onChange, trigger }: CustomTimeSlo
           <Button variant="outline" className="w-full justify-start">
             <Clock className="mr-2 h-4 w-4" />
             {value ? (
-              `${value.startHour.toString().padStart(2, '0')}:00-${value.endHour.toString().padStart(2, '0')}:00`
+              `${formatTimeForDisplay(value.startHour, value.startMinute || 0)}-${formatTimeForDisplay(value.endHour, value.endMinute || 0)}`
             ) : (
               "Seleziona orario personalizzato"
             )}
@@ -63,25 +79,21 @@ export function CustomTimeSlotPicker({ value, onChange, trigger }: CustomTimeSlo
         <div className="grid gap-4 py-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="startHour">Ora di inizio</Label>
+              <Label htmlFor="startTime">Ora di inizio</Label>
               <Input
-                id="startHour"
-                type="number"
-                min={0}
-                max={23}
-                value={startHour}
-                onChange={handleStartHourChange}
+                id="startTime"
+                type="time"
+                value={formatTimeForInput(startHour, startMinute)}
+                onChange={handleStartTimeChange}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="endHour">Ora di fine</Label>
+              <Label htmlFor="endTime">Ora di fine</Label>
               <Input
-                id="endHour"
-                type="number"
-                min={0}
-                max={23}
-                value={endHour}
-                onChange={handleEndHourChange}
+                id="endTime"
+                type="time"
+                value={formatTimeForInput(endHour, endMinute)}
+                onChange={handleEndTimeChange}
               />
             </div>
           </div>

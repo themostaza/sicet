@@ -30,8 +30,10 @@ import {
   isCustomTimeSlot,
   isCustomTimeSlotString,
   parseCustomTimeSlotString,
+  timeToMinutes,
   type CustomTimeSlot,
-  type TimeSlotValue
+  type TimeSlotValue,
+  minutesToTime
 } from "@/lib/validation/todolist-schemas"
 import { checkKpiAlerts } from "./actions-alerts"
 
@@ -57,6 +59,9 @@ type TodolistRow = {
   status: "pending" | "in_progress" | "completed"
   created_at: string | null
   updated_at: string | null
+  time_slot_type: "standard" | "custom"
+  time_slot_start: number | null
+  time_slot_end: number | null
 }
 
 type TodolistWithTasks = TodolistRow & {
@@ -384,11 +389,15 @@ export async function getTodolistsGrouped() {
         
         // Determina il tipo di time slot
         if (item.time_slot_type === "custom" && item.time_slot_start !== null && item.time_slot_end !== null) {
-          // Time slot personalizzato
+          // Time slot personalizzato - converti da minuti a ore e minuti
+          const startTime = minutesToTime(item.time_slot_start)
+          const endTime = minutesToTime(item.time_slot_end)
           const customSlot: CustomTimeSlot = {
             type: "custom",
-            startHour: item.time_slot_start as number,
-            endHour: item.time_slot_end as number
+            startHour: startTime.hour,
+            startMinute: startTime.minute,
+            endHour: endTime.hour,
+            endMinute: endTime.minute
           }
           timeSlotValue = customSlot
         } else {
@@ -411,6 +420,9 @@ export async function getTodolistsGrouped() {
             scheduled_execution: item.scheduled_execution,
             status: item.status as "pending" | "in_progress" | "completed",
             count: 0,
+            time_slot_type: item.time_slot_type,
+            time_slot_start: item.time_slot_start,
+            time_slot_end: item.time_slot_end,
             tasks: []
           }
         }
@@ -434,6 +446,9 @@ export async function getTodolistsGrouped() {
       scheduled_execution: string
       status: "pending" | "in_progress" | "completed"
       count: number
+      time_slot_type: "standard" | "custom"
+      time_slot_start: number | null
+      time_slot_end: number | null
       tasks: Array<{ id: string; kpi_id: string; status: string }>
     }>)
 
@@ -473,18 +488,18 @@ export async function getTodolistsGroupedWithFilters() {
         (item) =>
           item.date === today &&
           item.status !== "completed" &&
-          !isTodolistExpired(item.scheduled_execution)
+          !isTodolistExpired(item.scheduled_execution, item.time_slot_type, item.time_slot_end)
       ),
       overdue: todolists.filter(
         (item) =>
           item.status !== "completed" &&
-          isTodolistExpired(item.scheduled_execution)
+          isTodolistExpired(item.scheduled_execution, item.time_slot_type, item.time_slot_end)
       ),
       future: todolists.filter(
         (item) =>
           item.status !== "completed" &&
           new Date(item.date) > new Date(today) &&
-          !isTodolistExpired(item.scheduled_execution)
+          !isTodolistExpired(item.scheduled_execution, item.time_slot_type, item.time_slot_end)
       ),
       completed: todolists.filter((item) => item.status === "completed"),
     };
@@ -537,8 +552,8 @@ export async function createTodolist(
     status: "pending",
     time_slot_type: isCustom ? "custom" : "standard",
     ...(isCustom && customTimeSlot && {
-      time_slot_start: customTimeSlot.startHour,
-      time_slot_end: customTimeSlot.endHour
+      time_slot_start: timeToMinutes(customTimeSlot.startHour, customTimeSlot.startMinute || 0),
+      time_slot_end: timeToMinutes(customTimeSlot.endHour, customTimeSlot.endMinute || 0)
     })
   }
   
@@ -622,8 +637,8 @@ export async function createMultipleTasks(
     status: "pending",
     time_slot_type: isCustom ? "custom" : "standard",
     ...(isCustom && customTimeSlot && {
-      time_slot_start: customTimeSlot.startHour,
-      time_slot_end: customTimeSlot.endHour
+      time_slot_start: timeToMinutes(customTimeSlot.startHour, customTimeSlot.startMinute || 0),
+      time_slot_end: timeToMinutes(customTimeSlot.endHour, customTimeSlot.endMinute || 0)
     })
   }
   
