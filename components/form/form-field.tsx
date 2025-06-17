@@ -105,7 +105,7 @@ export function FormField({
     name,
     disabled,
     onBlur,
-    "aria-invalid": hasError ? "true" : "false",
+    "aria-invalid": hasError,
     "aria-describedby": hasError ? errorId : undefined,
   }
 

@@ -32,9 +32,16 @@ export const mapDbKpiToKpi = (dbKpi: KPI): KPI => ({
 })
 
 // Mappare la fascia oraria al formato per il database
-export const timeSlotToScheduledTime = (date: Date, timeSlot: TimeSlot): string => {
+export const timeSlotToScheduledTime = (date: Date, timeSlot: TimeSlotValue): string => {
   const dateStr = date.toISOString().split('T')[0]
   
+  if (isCustomTimeSlot(timeSlot)) {
+    // Per i timeslot personalizzati, usa l'ora di inizio
+    const startHour = timeSlot.startHour.toString().padStart(2, '0')
+    return `${dateStr}T${startHour}:00:00`
+  }
+  
+  // Per i timeslot standard
   switch (timeSlot) {
     case "mattina":
       return `${dateStr}T06:00:00`
@@ -44,6 +51,8 @@ export const timeSlotToScheduledTime = (date: Date, timeSlot: TimeSlot): string 
       return `${dateStr}T22:00:00`
     case "giornata":
       return `${dateStr}T06:00:00`
+    case "sera":
+      return `${dateStr}T18:00:00`
     default:
       return `${dateStr}T06:00:00`
   }

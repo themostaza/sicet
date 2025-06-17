@@ -11,7 +11,7 @@ import { createTodolist, createMultipleTasks, checkExistingTasks } from "@/app/a
 import { createAlert } from "@/app/actions/actions-alerts"
 import { format } from "date-fns"
 import { timeSlotToScheduledTime } from "@/components/todolist/new/types"
-import { formatTimeSlotValue } from "@/lib/validation/todolist-schemas"
+import { formatTimeSlotValue, isCustomTimeSlot } from "@/lib/validation/todolist-schemas"
 import type { Device, KPI, DateTimeEntry, TimeSlotValue } from "@/components/todolist/new/types"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -91,13 +91,13 @@ function TodolistCreationForm() {
               checkExistingTasks(
                 deviceId,
                 format(entry.date, "yyyy-MM-dd"),
-                formatTimeSlotValue(entry.timeSlot),
+                isCustomTimeSlot(entry.timeSlot) ? `custom_${entry.timeSlot.startHour}_${entry.timeSlot.endHour}` : entry.timeSlot,
                 [kpiId]
               ).then(result => ({
                 deviceId,
                 kpiId,
                 date: format(entry.date, "yyyy-MM-dd"),
-                timeSlot: formatTimeSlotValue(entry.timeSlot),
+                timeSlot: isCustomTimeSlot(entry.timeSlot) ? `custom_${entry.timeSlot.startHour}_${entry.timeSlot.endHour}` : entry.timeSlot,
                 exists: result.exists
               }))
             )
@@ -160,7 +160,7 @@ function TodolistCreationForm() {
             t.deviceId === deviceId && 
             t.kpiId === kpiId && 
             t.date === format(entry.date, "yyyy-MM-dd") && 
-            t.timeSlot === formatTimeSlotValue(entry.timeSlot)
+            t.timeSlot === (isCustomTimeSlot(entry.timeSlot) ? `custom_${entry.timeSlot.startHour}_${entry.timeSlot.endHour}` : entry.timeSlot)
           ) && !existingTasksDialog.proceedWithoutCreating) {
             continue
           }
@@ -169,7 +169,7 @@ function TodolistCreationForm() {
             createTodolist(
               deviceId,
               format(entry.date, "yyyy-MM-dd"),
-              formatTimeSlotValue(entry.timeSlot),
+              isCustomTimeSlot(entry.timeSlot) ? `custom_${entry.timeSlot.startHour}_${entry.timeSlot.endHour}` : entry.timeSlot,
               kpiId,
               alertEnabled,
               email

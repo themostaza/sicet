@@ -94,13 +94,51 @@ export function isCustomTimeSlot(timeSlot: TimeSlotValue): timeSlot is CustomTim
   return typeof timeSlot === "object" && timeSlot.type === "custom"
 }
 
+// Utility per verificare se una stringa rappresenta un timeslot personalizzato
+export function isCustomTimeSlotString(timeSlot: string): boolean {
+  return timeSlot.startsWith("custom_")
+}
+
+// Utility per convertire una stringa timeslot personalizzato in oggetto CustomTimeSlot
+export function parseCustomTimeSlotString(timeSlot: string): CustomTimeSlot | null {
+  if (!isCustomTimeSlotString(timeSlot)) return null
+  
+  const parts = timeSlot.split("_")
+  if (parts.length !== 3) return null
+  
+  const startHour = parseInt(parts[1])
+  const endHour = parseInt(parts[2])
+  
+  if (isNaN(startHour) || isNaN(endHour) || startHour < 0 || startHour > 23 || endHour < 0 || endHour > 23) {
+    return null
+  }
+  
+  return {
+    type: "custom",
+    startHour,
+    endHour
+  }
+}
+
+// Utility per convertire un CustomTimeSlot in stringa
+export function customTimeSlotToString(timeSlot: CustomTimeSlot): string {
+  return `custom_${timeSlot.startHour}_${timeSlot.endHour}`
+}
+
 // Utility per ottenere il range temporale da una data e uno slot
-export function getTimeRangeFromSlot(date: string, timeSlot: TimeSlotValue): { startTime: string; endTime: string } {
+export function getTimeRangeFromSlot(date: string, timeSlot: TimeSlotValue | string): { startTime: string; endTime: string } {
   const baseDate = new Date(date)
   let startHour = 0
   let endHour = 23
 
-  if (isCustomTimeSlot(timeSlot)) {
+  // Handle string-based custom timeslot
+  if (typeof timeSlot === "string" && isCustomTimeSlotString(timeSlot)) {
+    const customSlot = parseCustomTimeSlotString(timeSlot)
+    if (customSlot) {
+      startHour = customSlot.startHour
+      endHour = customSlot.endHour
+    }
+  } else if (isCustomTimeSlot(timeSlot)) {
     startHour = timeSlot.startHour
     endHour = timeSlot.endHour
   } else {

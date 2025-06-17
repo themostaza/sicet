@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils"
 import { TimeSlot, TimeSlotValue, CustomTimeSlot, isCustomTimeSlot, isTodolistExpired } from "@/lib/validation/todolist-schemas"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { deleteTodolist } from "@/app/actions/actions-todolist"
+import { deleteTodolistById } from "@/app/actions/actions-todolist"
 import { toast } from "@/components/ui/use-toast"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Checkbox as UICheckbox } from "@/components/ui/checkbox"
@@ -88,8 +88,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
   const handleDeleteTodolist = async (todolist: TodolistItem) => {
     try {
       setIsDeleting(todolist.id)
-      const timeSlot = isCustomTimeSlot(todolist.time_slot) ? 'custom' : todolist.time_slot
-      await deleteTodolist(todolist.device_id, todolist.date, timeSlot)
+      await deleteTodolistById(todolist.id)
       toast({
         title: "Todolist eliminata",
         description: "La todolist è stata eliminata con successo.",
@@ -131,11 +130,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
     try {
       setIsBulkDeleting(true)
       const deletePromises = Array.from(selectedItems).map(async (id) => {
-        const todolist = filtered.find(item => item.id === id)
-        if (!todolist) return
-        
-        const timeSlot = isCustomTimeSlot(todolist.time_slot) ? 'custom' : todolist.time_slot
-        await deleteTodolist(todolist.device_id, todolist.date, timeSlot)
+        await deleteTodolistById(id)
       })
 
       await Promise.all(deletePromises)

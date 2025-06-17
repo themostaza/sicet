@@ -57,8 +57,8 @@ export default function DashboardPage() {
         ])
 
         setStats({
-          devices: devicesData.count || 0,
-          kpis: kpisData.count || 0,
+          devices: devicesData.devices.length,
+          kpis: kpisData.kpis.length,
           todolist: {
             all: todolistsData.counts.all,
             today: todolistsData.counts.today,

@@ -19,7 +19,7 @@ export default async function TodolistPage() {
     const { data: { user } } = await supabase.auth.getUser()
     
     let userRole = null
-    if (user) {
+    if (user && user.email) {
       const { data: profile } = await supabase
         .from('profiles')
         .select('role')

@@ -28,6 +28,8 @@ import {
   toTask,
   toTodolist,
   isCustomTimeSlot,
+  isCustomTimeSlotString,
+  parseCustomTimeSlotString,
   type CustomTimeSlot,
   type TimeSlotValue
 } from "@/lib/validation/todolist-schemas"
@@ -109,7 +111,7 @@ function handleZodError(e: z.ZodError): never {
 // Ottieni una todolist
 export async function getTodolist(params: unknown): Promise<Todolist | null> {
   const { deviceId, date, timeSlot } = TodolistParamsSchema.parse(params)
-  const { startTime } = getTimeRangeFromSlot(date, timeSlot as TimeSlot)
+  const { startTime } = getTimeRangeFromSlot(date, timeSlot)
 
   const { data, error } = await (await getSupabaseClient())
     .from("todolist")
@@ -129,7 +131,7 @@ export async function getTodolist(params: unknown): Promise<Todolist | null> {
 // Ottieni le task per una todolist (con paginazione)
 export async function getTodolistTasks(params: unknown): Promise<{ tasks: Task[]; hasMore: boolean }> {
   const { deviceId, date, timeSlot, offset, limit } = TodolistParamsSchema.parse(params)
-  const { startTime } = getTimeRangeFromSlot(date, timeSlot as TimeSlot)
+  const { startTime: rangeStartTime } = getTimeRangeFromSlot(date, timeSlot)
 
   // First get the todolist
   const todolist = await getTodolist({ deviceId, date, timeSlot })
@@ -244,7 +246,7 @@ export async function updateTaskValue(taskId: string, value: any): Promise<Task>
 
 // Elimina una todolist e tutte le sue task
 export async function deleteTodolist(deviceId: string, date: string, timeSlot: string): Promise<void> {
-  const { startTime } = getTimeRangeFromSlot(date, timeSlot as TimeSlot)
+  const { startTime } = getTimeRangeFromSlot(date, timeSlot)
   
   // Get todolist info before deleting for logging
   const { data: todolistData, error: todolistError } = await (await getSupabaseClient())
@@ -283,6 +285,51 @@ export async function deleteTodolist(deviceId: string, date: string, timeSlot: s
         kpi_id: task.kpi_id,
         scheduled_execution: startTime,
         time_slot: timeSlot
+      })
+    ));
+  }
+  
+  revalidatePath("/todolist")
+}
+
+// Elimina una todolist direttamente per ID (più affidabile)
+export async function deleteTodolistById(todolistId: string): Promise<void> {
+  // Get todolist info before deleting for logging
+  const { data: todolistData, error: todolistError } = await (await getSupabaseClient())
+    .from("todolist")
+    .select("device_id, scheduled_execution")
+    .eq("id", todolistId)
+    .single()
+
+  if (todolistError) {
+    if (todolistError.code === "PGRST116") return // Not found
+    handleError(todolistError)
+  }
+
+  if (!todolistData) return
+
+  // Get tasks info before deleting for logging
+  const { data: tasksData } = await (await getSupabaseClient())
+    .from("tasks")
+    .select("id, kpi_id")
+    .eq("todolist_id", todolistId)
+  
+  // Delete the todolist (this will cascade delete all tasks)
+  const { error } = await (await getSupabaseClient())
+    .from("todolist")
+    .delete()
+    .eq("id", todolistId)
+  
+  if (error) handleError(error)
+  
+  // Log activities for each deleted task
+  if (tasksData) {
+    await Promise.all(tasksData.map(task => 
+      logCurrentUserActivity('delete_todolist', 'task', task.id, {
+        todolist_id: todolistId,
+        device_id: todolistData.device_id,
+        kpi_id: task.kpi_id,
+        scheduled_execution: todolistData.scheduled_execution
       })
     ));
   }
@@ -472,10 +519,15 @@ export async function createTodolist(
   alertEnabled?: boolean,
   email?: string
 ): Promise<Task> {
-  const { startTime } = getTimeRangeFromSlot(date, timeSlot as TimeSlot)
+  const { startTime } = getTimeRangeFromSlot(date, timeSlot)
   
   // Determine if this is a custom time slot
-  const isCustom = isCustomTimeSlot(timeSlot as TimeSlotValue)
+  const isCustom = isCustomTimeSlotString(timeSlot)
+  let customTimeSlot: CustomTimeSlot | null = null
+  
+  if (isCustom) {
+    customTimeSlot = parseCustomTimeSlotString(timeSlot)
+  }
   
   // First create the todolist
   const todolistData: TablesInsert<"todolist"> = {
@@ -484,9 +536,9 @@ export async function createTodolist(
     scheduled_execution: startTime,
     status: "pending",
     time_slot_type: isCustom ? "custom" : "standard",
-    ...(isCustom && {
-      time_slot_start: (timeSlot as unknown as CustomTimeSlot).startHour,
-      time_slot_end: (timeSlot as unknown as CustomTimeSlot).endHour
+    ...(isCustom && customTimeSlot && {
+      time_slot_start: customTimeSlot.startHour,
+      time_slot_end: customTimeSlot.endHour
     })
   }
   
@@ -552,10 +604,15 @@ export async function createMultipleTasks(
   alertEnabled?: boolean,
   email?: string
 ): Promise<void> {
-  const { startTime } = getTimeRangeFromSlot(date, timeSlot as TimeSlot)
+  const { startTime } = getTimeRangeFromSlot(date, timeSlot)
   
   // Determine if this is a custom time slot
-  const isCustom = isCustomTimeSlot(timeSlot as TimeSlotValue)
+  const isCustom = isCustomTimeSlotString(timeSlot)
+  let customTimeSlot: CustomTimeSlot | null = null
+  
+  if (isCustom) {
+    customTimeSlot = parseCustomTimeSlotString(timeSlot)
+  }
   
   // First create the todolist
   const todolistData: TablesInsert<"todolist"> = {
@@ -564,9 +621,9 @@ export async function createMultipleTasks(
     scheduled_execution: startTime,
     status: "pending",
     time_slot_type: isCustom ? "custom" : "standard",
-    ...(isCustom && {
-      time_slot_start: (timeSlot as unknown as CustomTimeSlot).startHour,
-      time_slot_end: (timeSlot as unknown as CustomTimeSlot).endHour
+    ...(isCustom && customTimeSlot && {
+      time_slot_start: customTimeSlot.startHour,
+      time_slot_end: customTimeSlot.endHour
     })
   }
   
@@ -622,7 +679,7 @@ export async function createMultipleTasks(
 
 // Check for existing tasks with the same date-device-KPI tuple
 export async function checkExistingTasks(deviceId: string, date: string, timeSlot: string, kpiIds: string[]): Promise<{ exists: boolean; existingTasks: Task[] }> {
-  const { startTime } = getTimeRangeFromSlot(date, timeSlot as TimeSlot)
+  const { startTime } = getTimeRangeFromSlot(date, timeSlot)
   
   // First check if todolist exists
   const { data: todolist } = await (await getSupabaseClient())
