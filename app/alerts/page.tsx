@@ -54,6 +54,7 @@ async function getKpiAlerts(): Promise<KpiAlert[]> {
       ),
       todolist (
         id,
+        status,
         device_id,
         devices (
           name,
@@ -187,10 +188,14 @@ export default async function AlertsPage() {
   const client = await supabase();
   
   // Fetch KPI alerts
-  const kpiAlerts = await getKpiAlerts()
+  const kpiAlertsRaw = await getKpiAlerts()
+  const kpiAlerts = kpiAlertsRaw.filter(alert => alert.todolist?.status !== 'completed')
+  const kpiAlertsConsumed = kpiAlertsRaw.filter(alert => alert.todolist?.status === 'completed')
   
   // Fetch todolist alerts
-  const todolistAlerts = await getTodolistAlerts()
+  const todolistAlertsRaw = await getTodolistAlerts()
+  const todolistAlerts = todolistAlertsRaw.filter(alert => alert.todolist?.status !== 'completed')
+  const todolistAlertsConsumed = todolistAlertsRaw.filter(alert => alert.todolist?.status === 'completed')
 
   // Funzione per cancellare un alert Todolist
   async function deleteTodolistAlert(alertId: string) {
@@ -338,6 +343,142 @@ export default async function AlertsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Sezione alert consumati */}
+      <div className="mt-12">
+        <h2 className="text-xl font-bold mb-4">Alert consumati (todolist completate)</h2>
+        <Tabs defaultValue="kpi-alerts-consumed" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="kpi-alerts-consumed" className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4" />
+              Alert KPI consumati
+            </TabsTrigger>
+            <TabsTrigger value="todolist-alerts-consumed" className="flex items-center gap-2">
+              <CheckSquare className="h-4 w-4" />
+              Alert Todolist consumati
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="kpi-alerts-consumed" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5" />
+                  Alert KPI consumati
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {kpiAlertsConsumed && kpiAlertsConsumed.length > 0 ? (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>KPI</TableHead>
+                          <TableHead>Dispositivo</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Controlli</TableHead>
+                          <TableHead>Creato</TableHead>
+                          <TableHead>Azioni</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {kpiAlertsConsumed.map((alert) => (
+                          <TableRow key={alert.id}>
+                            <TableCell>{alert.kpis?.name || 'KPI sconosciuto'}</TableCell>
+                            <TableCell>{alert.todolist?.devices?.name || 'Dispositivo sconosciuto'}</TableCell>
+                            <TableCell>{alert.email}</TableCell>
+                            <TableCell>{renderKpiConditions(alert)}</TableCell>
+                            <TableCell>{alert.created_at ? new Date(alert.created_at).toLocaleString('it-IT') : 'N/A'}</TableCell>
+                            <TableCell>
+                              <AlertDelete 
+                                alert={alert} 
+                                onDelete={deleteAlert} 
+                                confirmMessage="Sei sicuro di voler eliminare questo alert KPI?" 
+                                description={`L'alert per il KPI "${alert.kpis?.name}" sarà eliminato definitivamente.`}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <AlertCircle className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p>Nessun alert KPI consumato</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="todolist-alerts-consumed" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CheckSquare className="h-5 w-5" />
+                  Alert Todolist consumati
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {todolistAlertsConsumed && todolistAlertsConsumed.length > 0 ? (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Dispositivo</TableHead>
+                          <TableHead>Data Programmata</TableHead>
+                          <TableHead>Fascia Oraria</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Stato</TableHead>
+                          <TableHead>Creato</TableHead>
+                          <TableHead>Azioni</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {todolistAlertsConsumed.map((alert) => (
+                          <TableRow key={alert.id}>
+                            <TableCell>{alert.todolist?.devices?.name || 'Dispositivo sconosciuto'}</TableCell>
+                            <TableCell>
+                              {alert.todolist?.scheduled_execution 
+                                ? format(new Date(alert.todolist.scheduled_execution), 'dd/MM/yyyy', { locale: it })
+                                : 'N/A'
+                              }
+                            </TableCell>
+                            <TableCell>
+                              {alert.todolist ? formatTimeSlot(alert.todolist) : 'N/A'}
+                            </TableCell>
+                            <TableCell>{alert.email}</TableCell>
+                            <TableCell>
+                              <Badge variant={alert.todolist?.status === 'completed' ? 'default' : 'secondary'}>
+                                {alert.todolist?.status === 'completed' ? 'Completata' : 'In corso'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{alert.created_at ? new Date(alert.created_at).toLocaleString('it-IT') : 'N/A'}</TableCell>
+                            <TableCell>
+                              <AlertDelete 
+                                alert={alert} 
+                                onDelete={deleteTodolistAlert} 
+                                confirmMessage="Sei sicuro di voler eliminare questo alert Todolist?" 
+                                description={`L'alert per la todolist del dispositivo "${alert.todolist?.devices?.name}" sarà eliminato definitivamente.`}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <CheckSquare className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p>Nessun alert todolist consumato</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   )
 } 
