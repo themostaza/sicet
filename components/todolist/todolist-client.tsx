@@ -17,7 +17,7 @@ import { getKpis } from "@/app/actions/actions-kpi"
 import { getDevice } from "@/app/actions/actions-device"
 import type { Task } from "@/lib/validation/todolist-schemas"
 import type { Kpi } from "@/lib/validation/kpi-schemas"
-import { Check, AlertCircle, Info, Save, Loader2, Upload, X } from "lucide-react"
+import { Check, AlertCircle, Info, Save, Loader2, Upload, X, Eye, Calendar as CalendarIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import Image from "next/image"
@@ -32,6 +32,12 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { toast } from "@/components/ui/use-toast"
+import { Textarea } from "@/components/ui/textarea"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { format } from "date-fns"
+import { it } from "date-fns/locale"
 
 interface Props {
   initialData: { tasks: Task[]; hasMore: boolean }
@@ -149,6 +155,13 @@ const validateFieldValue = (value: any, field: any): { valid: boolean; message?:
       }
       return { valid: true }
       
+    case "image":
+      // For image type, value should be a valid URL string
+      if (typeof value !== "string" || value.trim() === "") {
+        return { valid: false, message: "Caricare un'immagine" }
+      }
+      return { valid: true }
+      
     case "select":
       // Check if the value is one of the available options
       if (field.options && !field.options.some((o: any) => o.value === value)) {
@@ -227,6 +240,8 @@ export default function TodolistClient({
   const [isSavingAll, setIsSavingAll] = useState(false)
   const [isCompleting, setIsCompleting] = useState(false)
   const [uploadingImages, setUploadingImages] = useState<Record<string, boolean>>({})
+  const [showValidation, setShowValidation] = useState(false)
+  const [imageModalOpen, setImageModalOpen] = useState<string | null>(null)
 
   const [kpis, setKpis] = useState<Kpi[]>(initialKpis)
   const [kpisLoading, setKpisLoading] = useState(initialKpis.length === 0)
@@ -294,25 +309,123 @@ export default function TodolistClient({
 
   /* ---------------- mutations ----------------- */
   const handleCompleteTodolist = async () => {
-    setIsCompleting(true)
-    try {
-      // Salva tutti i valori locali (inclusi quelli non dirty)
-      const savePromises = Object.entries(localValues).map(async ([taskId, value]) => {
-        if (value !== undefined && value !== null) {
-          await updateTaskValue(taskId, value)
+    setShowValidation(true)
+    // Validazione: controlla se ci sono errori
+    let hasError = false
+    tasks.filter(task => task.status !== "completed").forEach(task => {
+      const kpi = kpis.find((k) => k.id === task.kpi_id)
+      const fields = kpi && kpi.value ? (Array.isArray(kpi.value) ? kpi.value : [kpi.value]) : [];
+      fields.forEach((field, idx) => {
+        const fieldKey = `${task.id}-${field.id || idx}`
+        const val = localValues[fieldKey] ?? (Array.isArray(task.value) ? task.value[idx]?.value : task.value?.value ?? task.value)
+        if (field.required && (val === undefined || val === null || val === "")) {
+          hasError = true
+        } else {
+          const validation = validateFieldValue(val, field);
+          if (!validation.valid) {
+            hasError = true
+          }
         }
       })
+    })
+    if (hasError) {
+      toast({
+        title: "Compilazione incompleta",
+        description: "Correggi tutti gli errori prima di completare la todolist.",
+        variant: "destructive"
+      })
+      return
+    }
+    setIsCompleting(true)
+    try {
+      // Salva tutti i valori locali per ogni task
+      const savePromises = tasks.filter(task => task.status !== "completed").map(async (task) => {
+        const kpi = kpis.find((k) => k.id === task.kpi_id)
+        const fields = kpi && kpi.value ? (Array.isArray(kpi.value) ? kpi.value : [kpi.value]) : [];
+        
+        if (fields.length === 0) {
+          // Se non ci sono campi specifici, salva il valore diretto
+          const value = localValues[task.id]
+          if (value !== undefined && value !== null) {
+            await updateTaskValue(task.id, value)
+          }
+        } else {
+          // Costruisci l'oggetto valore basato sui campi
+          let taskValue
+          if (fields.length === 1) {
+            const fieldKey = `${task.id}-${fields[0].id || 0}`
+            const fieldValue = localValues[fieldKey]
+            if (fieldValue !== undefined && fieldValue !== null) {
+              taskValue = {
+                id: fields[0].id || `${task.kpi_id}-${fields[0].name.toLowerCase().replace(/\s+/g, '_')}`,
+                value: fieldValue
+              }
+            }
+          } else {
+            taskValue = fields.map((field, idx) => {
+              const fieldKey = `${task.id}-${field.id || idx}`
+              const fieldValue = localValues[fieldKey]
+              return {
+                id: field.id || `${task.kpi_id}-${field.name.toLowerCase().replace(/\s+/g, '_')}`,
+                value: fieldValue
+              }
+            })
+          }
+          
+          if (taskValue !== undefined) {
+            await updateTaskValue(task.id, taskValue)
+          }
+        }
+      })
+      
       await Promise.all(savePromises)
 
       // Poi completa la todolist
       await completeTodolist(todolistId)
       
-      // Aggiorna lo stato locale
-      setTasks(tasks.map(task => ({ 
-        ...task, 
-        status: "completed",
-        value: localValues[task.id] !== undefined ? localValues[task.id] : task.value 
-      })))
+      // Aggiorna lo stato locale delle tasks con i valori salvati
+      setTasks(tasks.map(task => {
+        const kpi = kpis.find((k) => k.id === task.kpi_id)
+        const fields = kpi && kpi.value ? (Array.isArray(kpi.value) ? kpi.value : [kpi.value]) : [];
+        
+        let updatedValue = task.value
+        
+        if (fields.length === 0) {
+          // Se non ci sono campi specifici, usa il valore diretto
+          const value = localValues[task.id]
+          if (value !== undefined && value !== null) {
+            updatedValue = value
+          }
+        } else {
+          // Costruisci l'oggetto valore basato sui campi
+          if (fields.length === 1) {
+            const fieldKey = `${task.id}-${fields[0].id || 0}`
+            const fieldValue = localValues[fieldKey]
+            if (fieldValue !== undefined && fieldValue !== null) {
+              updatedValue = {
+                id: fields[0].id || `${task.kpi_id}-${fields[0].name.toLowerCase().replace(/\s+/g, '_')}`,
+                value: fieldValue
+              }
+            }
+          } else {
+            updatedValue = fields.map((field, idx) => {
+              const fieldKey = `${task.id}-${field.id || idx}`
+              const fieldValue = localValues[fieldKey]
+              return {
+                id: field.id || `${task.kpi_id}-${field.name.toLowerCase().replace(/\s+/g, '_')}`,
+                value: fieldValue
+              }
+            })
+          }
+        }
+        
+        return { 
+          ...task, 
+          status: "completed",
+          value: updatedValue
+        }
+      }))
+      
       clearDirty()
       
       toast({
@@ -374,29 +487,9 @@ export default function TodolistClient({
         .from('images')
         .getPublicUrl(filePath)
 
-      // Update the task value with the image URL
-      const fields = Array.isArray(kpis.find(k => k.id === currentTask.kpi_id)?.value) 
-        ? kpis.find(k => k.id === currentTask.kpi_id)?.value 
-        : [kpis.find(k => k.id === currentTask.kpi_id)?.value]
-
-      if (!fields) return
-
-      let newValue
-      if (fields.length === 1) {
-        newValue = { 
-          id: field.id || `${currentTask.kpi_id}-${field.name.toLowerCase().replace(/\s+/g, '_')}`,
-          value: publicUrl 
-        }
-      } else {
-        const current = localValues[taskId] || currentTask.value
-        newValue = [...(Array.isArray(current) ? current : Array(fields.length).fill(null))]
-        newValue[idx] = { 
-          id: field.id || `${currentTask.kpi_id}-${field.name.toLowerCase().replace(/\s+/g, '_')}`,
-          value: publicUrl 
-        }
-      }
-
-      setLocalValue(taskId, newValue)
+      // For image fields, save the URL directly
+      const fieldKey = `${taskId}-${field.id || idx}`
+      setLocalValue(fieldKey, publicUrl)
     } catch (error) {
       console.error('Error uploading image:', error)
       toast({
@@ -410,563 +503,445 @@ export default function TodolistClient({
   }
 
   /* ---------------- render utils -------------- */
-  const renderInput = (task: Task, kpi?: Kpi) => {
+  const renderInput = (task: Task, kpi?: Kpi, isReadOnly: boolean = false, idx: number = 0, fieldKey: string = "") => {
     const current = dirtyFields.has(task.id) ? localValues[task.id] : task.value
 
     // Default simple input for when we don't have KPI field type info
     const simpleInput = (
       <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <label className="text-sm font-medium">
-            Valore
-            <span className="text-red-500 ml-1">*</span>
-          </label>
-          <span className="text-xs text-muted-foreground">Testo</span>
-        </div>
         <Input
-          value={typeof current === "object" ? JSON.stringify(current) : current ?? ""}
-          onChange={(e) => setLocalValue(task.id, e.target.value)}
-          disabled={isPending}
+          value={localValues[fieldKey] ?? (Array.isArray(current) ? current[idx]?.value : current?.value ?? current) ?? ""}
+          onChange={(e) => setLocalValue(fieldKey, e.target.value)}
+          disabled={isPending || isReadOnly}
           placeholder="Inserisci il valore"
         />
-        {kpi?.description && (
-          <p className="text-xs text-muted-foreground">{kpi.description}</p>
-        )}
       </div>
     )
     if (!kpi || !kpi.value) return simpleInput
 
     const fields = Array.isArray(kpi.value) ? kpi.value : [kpi.value]
+    const field = fields[idx] || fields[0]
 
-    return (
-      <div className="space-y-4">
-        {fields.map((field, idx) => {
-          const setVal = (val: any, field: KpiField, idx: number) => {
-            let newValue
-            if (fields.length === 1) {
-              newValue = { 
-                id: field.id || `${kpi.id}-${field.name.toLowerCase().replace(/\s+/g, '_')}`,
-                value: val 
+    const allNames = fields.map(f => (f.name || '').trim());
+    const uniqueNames = Array.from(new Set(allNames));
+    const allDescriptions = fields.map(f => (f.description || '').trim());
+    const uniqueDescriptions = Array.from(new Set(allDescriptions));
+    const showSingleLabel = uniqueNames.length === 1 && uniqueDescriptions.length === 1 && fields.length > 1;
+
+    // Get current value for this specific field
+    const currentValue = localValues[fieldKey] ?? (Array.isArray(current) ? current[idx]?.value : current?.value ?? current) ?? ""
+
+    // Helper function to validate image URL
+    const isValidImageUrl = (url: string): boolean => {
+      if (!url || typeof url !== 'string') return false
+      try {
+        const urlObj = new URL(url)
+        return urlObj.protocol === 'http:' || urlObj.protocol === 'https:'
+      } catch {
+        return false
+      }
+    }
+
+    // Restituisci solo l'input (e la label, se serve) per il campo richiesto
+    switch (field.type) {
+      case "number":
+        return (
+          <Input
+            type="number"
+            step="1"
+            value={currentValue}
+            onChange={(e) => {
+              const value = e.target.value
+              // Ensure only integers
+              if (value === '' || /^-?\d+$/.test(value)) {
+                setLocalValue(fieldKey, value === '' ? '' : parseInt(value))
               }
-            } else {
-              newValue = [...(Array.isArray(current) ? current : Array(fields.length).fill(null))]
-              newValue[idx] = { 
-                id: field.id || `${kpi.id}-${field.name.toLowerCase().replace(/\s+/g, '_')}`,
-                value: val 
+            }}
+            disabled={isPending || isReadOnly}
+            placeholder="Inserisci un numero intero"
+            min={field.min}
+            max={field.max}
+          />
+        )
+      case "decimal":
+        return (
+          <Input
+            type="number"
+            step="0.01"
+            value={currentValue}
+            onChange={(e) => {
+              const value = e.target.value
+              // Allow decimals
+              if (value === '' || /^-?\d*\.?\d*$/.test(value)) {
+                setLocalValue(fieldKey, value === '' ? '' : parseFloat(value))
               }
-            }
-            setLocalValue(task.id, newValue)
-          }
-
-          const val = Array.isArray(current)
-            ? current[idx]?.value
-            : typeof current === "object" && current !== null
-            ? (current as any).value
-            : current
-
-          switch (field.type) {
-            case "text":
-              return (
-                <div key={idx} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium">
-                      {field.name || "Testo"}
-                      {field.required && <span className="text-red-500 ml-1">*</span>}
-                    </label>
-                    <span className="text-xs text-muted-foreground">Testo breve</span>
-                  </div>
-                  <Input
-                    value={val ?? ""}
-                    onChange={(e) => setVal(e.target.value, field, idx)}
-                    disabled={isPending}
-                    placeholder="Inserisci testo"
-                    required={field.required}
+            }}
+            disabled={isPending || isReadOnly}
+            placeholder="Inserisci un numero decimale"
+            min={field.min}
+            max={field.max}
+          />
+        )
+      case "text":
+        return (
+          <Input
+            type="text"
+            value={currentValue}
+            onChange={(e) => setLocalValue(fieldKey, e.target.value)}
+            disabled={isPending || isReadOnly}
+            placeholder="Inserisci il testo"
+          />
+        )
+      case "textarea":
+        return (
+          <Textarea
+            value={currentValue}
+            onChange={(e) => setLocalValue(fieldKey, e.target.value)}
+            disabled={isPending || isReadOnly}
+            placeholder="Inserisci il testo"
+            rows={3}
+          />
+        )
+      case "date":
+        return (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-full justify-start text-left font-normal"
+                disabled={isPending || isReadOnly}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {currentValue ? (
+                  format(new Date(currentValue), "PPP", { locale: it })
+                ) : (
+                  <span className="text-muted-foreground">Seleziona una data</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={currentValue ? new Date(currentValue) : undefined}
+                onSelect={(date) => setLocalValue(fieldKey, date ? format(date, "yyyy-MM-dd") : "")}
+                disabled={isPending || isReadOnly}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+        )
+      case "boolean":
+        return (
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant={currentValue === true ? "default" : "outline"}
+              onClick={() => setLocalValue(fieldKey, true)}
+              disabled={isPending || isReadOnly}
+              className="flex-1"
+            >
+              Sì
+            </Button>
+            <Button
+              type="button"
+              variant={currentValue === false ? "default" : "outline"}
+              onClick={() => setLocalValue(fieldKey, false)}
+              disabled={isPending || isReadOnly}
+              className="flex-1"
+            >
+              No
+            </Button>
+          </div>
+        )
+      case "image":
+        return (
+          <div className="space-y-2">
+            {currentValue && isValidImageUrl(currentValue) ? (
+              <div className="relative">
+                <div 
+                  className="relative w-full h-[150px] border rounded-md overflow-hidden cursor-pointer"
+                  onClick={() => setImageModalOpen(fieldKey)}
+                >
+                  <Image
+                    src={currentValue}
+                    alt="Immagine caricata"
+                    fill
+                    className="object-contain"
                   />
-                  {field.description && (
-                    <p className="text-xs text-muted-foreground">{field.description}</p>
-                  )}
+                  <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-10 transition-all flex items-center justify-center">
+                    <Eye className="text-white opacity-0 hover:opacity-100 transition-opacity" size={24} />
+                  </div>
                 </div>
-              )
-
-            case "textarea":
-              return (
-                <div key={idx} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium">
-                      {field.name || "Descrizione"}
-                      {field.required && <span className="text-red-500 ml-1">*</span>}
-                    </label>
-                    <span className="text-xs text-muted-foreground">Testo lungo</span>
-                  </div>
-                  <Input
-                    value={val ?? ""}
-                    onChange={(e) => setVal(e.target.value, field, idx)}
-                    disabled={isPending}
-                    placeholder="Inserisci descrizione"
-                    required={field.required}
-                  />
-                  {field.description && (
-                    <p className="text-xs text-muted-foreground">{field.description}</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setLocalValue(fieldKey, '')}
+                  disabled={isPending || isReadOnly}
+                  className="mt-2"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Rimuovi
+                </Button>
+              </div>
+            ) : (
+              <div className="border-2 border-dashed border-gray-300 rounded-md p-4 text-center">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) {
+                      handleImageUpload(file, task.id, field, idx)
+                    }
+                  }}
+                  disabled={isPending || isReadOnly || uploadingImages[task.id]}
+                  className="hidden"
+                  id={`image-upload-${fieldKey}`}
+                />
+                <label
+                  htmlFor={`image-upload-${fieldKey}`}
+                  className="cursor-pointer flex flex-col items-center"
+                >
+                  {uploadingImages[task.id] ? (
+                    <>
+                      <Loader2 className="h-8 w-8 animate-spin text-gray-400 mb-2" />
+                      <span className="text-sm text-gray-500">Caricamento...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-8 w-8 text-gray-400 mb-2" />
+                      <span className="text-sm text-gray-500">Clicca per caricare un'immagine</span>
+                    </>
                   )}
-                </div>
-              )
-
-            case "number":
-              return (
-                <div key={idx} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium">
-                      {field.name || "Numero intero"}
-                      {field.required && <span className="text-red-500 ml-1">*</span>}
-                    </label>
-                    <span className="text-xs text-muted-foreground">Numero intero</span>
-                  </div>
-                  <Input
-                    type="number"
-                    step="1"
-                    min={field.min}
-                    max={field.max}
-                    value={val ?? ""}
-                    onChange={(e) => {
-                      const value = e.target.value === "" ? "" : parseInt(e.target.value, 10);
-                      setVal(value, field, idx);
-                    }}
-                    onBlur={(e) => {
-                      if (e.target.value !== "") {
-                        const validation = validateFieldValue(parseInt(e.target.value, 10), field);
-                        if (!validation.valid && validation.message) {
-                          toast({
-                            title: "Valore non valido",
-                            description: validation.message,
-                            variant: "destructive"
-                          });
-                        }
-                      }
-                    }}
-                    disabled={isPending}
-                    required={field.required}
-                  />
-                  {field.description && (
-                    <p className="text-xs text-muted-foreground">{field.description}</p>
-                  )}
-                  {field.min !== undefined && field.max !== undefined && (
-                    <p className="text-xs text-muted-foreground">
-                      Range: {field.min} - {field.max}
-                    </p>
-                  )}
-                </div>
-              )
-
-            case "decimal":
-              return (
-                <div key={idx} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium">
-                      {field.name || "Numero decimale"}
-                      {field.required && <span className="text-red-500 ml-1">*</span>}
-                    </label>
-                    <span className="text-xs text-muted-foreground">Numero decimale</span>
-                  </div>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min={field.min}
-                    max={field.max}
-                    value={val ?? ""}
-                    onChange={(e) => {
-                      const value = e.target.value === "" ? "" : parseFloat(e.target.value);
-                      setVal(value, field, idx);
-                    }}
-                    onBlur={(e) => {
-                      if (e.target.value !== "") {
-                        const validation = validateFieldValue(parseFloat(e.target.value), field);
-                        if (!validation.valid && validation.message) {
-                          toast({
-                            title: "Valore non valido",
-                            description: validation.message,
-                            variant: "destructive"
-                          });
-                        }
-                      }
-                    }}
-                    disabled={isPending}
-                    required={field.required}
-                  />
-                  {field.description && (
-                    <p className="text-xs text-muted-foreground">{field.description}</p>
-                  )}
-                  {field.min !== undefined && field.max !== undefined && (
-                    <p className="text-xs text-muted-foreground">
-                      Range: {field.min} - {field.max}
-                    </p>
-                  )}
-                </div>
-              )
-
-            case "date":
-              return (
-                <div key={idx} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium">
-                      {field.name || "Data"}
-                      {field.required && <span className="text-red-500 ml-1">*</span>}
-                    </label>
-                    <span className="text-xs text-muted-foreground">Data</span>
-                  </div>
-                  <Input
-                    type="date"
-                    value={val ?? ""}
-                    onChange={(e) => {
-                      setVal(e.target.value, field, idx);
-                    }}
-                    onBlur={(e) => {
-                      if (e.target.value) {
-                        const validation = validateFieldValue(e.target.value, field);
-                        if (!validation.valid && validation.message) {
-                          toast({
-                            title: "Data non valida",
-                            description: validation.message,
-                            variant: "destructive"
-                          });
-                        }
-                      }
-                    }}
-                    disabled={isPending}
-                    required={field.required}
-                  />
-                  {field.description && (
-                    <p className="text-xs text-muted-foreground">{field.description}</p>
-                  )}
-                </div>
-              )
-
-            case "boolean":
-              return (
-                <div key={idx} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium">
-                      {field.name || "Sì/No"}
-                      {field.required && <span className="text-red-500 ml-1">*</span>}
-                    </label>
-                    <span className="text-xs text-muted-foreground">Sì/No</span>
-                  </div>
-                  <div className="flex space-x-2">
-                    <Button
-                      type="button"
-                      variant={val === true ? "default" : "outline"}
-                      onClick={() => setVal(true, field, idx)}
-                      disabled={isPending}
-                      className={val === true ? "bg-green-600 hover:bg-green-700" : ""}
-                    >
-                      Sì
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={val === false ? "default" : "outline"}
-                      onClick={() => setVal(false, field, idx)}
-                      disabled={isPending}
-                      className={val === false ? "bg-red-600 hover:bg-red-700" : ""}
-                    >
-                      No
-                    </Button>
-                  </div>
-                  {field.description && (
-                    <p className="text-xs text-muted-foreground">{field.description}</p>
-                  )}
-                </div>
-              )
-
-            case "select":
-              return (
-                <div key={idx} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium">
-                      {field.name || "Selezione"}
-                      {field.required && <span className="text-red-500 ml-1">*</span>}
-                    </label>
-                    <span className="text-xs text-muted-foreground">Selezione</span>
-                  </div>
-                  <Select 
-                    value={val ?? ""} 
-                    onValueChange={(newVal) => {
-                      setVal(newVal, field, idx);
-                    }} 
-                    disabled={isPending}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Seleziona" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {field.options?.map((o: any) => (
-                        <SelectItem key={o.value} value={o.value}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {field.description && (
-                    <p className="text-xs text-muted-foreground">{field.description}</p>
-                  )}
-                </div>
-              )
-
-            case "image":
-              return (
-                <div key={idx} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium">
-                      {field.name || "Immagine"}
-                      {field.required && <span className="text-red-500 ml-1">*</span>}
-                    </label>
-                    <span className="text-xs text-muted-foreground">Immagine</span>
-                  </div>
-                  <div className="space-y-2">
-                    {val && (
-                      <div className="relative w-full aspect-video rounded-md overflow-hidden border">
-                        <Image 
-                          src={val} 
-                          alt={field.name || "Immagine caricata"} 
-                          fill
-                          className="object-contain"
-                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                        />
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="icon"
-                          className="absolute top-2 right-2 h-6 w-6"
-                          onClick={() => setVal("", field, idx)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0]
-                          if (file) {
-                            handleImageUpload(file, task.id, field, idx)
-                          }
-                        }}
-                        disabled={isPending || uploadingImages[task.id]}
-                        className="hidden"
-                        id={`image-upload-${task.id}-${idx}`}
-                      />
-                      <label
-                        htmlFor={`image-upload-${task.id}-${idx}`}
-                        className={`flex items-center justify-center gap-2 px-4 py-2 rounded-md border cursor-pointer
-                          ${isPending || uploadingImages[task.id] 
-                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                            : 'bg-white hover:bg-gray-50'}`}
-                      >
-                        {uploadingImages[task.id] ? (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Caricamento...
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="h-4 w-4" />
-                            {val ? 'Cambia immagine' : 'Carica immagine'}
-                          </>
-                        )}
-                      </label>
-                    </div>
-                  </div>
-                  {field.description && (
-                    <p className="text-xs text-muted-foreground">{field.description}</p>
-                  )}
-                </div>
-              )
-
-            default:
-              return simpleInput
-          }
-        })}
-      </div>
-    )
+                </label>
+              </div>
+            )}
+          </div>
+        )
+      case "select":
+        return (
+          <Select
+            value={currentValue}
+            onValueChange={(value) => setLocalValue(fieldKey, value)}
+            disabled={isPending || isReadOnly}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Seleziona un'opzione" />
+            </SelectTrigger>
+            <SelectContent>
+              {field.options?.map((option: any) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.name || option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )
+      default:
+        return simpleInput
+    }
   }
+
+  // Funzione helper per label tipo campo
+  const fieldTypeLabel = (type: string) => {
+    switch (type) {
+      case 'text': return 'Testo';
+      case 'textarea': return 'Testo lungo';
+      case 'number': return 'Numero intero';
+      case 'decimal': return 'Numero decimale';
+      case 'date': return 'Data';
+      case 'boolean': return 'Sì/No';
+      case 'image': return 'Immagine';
+      default: return '';
+    }
+  };
+
+  // Calcolo descrizione globale per ogni task (helper)
+  function getGlobalDescription(fields: any[]): string | null {
+    const allDescriptions = fields.map(f => (f.description || '').trim());
+    const uniqueDescriptions = Array.from(new Set(allDescriptions));
+    return uniqueDescriptions.length === 1 && uniqueDescriptions[0] !== '' ? uniqueDescriptions[0] : null;
+  }
+
+  // Determina se la todolist è completata
+  const isReadOnly = tasks.length > 0 && tasks.every(task => task.status === "completed");
 
   /* ---------------- JSX ----------------------- */
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col sm:flex-row justify-between gap-2">
-          <div>
-            <CardTitle>Todolist</CardTitle>
-            {!deviceInfo ? (
-              <>
-                <Skeleton className="h-4 w-32 mt-1" />
-                <Skeleton className="h-3 w-24 mt-1" />
-              </>
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row justify-between gap-2">
+            <div>
+              <CardTitle>Todolist</CardTitle>
+              {deviceInfo ? (
+                <>
+                  <p className="text-gray-600">
+                    {deviceInfo.name} – {deviceInfo.location}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {date} – {labelForSlot(timeSlot)}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <Skeleton className="h-4 w-32 mt-1" />
+                  <Skeleton className="h-3 w-24 mt-1" />
+                </>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              {tasks.some(task => task.status !== "completed") && (
+                <Button 
+                  onClick={handleCompleteTodolist}
+                  disabled={isPending || isCompleting}
+                  className="relative bg-green-600 hover:bg-green-700"
+                >
+                  {isCompleting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Completamento...
+                    </>
+                  ) : (
+                    <>
+                      <Check size={16} className="mr-2" />
+                      Completa Todolist
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent>
+          {tasks.length === 0 ? (
+            isPending ? (
+              <SkeletonList count={6} />
             ) : (
-              <>
-                <p className="text-gray-600">
-                  {deviceInfo.name} – {deviceInfo.location}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {date} – {labelForSlot(timeSlot)}
-                </p>
-              </>
-            )}
-          </div>
-
-          <div className="flex gap-2">
-            {tasks.some(task => task.status !== "completed") && (
-              <Button 
-                onClick={handleCompleteTodolist}
-                disabled={isPending || isCompleting}
-                className="relative bg-green-600 hover:bg-green-700"
-              >
-                {isCompleting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Completamento...
-                  </>
-                ) : (
-                  <>
-                    <Check size={16} className="mr-2" />
-                    Completa Todolist
-                  </>
-                )}
-              </Button>
-            )}
-          </div>
-        </div>
-      </CardHeader>
-
-      <CardContent>
-        {tasks.length === 0 ? (
-          isPending ? (
-            <SkeletonList count={6} />
+              <EmptyState />
+            )
           ) : (
-            <EmptyState />
-          )
-        ) : (
-          <>
-            {/* Pending tasks section */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {tasks
-                .filter(task => task.status !== "completed")
-                .map((task) => {
+            <>
+              <div className="flex flex-col gap-6">
+                {tasks.map((task) => {
                   const kpi = kpis.find((k) => k.id === task.kpi_id)
-                  const dirty = dirtyFields.has(task.id)
+                  const fields = kpi && kpi.value ? (Array.isArray(kpi.value) ? kpi.value : [kpi.value]) : [];
+                  const current = dirtyFields.has(task.id) ? localValues[task.id] : task.value;
+                  const globalDescription = getGlobalDescription(fields);
+                  const allNames = fields.map(f => (f.name || '').trim());
+                  const uniqueNames = Array.from(new Set(allNames));
+                  const allDescriptions = fields.map(f => (f.description || '').trim());
+                  const uniqueDescriptions = Array.from(new Set(allDescriptions));
+                  const showSingleLabel = uniqueNames.length === 1 && uniqueDescriptions.length === 1 && fields.length > 1;
                   return (
-                    <Card key={task.id} className={dirty ? "ring-1 ring-amber-500" : ""}>
-                      <CardHeader className="pb-3">
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <CardTitle className="text-md flex items-center">
-                              {kpi?.name ?? "Controllo sconosciuto"}
-                              {dirty && (
-                                <Badge variant="outline" className="ml-2 text-amber-600 border-amber-600">
-                                  Modificato
-                                </Badge>
-                              )}
-                            </CardTitle>
-                            {kpi?.description && <CardDescription className="text-xs mt-1">{kpi.description}</CardDescription>}
+                    <div key={task.id} className="border rounded-lg bg-white p-4 flex flex-col gap-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-semibold text-base">{kpi?.name ?? "Controllo sconosciuto"}</span>
+                      </div>
+                      {/* Descrizione globale se unica */}
+                      <div className="flex flex-col gap-1 text-xs text-muted-foreground mb-1">
+                        <span className="font-semibold">Descrizione</span>
+                        <span>{typeof globalDescription === 'string' && globalDescription.trim() !== '' ? globalDescription : '/'}</span>
+                      </div>
+                      <div className="flex flex-col gap-4 mt-1">
+                        {showSingleLabel && (
+                          <div className="flex items-center justify-between">
+                            <label className="text-sm font-medium mb-1">{fields[0].name}{fields[0].required && <span className="text-red-500 ml-1">*</span>}</label>
+                            <span className="text-xs text-muted-foreground">{fieldTypeLabel(fields[0].type)}</span>
                           </div>
-                        </div>
-                      </CardHeader>
-                      <Separator />
-                      <CardContent className="pt-4">
-                        {kpisLoading ? <ValueSkeleton /> : renderInput(task, kpi)}
-                      </CardContent>
-                    </Card>
+                        )}
+                        {fields.length > 0 ? fields.map((field, idx) => {
+                          const fieldKey = `${task.id}-${field.id || idx}`;
+                          let val = localValues[fieldKey] ?? (Array.isArray(current) ? current[idx]?.value : current?.value ?? current);
+                          let errorMsg = "";
+                          if (showValidation && !isReadOnly) {
+                            if (field.required && (val === undefined || val === null || val === "")) {
+                              errorMsg = "Campo obbligatorio";
+                            } else {
+                              const validation = validateFieldValue(val, field);
+                              if (!validation.valid && validation.message) {
+                                errorMsg = validation.message;
+                              }
+                            }
+                          }
+                          return (
+                            <div key={field.id || idx} className="flex flex-col gap-1">
+                              {(field.name && field.name.toLowerCase() !== 'valore') && (
+                                <div className="flex items-center justify-between">
+                                  <label className="text-sm font-medium mb-1">
+                                    {field.name}
+                                    {field.required && <span className="text-red-500 ml-1">*</span>}
+                                  </label>
+                                  <span className="text-xs text-muted-foreground">{fieldTypeLabel(field.type)}</span>
+                                </div>
+                              )}
+                              {renderInput(task, kpi, isReadOnly, idx, fieldKey)}
+                              {(field.type === 'number' || field.type === 'decimal') && field.min !== undefined && field.max !== undefined && (
+                                <span className="text-xs text-muted-foreground">Range: {field.min} - {field.max}</span>
+                              )}
+                              {field.description && (
+                                <span className="text-xs text-muted-foreground mt-1">
+                                  <span className="font-semibold">Descrizione:</span> {field.type === 'textarea' ? 'Testo lungo' : field.description}
+                                </span>
+                              )}
+                              {errorMsg && <span className="text-xs text-red-500 mt-1">{errorMsg}</span>}
+                            </div>
+                          )
+                        }) : (
+                          <div className="flex flex-col gap-1">
+                            {renderInput(task, kpi, isReadOnly)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   )
                 })}
-            </div>
-            
-            {/* Completed tasks section */}
-            {tasks.some(task => task.status === "completed") && (
-              <div className="mt-8">
-                <h3 className="font-medium text-lg mb-3 flex items-center">
-                  <Check size={18} className="text-green-600 mr-2" />
-                  Attività completate
-                </h3>
-                <div className="space-y-2">
-                  {tasks
-                    .filter(task => task.status === "completed")
-                    .map((task) => {
-                      const kpi = kpis.find((k) => k.id === task.kpi_id)
-                      return (
-                        <Card key={task.id} className="bg-muted/20">
-                          <CardContent className="p-3">
-                            <div className="flex justify-between items-start">
-                              <div className="w-full">
-                                <h4 className="font-medium">{kpi?.name ?? "Controllo sconosciuto"}</h4>
-                                
-                                {/* Display task value based on its type */}
-                                <div className="text-sm text-muted-foreground mt-1">
-                                  {/* For array values */}
-                                  {Array.isArray(task.value) && (
-                                    <div className="space-y-2">
-                                      {task.value.map((item: { id?: string; value: any }, idx: number) => {
-                                        const fieldDef = Array.isArray(kpi?.value) ? kpi.value[idx] : null;
-                                        const isImageField = fieldDef?.type === 'image';
-                                        
-                                        return (
-                                          <div key={idx}>
-                                            <div>
-                                              <span className="font-medium text-xs">{fieldDef?.name || `Campo ${idx + 1}`}: </span>
-                                              {isImageField && item?.value ? (
-                                                <div className="mt-2 w-full rounded-md overflow-hidden border relative" style={{ height: 200 }}>
-                                                  <Image
-                                                    src={item.value}
-                                                    alt={fieldDef?.name || "Immagine"}
-                                                    fill
-                                                    className="object-contain"
-                                                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                                                  />
-                                                </div>
-                                              ) : (
-                                                <span>{item?.value !== undefined ? String(item.value) : "N/A"}</span>
-                                              )}
-                                            </div>
-                                            {fieldDef?.description && (
-                                              <p className="text-xs text-muted-foreground">{fieldDef.description}</p>
-                                            )}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-                                  
-                                  {/* For object value */}
-                                  {!Array.isArray(task.value) && typeof task.value === 'object' && task.value !== null && kpi?.value?.[0]?.type === 'image' && task.value.value ? (
-                                    <div className="mt-2 w-full rounded-md overflow-hidden border relative" style={{ height: 200 }}>
-                                      <Image
-                                        src={task.value.value}
-                                        alt={kpi?.value?.[0]?.name || "Immagine"}
-                                        fill
-                                        className="object-contain"
-                                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                                      />
-                                    </div>
-                                  ) : null}
-                                </div>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      )
-                    })}
-                </div>
               </div>
-            )}
-            
-            {hasMore && (
-              <Button variant="outline" onClick={loadMore} disabled={isPending} className="mt-4 w-full">
-                {isPending ? "Caricamento..." : "Carica altri"}
-              </Button>
-            )}
-          </>
-        )}
-      </CardContent>
-    </Card>
+              
+              {hasMore && (
+                <Button variant="outline" onClick={loadMore} disabled={isPending} className="mt-4 w-full">
+                  {isPending ? "Caricamento..." : "Carica altri"}
+                </Button>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Image Modal */}
+      <Dialog open={!!imageModalOpen} onOpenChange={(open) => !open && setImageModalOpen(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Visualizza Immagine</DialogTitle>
+          </DialogHeader>
+          <div className="relative w-full h-[70vh] overflow-hidden">
+            {imageModalOpen && typeof localValues[imageModalOpen] === 'string' && localValues[imageModalOpen] && (() => {
+              const imageUrl = localValues[imageModalOpen] as string
+              try {
+                new URL(imageUrl)
+                return (
+                  <Image
+                    src={imageUrl}
+                    alt="Immagine a schermo intero"
+                    fill
+                    className="object-contain"
+                  />
+                )
+              } catch {
+                return (
+                  <div className="flex items-center justify-center h-full">
+                    <p className="text-gray-500">URL immagine non valido</p>
+                  </div>
+                )
+              }
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 
