@@ -11,10 +11,14 @@ import { cn } from "@/lib/utils"
 import { TimeSlot, TimeSlotValue, CustomTimeSlot, isCustomTimeSlot, isTodolistExpired } from "@/lib/validation/todolist-schemas"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { deleteTodolistById } from "@/app/actions/actions-todolist"
 import { toast } from "@/components/ui/use-toast"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Checkbox as UICheckbox } from "@/components/ui/checkbox"
+import { format } from "date-fns"
+import { it } from "date-fns/locale"
 
 type TodolistItem = {
   id: string
@@ -58,7 +62,7 @@ const timeSlotOrder: Record<TimeSlot, number> = {
 export default function TodolistListClient({ todolistsByFilter, counts, initialFilter, userRole, devices }: Props) {
   const router = useRouter()
   const [activeFilter, setActiveFilter] = useState<FilterType>(userRole === 'operator' ? 'today' : initialFilter)
-  const [selectedDate, setSelectedDate] = useState<string>("")
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined)
   const [selectedDevice, setSelectedDevice] = useState<string>("all")
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
@@ -70,7 +74,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
   const isAdmin = userRole === 'admin'
 
   const filtered = todolistsByFilter[activeFilter].filter(item => {
-    const matchesDate = !selectedDate || item.date === selectedDate
+    const matchesDate = !selectedDate || item.date === format(selectedDate, 'yyyy-MM-dd')
     const matchesDevice = selectedDevice === "all" || item.device_id === selectedDevice
     return matchesDate && matchesDevice
   })
@@ -378,12 +382,39 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
           <div className="flex flex-wrap gap-4 mb-4">
             <div className="flex items-center gap-2">
               <Filter className="h-4 w-4 text-muted-foreground" />
-              <Input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-[200px]"
-              />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-[200px] justify-start text-left font-normal",
+                      !selectedDate && "text-muted-foreground"
+                    )}
+                  >
+                    <Calendar className="mr-2 h-4 w-4" />
+                    {selectedDate ? format(selectedDate, "PPP", { locale: it }) : "Seleziona data"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <CalendarComponent
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={setSelectedDate}
+                    initialFocus
+                    locale={it}
+                  />
+                </PopoverContent>
+              </Popover>
+              {selectedDate && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedDate(undefined)}
+                  className="h-8 px-2"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Filter className="h-4 w-4 text-muted-foreground" />
