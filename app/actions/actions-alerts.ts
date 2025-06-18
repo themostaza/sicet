@@ -30,7 +30,7 @@ const AlertConditionSchema = z.object({
 const AlertSchema = z.object({
   id: z.string(),
   kpi_id: z.string(),
-  device_id: z.string(),
+  todolist_id: z.string(),
   is_active: z.boolean(),
   email: z.string().email(),
   conditions: z.array(AlertConditionSchema)
@@ -50,14 +50,14 @@ const parseAlert = (dbAlert: Database['public']['Tables']['kpi_alerts']['Row']):
 // Create a new alert
 export async function createAlert(
   kpiId: string,
-  deviceId: string,
+  todolistId: string,
   email: string,
   conditions: AlertCondition[],
   isActive: boolean = true
 ): Promise<Alert> {
   const alert: Database['public']['Tables']['kpi_alerts']['Insert'] = {
     kpi_id: kpiId,
-    device_id: deviceId,
+    todolist_id: todolistId,
     email,
     conditions,
     is_active: isActive
@@ -98,7 +98,7 @@ export async function getKpiAlerts(kpiId: string): Promise<Alert[]> {
 async function logAlertTrigger(
   alert: Alert,
   kpiId: string,
-  deviceId: string,
+  todolistId: string,
   triggeredValue: any,
   errorMessage?: string
 ): Promise<void> {
@@ -114,10 +114,22 @@ async function logAlertTrigger(
     throw kpiError
   }
 
+  // Recupera la todolist per ottenere il device_id
+  const { data: todolistData, error: todolistError } = await (await supabase())
+    .from('todolist')
+    .select('device_id')
+    .eq('id', todolistId)
+    .single()
+  if (todolistError) {
+    console.error('Error getting todolist for device_id:', todolistError)
+    throw todolistError
+  }
+
+  // Ora recupera il device
   const { data: deviceData, error: deviceError } = await (await supabase())
     .from('devices')
     .select('name, location')
-    .eq('id', deviceId)
+    .eq('id', todolistData.device_id)
     .single()
 
   if (deviceError) {
@@ -128,8 +140,6 @@ async function logAlertTrigger(
   // Create the log entry
   const log: Database['public']['Tables']['kpi_alert_logs']['Insert'] = {
     alert_id: alert.id,
-    kpi_id: kpiId,
-    device_id: deviceId,
     triggered_value: triggeredValue,
     error_message: errorMessage,
     email_sent: false // Will be updated after sending email
@@ -191,7 +201,7 @@ export async function getAlertLogs(
   params: {
     alertId?: string;
     kpiId?: string;
-    deviceId?: string;
+    todolistId?: string;
     startDate?: string;
     endDate?: string;
     limit?: number;
@@ -222,8 +232,8 @@ export async function getAlertLogs(
   if (params.kpiId) {
     query = query.eq('kpi_id', params.kpiId)
   }
-  if (params.deviceId) {
-    query = query.eq('device_id', params.deviceId)
+  if (params.todolistId) {
+    query = query.eq('todolist_id', params.todolistId)
   }
   if (params.startDate) {
     query = query.gte('triggered_at', params.startDate)
@@ -248,19 +258,19 @@ export async function getAlertLogs(
 // Check if a KPI value triggers any alerts
 export async function checkKpiAlerts(
   kpiId: string,
-  deviceId: string,
+  todolistId: string,
   value: any
 ): Promise<void> {
-  console.log('Checking alerts for:', { kpiId, deviceId, value })
+  console.log('Checking alerts for:', { kpiId, todolistId, value })
   
   // Get active alerts for this KPI
   const alerts = await getKpiAlerts(kpiId)
   console.log('Active alerts:', alerts)
   
   for (const alert of alerts) {
-    // Skip if alert is for a different device
-    if (alert.device_id !== deviceId) {
-      console.log('Skipping alert for different device:', alert.device_id)
+    // Skip if alert is for a different todolist
+    if (alert.todolist_id !== todolistId) {
+      console.log('Skipping alert for different todolist:', alert.todolist_id)
       continue
     }
 
@@ -282,10 +292,7 @@ export async function checkKpiAlerts(
 
       if (Array.isArray(value)) {
         // Se il valore è un array, cerca il campo con l'ID corrispondente
-        // Prima prova a cercare per ID esatto
         let field = value.find(v => v && typeof v === 'object' && v.id === condition.field_id)
-        
-        // Se non lo trova, prova a cercare per nome del campo (per retrocompatibilità)
         if (!field) {
           const fieldName = condition.field_id.split('-').pop()?.toLowerCase()
           if (fieldName) {
@@ -294,25 +301,20 @@ export async function checkKpiAlerts(
                v.id?.toLowerCase().endsWith(fieldName)))
           }
         }
-        
         fieldValue = field?.value
         console.log('Array value, found field:', { field, fieldValue, condition_field_id: condition.field_id })
       } else if (typeof value === 'object') {
-        // Se il valore è un oggetto singolo
         if ('id' in value && value.id === condition.field_id) {
           fieldValue = value.value
           console.log('Object with matching id, fieldValue:', fieldValue)
         } else if ('value' in value) {
-          // Se è un oggetto con una proprietà value, usa quello
           fieldValue = value.value
           console.log('Object with value property, fieldValue:', fieldValue)
         } else {
-          // Altrimenti usa l'oggetto stesso come valore
           fieldValue = value
           console.log('Using object as value:', fieldValue)
         }
       } else {
-        // Se è un valore primitivo, usalo direttamente
         fieldValue = value
         console.log('Using primitive value:', fieldValue)
       }
@@ -322,7 +324,7 @@ export async function checkKpiAlerts(
         continue
       }
 
-      console.log('Evaluating condition with value:', { type: condition.type, fieldValue })
+      console.log('Evaluating condition with value:', { type: condition.type, fieldValue, condition })
 
       switch (condition.type) {
         case 'numeric':
@@ -364,19 +366,18 @@ export async function checkKpiAlerts(
       }
 
       if (shouldTrigger) {
-        console.log(`ALERT TRIGGERED: KPI ${kpiId} triggered alert for device ${deviceId}`)
+        console.log(`ALERT TRIGGERED: KPI ${kpiId} triggered alert for todolist ${todolistId}`)
         console.log(`Would send email to ${alert.email} with value:`, triggeredValue)
         
         // Log the alert trigger
         try {
-          await logAlertTrigger(alert, kpiId, deviceId, triggeredValue)
+          await logAlertTrigger(alert, kpiId, todolistId, triggeredValue)
         } catch (error) {
           console.error('Error logging alert trigger:', error)
-          // Non chiamiamo nuovamente logAlertTrigger per evitare il doppio log
-          // L'errore verrà comunque registrato nel log dell'applicazione
         }
-        
         break
+      } else {
+        console.log('Condition not triggered for this value.')
       }
     }
   }

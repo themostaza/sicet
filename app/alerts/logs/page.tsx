@@ -10,8 +10,11 @@ import React from "react"
 import { Database } from "@/supabase/database.types"
 
 type KpiAlertLog = Database['public']['Tables']['kpi_alert_logs']['Row'] & {
-  kpi_alerts: Database['public']['Tables']['kpi_alerts']['Row'] | null
-  kpis: Database['public']['Tables']['kpis']['Row'] | null
+  kpi_alerts: (Database['public']['Tables']['kpi_alerts']['Row'] & {
+    todolist: (Database['public']['Tables']['todolist']['Row'] & {
+      devices: Database['public']['Tables']['devices']['Row'] | null
+    }) | null
+  }) | null
 }
 
 type TodolistAlertLog = Database['public']['Tables']['todolist_alert_logs']['Row'] & {
@@ -28,12 +31,13 @@ async function getKpiAlertLogs(): Promise<KpiAlertLog[]> {
     .select(`
       *,
       kpi_alerts (
-        email,
-        conditions
-      ),
-      kpis (
-        name,
-        description
+        *,
+        todolist (
+          *,
+          devices (
+            *
+          )
+        )
       )
     `)
     .order('triggered_at', { ascending: false })
@@ -110,7 +114,6 @@ export default async function AlertLogsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>KPI</TableHead>
                         <TableHead>Valore Rilevato</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Stato</TableHead>
@@ -120,7 +123,6 @@ export default async function AlertLogsPage() {
                     <TableBody>
                       {kpiAlertLogs.map((log) => (
                         <TableRow key={log.id}>
-                          <TableCell>{log.kpis?.name || 'KPI sconosciuto'}</TableCell>
                           <TableCell className="max-w-xs truncate">
                             {JSON.stringify(log.triggered_value)}
                           </TableCell>

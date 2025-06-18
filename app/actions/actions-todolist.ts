@@ -235,16 +235,8 @@ export async function updateTaskValue(taskId: string, value: any): Promise<Task>
   if (error) handleError(error)
   const updatedTask = toTask(data!)
 
-  // Recupera la todolist per device_id
-  const { data: todolist, error: todolistError } = await (await getSupabaseClient())
-    .from("todolist")
-    .select("device_id")
-    .eq("id", updatedTask.todolist_id)
-    .single()
-  if (todolistError) handleError(todolistError)
-
   // Trigger alert
-  await checkKpiAlerts(updatedTask.kpi_id, todolist.device_id, value)
+  await checkKpiAlerts(updatedTask.kpi_id, updatedTask.todolist_id, value)
 
   return updatedTask
 }
@@ -621,7 +613,7 @@ export async function createMultipleTasks(
   kpiIds: string[],
   alertEnabled?: boolean,
   email?: string
-): Promise<void> {
+): Promise<{ id: string }> {
   const { startTime } = getTimeRangeFromSlot(date, timeSlot)
   
   // Determine if this is a custom time slot
@@ -709,6 +701,7 @@ export async function createMultipleTasks(
   });
   
   revalidatePath("/todolist")
+  return { id: todolist!.id }
 }
 
 // Completa una todolist e tutte le sue task

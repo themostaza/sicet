@@ -127,7 +127,7 @@ export interface Database {
         Row: {
           id: string
           kpi_id: string
-          device_id: string
+          todolist_id: string
           is_active: boolean
           email: string
           conditions: Json
@@ -137,7 +137,7 @@ export interface Database {
         Insert: {
           id?: string
           kpi_id: string
-          device_id: string
+          todolist_id: string
           is_active?: boolean
           email: string
           conditions: Json
@@ -147,7 +147,7 @@ export interface Database {
         Update: {
           id?: string
           kpi_id?: string
-          device_id?: string
+          todolist_id?: string
           is_active?: boolean
           email?: string
           conditions?: Json
@@ -162,9 +162,9 @@ export interface Database {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "kpi_alerts_device_id_fkey"
-            columns: ["device_id"]
-            referencedRelation: "devices"
+            foreignKeyName: "kpi_alerts_todolist_id_fkey"
+            columns: ["todolist_id"]
+            referencedRelation: "todolist"
             referencedColumns: ["id"]
           }
         ]
@@ -173,8 +173,6 @@ export interface Database {
         Row: {
           id: string
           alert_id: string
-          kpi_id: string
-          device_id: string
           triggered_value: Json
           triggered_at: string
           email_sent: boolean
@@ -184,8 +182,6 @@ export interface Database {
         Insert: {
           id?: string
           alert_id: string
-          kpi_id: string
-          device_id: string
           triggered_value: Json
           triggered_at?: string
           email_sent?: boolean
@@ -195,8 +191,6 @@ export interface Database {
         Update: {
           id?: string
           alert_id?: string
-          kpi_id?: string
-          device_id?: string
           triggered_value?: Json
           triggered_at?: string
           email_sent?: boolean
@@ -208,18 +202,6 @@ export interface Database {
             foreignKeyName: "kpi_alert_logs_alert_id_fkey"
             columns: ["alert_id"]
             referencedRelation: "kpi_alerts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "kpi_alert_logs_kpi_id_fkey"
-            columns: ["kpi_id"]
-            referencedRelation: "kpis"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "kpi_alert_logs_device_id_fkey"
-            columns: ["device_id"]
-            referencedRelation: "devices"
             referencedColumns: ["id"]
           }
         ]

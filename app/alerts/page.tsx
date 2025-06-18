@@ -17,7 +17,9 @@ import { deleteAlert } from "@/app/actions/actions-alerts"
 
 type KpiAlert = Database['public']['Tables']['kpi_alerts']['Row'] & {
   kpis: Database['public']['Tables']['kpis']['Row'] | null
-  devices: Database['public']['Tables']['devices']['Row'] | null
+  todolist: (Database['public']['Tables']['todolist']['Row'] & {
+    devices: Database['public']['Tables']['devices']['Row'] | null
+  }) | null
 }
 
 type TodolistAlert = Database['public']['Tables']['todolist_alert']['Row'] & {
@@ -50,9 +52,13 @@ async function getKpiAlerts(): Promise<KpiAlert[]> {
         name,
         description
       ),
-      devices (
-        name,
-        location
+      todolist (
+        id,
+        device_id,
+        devices (
+          name,
+          location
+        )
       )
     `)
     .order('created_at', { ascending: false })
@@ -239,7 +245,7 @@ export default async function AlertsPage() {
                       {kpiAlerts.map((alert) => (
                         <TableRow key={alert.id}>
                           <TableCell>{alert.kpis?.name || 'KPI sconosciuto'}</TableCell>
-                          <TableCell>{alert.devices?.name || 'Dispositivo sconosciuto'}</TableCell>
+                          <TableCell>{alert.todolist?.devices?.name || 'Dispositivo sconosciuto'}</TableCell>
                           <TableCell>{alert.email}</TableCell>
                           <TableCell>{renderKpiConditions(alert)}</TableCell>
                           <TableCell>{alert.created_at ? new Date(alert.created_at).toLocaleString('it-IT') : 'N/A'}</TableCell>

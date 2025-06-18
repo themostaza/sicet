@@ -89,54 +89,38 @@ function TodolistCreationForm() {
   }
 
   const createTodolistsAndAlerts = async () => {
-    // Create alerts if conditions are set
-    const alertPromises = []
-    const todolistPromises = []
-    
+    const todolistResults = []
+    // Prima crea tutte le todolist (e tasks)
     for (const deviceId of selectedDevices) {
-      // Create alerts for each KPI if conditions are set
-      if (alertConditions.length > 0 && alertEmail) {
-        for (const kpiId of selectedKpis) {
-          console.log(`Queueing alert creation for KPI ${kpiId} and device ${deviceId}`)
-          alertPromises.push(
-            createAlert(kpiId, deviceId, alertEmail, alertConditions)
-          )
-        }
-      }
-
-      // Create todolists for each date with all selected KPIs
       for (const entry of dateEntries) {
         const kpiIds = Array.from(selectedKpis)
-        todolistPromises.push(
-          createMultipleTasks(
-            deviceId,
-            format(entry.date, "yyyy-MM-dd"),
-            isCustomTimeSlot(entry.timeSlot) ? customTimeSlotToString(entry.timeSlot) : entry.timeSlot,
-            kpiIds,
-            alertEnabled,
-            email
-          )
+        // createMultipleTasks deve restituire l'id della todolist creata
+        const todolist = await createMultipleTasks(
+          deviceId,
+          format(entry.date, "yyyy-MM-dd"),
+          isCustomTimeSlot(entry.timeSlot) ? customTimeSlotToString(entry.timeSlot) : entry.timeSlot,
+          kpiIds,
+          alertEnabled,
+          email
         )
+        todolistResults.push({ todolist, deviceId, kpiIds })
       }
     }
-    
-    // First create all alerts, then create all todolists
-    if (alertPromises.length > 0) {
-      console.log(`Waiting for ${alertPromises.length} alerts to be created...`)
-      await Promise.all(alertPromises)
-      console.log('All alerts created successfully')
+
+    // Poi crea gli alert KPI associati alle nuove todolist
+    if (alertConditions.length > 0 && alertEmail) {
+      for (const result of todolistResults) {
+        for (const kpiId of result.kpiIds) {
+          await createAlert(kpiId, result.todolist.id, alertEmail, alertConditions)
+        }
+      }
     }
-    
-    console.log(`Creating ${todolistPromises.length} todolists...`)
-    await Promise.all(todolistPromises)
-    console.log('All todolists created successfully')
-    
-    const createdCount = todolistPromises.length
+
+    const createdCount = todolistResults.length
     toast({
       title: "Todolist create con successo",
       description: `Sono state create ${createdCount} todolist`,
     })
-    
     router.push("/todolist")
   }
 
