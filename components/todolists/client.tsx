@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, AlertTriangle, ArrowRight, CheckCircle2, Plus, Clock, Trash2, Filter } from "lucide-react"
+import { Calendar, AlertTriangle, ArrowRight, CheckCircle2, Plus, Clock, Trash2, Filter, ArrowUp, ArrowDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -28,6 +28,7 @@ type TodolistItem = {
   time_slot_type: "standard" | "custom"
   time_slot_start: number | null
   time_slot_end: number | null
+  created_at: string
   tasks: Array<{
     id: string
     kpi_id: string
@@ -62,6 +63,8 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
   const [isBulkDeleting, setIsBulkDeleting] = useState(false)
+  const [sortColumn, setSortColumn] = useState<string>("date")
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
 
   const isOperator = userRole === 'operator'
   const isAdmin = userRole === 'admin'
@@ -71,6 +74,61 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
     const matchesDevice = selectedDevice === "all" || item.device_id === selectedDevice
     return matchesDate && matchesDevice
   })
+
+  const sorted = [...filtered].sort((a, b) => {
+    let aValue = a[sortColumn as keyof TodolistItem]
+    let bValue = b[sortColumn as keyof TodolistItem]
+    if (sortColumn === "date" || sortColumn === "scheduled_execution") {
+      aValue = a.scheduled_execution
+      bValue = b.scheduled_execution
+      if (aValue && bValue) {
+        const aDate = new Date(aValue as string).getTime()
+        const bDate = new Date(bValue as string).getTime()
+        return sortDirection === "asc" ? aDate - bDate : bDate - aDate
+      }
+      return 0
+    }
+    if (sortColumn === "created_at") {
+      aValue = a.created_at
+      bValue = b.created_at
+      if (aValue && bValue) {
+        const aDate = new Date(aValue as string).getTime()
+        const bDate = new Date(bValue as string).getTime()
+        return sortDirection === "asc" ? aDate - bDate : bDate - aDate
+      }
+      return 0
+    }
+    if (sortColumn === "count") {
+      return sortDirection === "asc"
+        ? (a.count as number) - (b.count as number)
+        : (b.count as number) - (a.count as number)
+    }
+    if (sortColumn === "status") {
+      return sortDirection === "asc"
+        ? String(a.status).localeCompare(String(b.status))
+        : String(b.status).localeCompare(String(a.status))
+    }
+    if (sortColumn === "device_name") {
+      return sortDirection === "asc"
+        ? String(a.device_name).localeCompare(String(b.device_name))
+        : String(b.device_name).localeCompare(String(a.device_name))
+    }
+    if (sortColumn === "time_slot") {
+      return sortDirection === "asc"
+        ? String(a.time_slot).localeCompare(String(b.time_slot))
+        : String(b.time_slot).localeCompare(String(a.time_slot))
+    }
+    return 0
+  })
+
+  const handleSort = (col: string) => {
+    if (sortColumn === col) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc")
+    } else {
+      setSortColumn(col)
+      setSortDirection(col === "date" || col === "scheduled_execution" ? "desc" : "asc")
+    }
+  }
 
   const handleRowClick = (todolist: TodolistItem) => {
     if (isOperator) {
@@ -111,7 +169,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedItems(new Set(filtered.map(item => item.id)))
+      setSelectedItems(new Set(sorted.map(item => item.id)))
     } else {
       setSelectedItems(new Set())
     }
@@ -353,29 +411,54 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                 {isAdmin && (
                   <TableHead className="w-[50px]">
                     <UICheckbox
-                      checked={filtered.length > 0 && selectedItems.size === filtered.length}
+                      checked={sorted.length > 0 && selectedItems.size === sorted.length}
                       onCheckedChange={handleSelectAll}
                       aria-label="Seleziona tutte"
                     />
                   </TableHead>
                 )}
-                <TableHead>Dispositivo</TableHead>
-                <TableHead>Data</TableHead>
-                <TableHead>Fascia</TableHead>
-                <TableHead>Stato</TableHead>
-                <TableHead>Task</TableHead>
+                <TableHead onClick={() => handleSort("device_name")}
+                  className="cursor-pointer select-none">
+                  Dispositivo
+                  {sortColumn === "device_name" && (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />)}
+                </TableHead>
+                <TableHead onClick={() => handleSort("date")}
+                  className="cursor-pointer select-none">
+                  Data
+                  {sortColumn === "date" && (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />)}
+                </TableHead>
+                <TableHead onClick={() => handleSort("time_slot")}
+                  className="cursor-pointer select-none">
+                  Fascia
+                  {sortColumn === "time_slot" && (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />)}
+                </TableHead>
+                <TableHead onClick={() => handleSort("status")}
+                  className="cursor-pointer select-none">
+                  Stato
+                  {sortColumn === "status" && (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />)}
+                </TableHead>
+                <TableHead onClick={() => handleSort("count")}
+                  className="cursor-pointer select-none">
+                  Task
+                  {sortColumn === "count" && (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />)}
+                </TableHead>
+                <TableHead onClick={() => handleSort("created_at")}
+                  className="cursor-pointer select-none">
+                  Creato
+                  {sortColumn === "created_at" && (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />)}
+                </TableHead>
                 <TableHead className="w-[100px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.length === 0 ? (
+              {sorted.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={isAdmin ? 7 : 6} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={isAdmin ? 8 : 7} className="text-center text-muted-foreground py-8">
                     Nessuna todolist trovata.
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((item) => {
+                sorted.map((item) => {
                   const isExpired = item.status !== "completed" && isTodolistExpired(
                     item.scheduled_execution, 
                     item.time_slot_type, 
@@ -404,6 +487,9 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                       <TableCell onClick={() => canClick && handleRowClick(item)}>{formatTimeSlot(item.time_slot)}</TableCell>
                       <TableCell onClick={() => canClick && handleRowClick(item)}>{getStatusDisplay(item)}</TableCell>
                       <TableCell onClick={() => canClick && handleRowClick(item)}>{item.count}</TableCell>
+                      <TableCell onClick={() => canClick && handleRowClick(item)}>
+                        {item.created_at ? new Date(item.created_at).toLocaleString('it-IT') : 'N/A'}
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           {canClick && <ArrowRight size={18} className="text-muted-foreground" />}
