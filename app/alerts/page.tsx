@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch"
 import { AlertActions } from "./alert-actions"
 import { AlertDelete } from "./alert-delete"
 import { SupabaseClient } from "@supabase/supabase-js"
+import { deleteAlert } from "@/app/actions/actions-alerts"
 
 type KpiAlert = Database['public']['Tables']['kpi_alerts']['Row'] & {
   kpis: Database['public']['Tables']['kpis']['Row'] | null
@@ -185,6 +186,17 @@ export default async function AlertsPage() {
   // Fetch todolist alerts
   const todolistAlerts = await getTodolistAlerts()
 
+  // Funzione per cancellare un alert Todolist
+  async function deleteTodolistAlert(alertId: string) {
+    "use server"
+    const supabase = await createServerSupabaseClient()
+    const { error } = await supabase
+      .from("todolist_alert")
+      .delete()
+      .eq("id", alertId)
+    if (error) throw error
+  }
+
   return (
     <div className="container mx-auto py-6">
       <h1 className="text-2xl font-bold mb-6">Gestione Alert</h1>
@@ -232,9 +244,12 @@ export default async function AlertsPage() {
                           <TableCell>{renderKpiConditions(alert)}</TableCell>
                           <TableCell>{alert.created_at ? new Date(alert.created_at).toLocaleString('it-IT') : 'N/A'}</TableCell>
                           <TableCell>
-                            <Button variant="ghost" size="icon">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            <AlertDelete 
+                              alert={alert} 
+                              onDelete={deleteAlert} 
+                              confirmMessage="Sei sicuro di voler eliminare questo alert KPI?" 
+                              description={`L'alert per il KPI "${alert.kpis?.name}" sarà eliminato definitivamente.`}
+                            />
                           </TableCell>
                         </TableRow>
                       ))}
@@ -295,9 +310,12 @@ export default async function AlertsPage() {
                           </TableCell>
                           <TableCell>{alert.created_at ? new Date(alert.created_at).toLocaleString('it-IT') : 'N/A'}</TableCell>
                           <TableCell>
-                            <Button variant="ghost" size="icon">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            <AlertDelete 
+                              alert={alert} 
+                              onDelete={deleteTodolistAlert} 
+                              confirmMessage="Sei sicuro di voler eliminare questo alert Todolist?" 
+                              description={`L'alert per la todolist del dispositivo "${alert.todolist?.devices?.name}" sarà eliminato definitivamente.`}
+                            />
                           </TableCell>
                         </TableRow>
                       ))}
