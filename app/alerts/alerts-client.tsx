@@ -235,7 +235,7 @@ export default function AlertsClient({
                                 <TableCell>
                                   <AlertDelete 
                                     alert={alert} 
-                                    onDelete={() => toast({ title: "Eliminato" })} 
+                                    onDelete={async () => { toast({ title: "Eliminato" }); return Promise.resolve(); }} 
                                     confirmMessage="Sei sicuro di voler eliminare questo alert Controllo?" 
                                     description={`L'alert per il Controllo "${alert.kpis?.name}" sarà eliminato definitivamente.`}
                                   />
@@ -323,7 +323,7 @@ export default function AlertsClient({
                                 <TableCell>
                                   <AlertDelete 
                                     alert={alert} 
-                                    onDelete={() => toast({ title: "Eliminato" })} 
+                                    onDelete={async () => { toast({ title: "Eliminato" }); return Promise.resolve(); }} 
                                     confirmMessage="Sei sicuro di voler eliminare questo alert Todolist?" 
                                     description={`L'alert per la todolist del punto di controllo "${alert.todolist?.devices?.name}" sarà eliminato definitivamente.`}
                                   />
@@ -403,7 +403,7 @@ export default function AlertsClient({
                           <TableCell>
                             <AlertDelete 
                               alert={alert} 
-                              onDelete={() => toast({ title: "Eliminato" })} 
+                              onDelete={async () => { toast({ title: "Eliminato" }); return Promise.resolve(); }} 
                               confirmMessage="Sei sicuro di voler eliminare questo alert Controllo?" 
                               description={`L'alert per il Controllo "${alert.kpis?.name}" sarà eliminato definitivamente.`}
                             />
@@ -491,7 +491,7 @@ export default function AlertsClient({
                           <TableCell>
                             <AlertDelete 
                               alert={alert} 
-                              onDelete={() => toast({ title: "Eliminato" })} 
+                              onDelete={async () => { toast({ title: "Eliminato" }); return Promise.resolve(); }} 
                               confirmMessage="Sei sicuro di voler eliminare questo alert Todolist?" 
                               description={`L'alert per la todolist del dispositivo "${alert.todolist?.devices?.name}" sarà eliminato definitivamente.`}
                             />

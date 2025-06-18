@@ -410,7 +410,7 @@ export async function getTodolistsGrouped() {
           time_slot_type: item.time_slot_type,
           time_slot_start: item.time_slot_start,
           time_slot_end: item.time_slot_end,
-          created_at: item.created_at,
+          created_at: item.created_at ?? new Date().toISOString(),
           tasks: item.tasks || []
         }
       } catch (err) {
@@ -429,7 +429,7 @@ export async function getTodolistsGrouped() {
       time_slot_type: "standard" | "custom"
       time_slot_start: number | null
       time_slot_end: number | null
-      created_at: string | null
+      created_at: string
       tasks: Array<{ id: string; kpi_id: string; status: string }>
     }>
 

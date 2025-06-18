@@ -4,6 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { AlertCircle } from "lucide-react"
 import TodolistListClient from "@/components/todolists/client"
 
+export const dynamic = 'force-dynamic'
+
 type TimeSlot = "mattina" | "pomeriggio" | "sera" | "notte";
 
 const timeSlotOrder: Record<TimeSlot, number> = {
