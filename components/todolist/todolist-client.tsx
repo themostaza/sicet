@@ -19,7 +19,7 @@ import type { Task } from "@/lib/validation/todolist-schemas"
 import type { Kpi } from "@/lib/validation/kpi-schemas"
 import { Check, AlertCircle, Info, Save, Loader2, Upload, X, Eye, Calendar as CalendarIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createClientSupabaseClient } from "@/lib/supabase-client"
 import Image from "next/image"
 
 import { Input } from "@/components/ui/input"
@@ -231,7 +231,7 @@ export default function TodolistClient({
   deviceInfo: initialDeviceInfo = null,
 }: Props) {
   const router = useRouter()
-  const supabase = createClientComponentClient()
+  const supabase = createClientSupabaseClient()
   const [tasks, setTasks] = useState<Task[]>(initialData.tasks)
   const [hasMore, setHasMore] = useState(initialData.hasMore)
   const [offset, setOffset] = useState(initialData.tasks.length)
