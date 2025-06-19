@@ -83,41 +83,17 @@ export default function PreRegisterPage() {
           return; 
         }
 
-        /* 1. inserisci riga profilo */
+        /* Inserisci riga profilo */
         const { error: insErr } = await supabase
           .from('profiles')
           .insert([{ email: values.email, role: values.role, status: 'registered' }]);
 
         if (insErr) { 
-          toast.error('Insert profilo fallito'); 
+          toast.error('Errore durante la registrazione del profilo'); 
           return; 
         }
 
-        /* 2. chiama endpoint admin per creare user auth */
-        const res = await fetch('/api/admin/create-user', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: values.email, role: values.role })
-        });
-
-        if (!res.ok) {
-          await supabase.from('profiles').delete().eq('email', values.email);
-          const { error } = await res.json();
-          toast.error(error || 'Errore createUser');
-          return;
-        }
-
-        /* 3. invia mail reset-password con redirect + email */
-        const { error: resetErr } = await supabase.auth.resetPasswordForEmail(values.email, {
-          redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/register?email=${encodeURIComponent(values.email)}`
-        });
-
-        if (resetErr) { 
-          toast.error('Invio mail fallito'); 
-          return; 
-        }
-
-        toast.success('Mail inviata!');
+        toast.success('Utente pre-registrato con successo!');
         resetForm();
         fetchProfiles();
       } catch (error) {
@@ -149,7 +125,7 @@ export default function PreRegisterPage() {
         {/* Form Card - now takes 1/4 of the space */}
         <Card className="lg:col-span-1">
           <CardHeader>
-            <CardTitle>Registra Nuovo Utente</CardTitle>
+            <CardTitle>Pre-registra Nuovo Utente</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleFormSubmit} className="space-y-4" noValidate>
@@ -182,7 +158,7 @@ export default function PreRegisterPage() {
               />
 
               <Button type="submit" disabled={isSubmitting} className="w-full">
-                {isSubmitting ? 'Registrazione in corso...' : 'Registra Utente'}
+                {isSubmitting ? 'Pre-registrazione in corso...' : 'Pre-registra Utente'}
               </Button>
             </form>
           </CardContent>
@@ -191,7 +167,7 @@ export default function PreRegisterPage() {
         {/* Table Card - now takes 3/4 of the space */}
         <Card className="lg:col-span-3">
           <CardHeader>
-            <CardTitle>Utenti Registrati</CardTitle>
+            <CardTitle>Utenti Pre-registrati</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="rounded-md border">
@@ -201,7 +177,7 @@ export default function PreRegisterPage() {
                     <TableHead className="w-[30%]">Email</TableHead>
                     <TableHead className="w-[20%]">Ruolo</TableHead>
                     <TableHead className="w-[20%]">Stato</TableHead>
-                    <TableHead className="w-[20%]">Data Registrazione</TableHead>
+                    <TableHead className="w-[20%]">Data Pre-registrazione</TableHead>
                     <TableHead className="w-[10%] text-right">Azioni</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -214,7 +190,7 @@ export default function PreRegisterPage() {
                          profile.role === 'admin' ? 'Admin' : 'Referente'}
                       </TableCell>
                       <TableCell className="capitalize">
-                        {profile.status === 'registered' ? 'Registrato' : 'Attivato'}
+                        {profile.status === 'registered' ? 'Pre-registrato' : 'Attivato'}
                       </TableCell>
                       <TableCell>
                         {new Date(profile.created_at).toLocaleDateString()}

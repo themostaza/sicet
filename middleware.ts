@@ -63,7 +63,12 @@ export async function middleware(req: NextRequest) {
   const referer = req.headers.get('referer')
 
   // Define public routes that don't require authentication
-  const publicRoutes = ['/auth/login', '/register', '/auth/reset-password']
+  const publicRoutes = [
+    '/auth/login', 
+    '/register', 
+    '/auth/reset-password',
+    '/api/auth/signup'  // Endpoint per la registrazione
+  ]
 
   // Check if the path is public
   if (publicRoutes.includes(path)) {

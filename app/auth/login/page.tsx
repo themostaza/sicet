@@ -164,7 +164,7 @@ export default function LoginPage() {
                 {isSubmitting ? 'Accesso in corso...' : 'Accedi'}
               </Button>
               
-              <Link href="/auth/reset-password" className="text-center text-sm text-gray-500 hover:text-gray-700">
+              <Link href="/register?source=user" className="text-center text-sm text-gray-500 hover:text-gray-700">
                 Password dimenticata?
               </Link>
             </div>
