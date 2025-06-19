@@ -75,9 +75,22 @@ export async function exportTodolistData(config: ExportConfig): Promise<Blob> {
     return new Blob(['Data,Punto di controllo,Nome Controllo,Value Name,Value\nNessun dato trovato'], { type: 'text/csv;charset=utf-8' })
   }
   
-  // Collect unique device and KPI IDs
-  const deviceIds = [...new Set(tasks.map(task => task.todolist.device_id))]
-  const kpiIds = [...new Set(tasks.map(task => task.kpi_id))]
+  // Filter out tasks with null todolist and collect unique device and KPI IDs
+  // This prevents "Cannot read properties of null (reading 'device_id')" errors
+  // that can occur when tasks reference deleted todolists or have data integrity issues
+  const validTasks = tasks.filter(task => task.todolist !== null)
+  
+  // Log if there are tasks with null todolist for debugging
+  if (validTasks.length < tasks.length) {
+    console.warn(`Found ${tasks.length - validTasks.length} tasks with null todolist relation out of ${tasks.length} total tasks`)
+  }
+  
+  if (validTasks.length === 0) {
+    return new Blob(['Data,Punto di controllo,Nome Controllo,Value Name,Value\nNessun dato valido trovato'], { type: 'text/csv;charset=utf-8' })
+  }
+  
+  const deviceIds = [...new Set(validTasks.map(task => task.todolist!.device_id))]
+  const kpiIds = [...new Set(validTasks.map(task => task.kpi_id))]
   
   // Fetch device and KPI details in parallel
   const [devices, kpis] = await Promise.all([
@@ -118,8 +131,8 @@ export async function exportTodolistData(config: ExportConfig): Promise<Blob> {
   let csvContent = 'Data,Punto di controllo,Nome Controllo,Value Name,Value\n'
   
   // Process each task
-  for (const task of tasks) {
-    if (!task.todolist.scheduled_execution) continue;
+  for (const task of validTasks) {
+    if (!task.todolist?.scheduled_execution) continue;
     const date = format(parseISO(task.todolist.scheduled_execution), 'dd/MM/yyyy')
     const deviceName = escapeCSV(deviceMap[task.todolist.device_id] || 'Punto di controllo sconosciuto')
     const kpiName = escapeCSV(kpiMap[task.kpi_id]?.name || 'Controllo sconosciuto')
@@ -219,8 +232,17 @@ export async function getKpisByDevice(config: {
     throw new Error(`Error fetching KPIs for device: ${error.message}`);
   }
   
-  // Extract unique KPI IDs
-  const kpiIds = [...new Set(data?.map(item => item.kpi_id) ?? [])];
+  // Filter out items with null todolist and extract unique KPI IDs
+  // This prevents "Cannot read properties of null (reading 'device_id')" errors
+  // that can occur when tasks reference deleted todolists
+  const validData = data?.filter(item => item.todolist !== null) ?? [];
+  
+  // Log if there are items with null todolist for debugging
+  if (validData.length < (data?.length ?? 0)) {
+    console.warn(`Found ${(data?.length ?? 0) - validData.length} items with null todolist relation out of ${data?.length ?? 0} total items in getKpisByDevice`)
+  }
+  
+  const kpiIds = [...new Set(validData.map(item => item.kpi_id))];
   
   // For empty results, return empty array
   if (kpiIds.length === 0) {
