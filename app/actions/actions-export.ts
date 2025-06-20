@@ -118,8 +118,10 @@ export async function exportTodolistData(config: ExportConfig): Promise<Blob> {
       const fieldNamesMap: Record<string, string> = {}
       if (Array.isArray(kpi.value)) {
         for (const field of kpi.value) {
-          if (typeof field === 'object' && field !== null && 'id' in field && 'name' in field) {
-            fieldNamesMap[field.id as string] = field.name as string
+          if (typeof field === 'object' && field !== null && 'name' in field) {
+            // Use the field name as the key, since that's what we need to match
+            const fieldName = field.name as string
+            fieldNamesMap[fieldName] = fieldName
           }
         }
       }
@@ -130,65 +132,56 @@ export async function exportTodolistData(config: ExportConfig): Promise<Blob> {
   // CSV header
   let csvContent = 'Data,Punto di controllo,Nome Controllo,Value Name,Value\n'
   
+  // Helper function to get field name from KPI schema
+  function getFieldNameFromKpiStructure(key: string, kpiId: string, kpiValueStructure: any): string {
+    if (Array.isArray(kpiValueStructure)) {
+      const field = kpiValueStructure.find(f => {
+        const fieldId = f.id || `${kpiId}-${f.name.toLowerCase().replace(/\s+/g, '_')}`;
+        return fieldId === key || f.name === key;
+      });
+      return field && field.name ? field.name : key;
+    }
+    return key;
+  }
+  
   // Process each task
   for (const task of validTasks) {
     if (!task.todolist?.scheduled_execution) continue;
     const date = format(parseISO(task.todolist.scheduled_execution), 'dd/MM/yyyy')
     const deviceName = escapeCSV(deviceMap[task.todolist.device_id] || 'Punto di controllo sconosciuto')
     const kpiName = escapeCSV(kpiMap[task.kpi_id]?.name || 'Controllo sconosciuto')
-    const fieldNamesMap = kpiFieldNamesMap[task.kpi_id] || {}
+    const kpiValueStructure = kpiMap[task.kpi_id]?.valueStructure;
     
     // Skip tasks with no value
     if (task.value === null || task.value === undefined) {
-      // Add a single row showing the task exists but has no value
       csvContent += `${date},${deviceName},${kpiName},valore,N/A\n`
       continue
     }
     
-    // Handle different value types
     if (Array.isArray(task.value)) {
-      // The value is an array of objects with name properties
       for (const item of task.value) {
         if (typeof item === 'object' && item !== null) {
-          // Use the "name" property as the value name
-          const valueName = typeof item === 'object' && item !== null && 'name' in item 
-            ? (item as any).name 
-            : 'valore';
-          // Use the "value" property as the actual value, or the entire item if no "value" property
+          const valueName = getFieldNameFromKpiStructure(item.id, task.kpi_id, kpiValueStructure);
           const value = typeof item === 'object' && item !== null && 'value' in item 
             ? (item as any).value 
             : JSON.stringify(item);
           csvContent += `${date},${deviceName},${kpiName},${escapeCSV(valueName)},${escapeCSV(value)}\n`
         } else {
-          // Fallback for primitive values in the array
           csvContent += `${date},${deviceName},${kpiName},valore,${escapeCSV(item)}\n`
         }
       }
     } else if (typeof task.value === 'object' && task.value !== null) {
-      // For regular objects
-      if ('name' in task.value && 'value' in task.value) {
-        // If it's a single object with name/value properties
-        csvContent += `${date},${deviceName},${kpiName},${escapeCSV(task.value.name)},${escapeCSV(task.value.value)}\n`
-      } else {
-        // Otherwise create rows for each property
-        Object.entries(task.value).forEach(([key, val]) => {
-          // Use the display name from the KPI definition if available
-          const displayName = fieldNamesMap[key] || key
-          csvContent += `${date},${deviceName},${kpiName},${escapeCSV(displayName)},${escapeCSV(val)}\n`
-        })
-      }
+      // Se è un oggetto, per ogni chiave usa la funzione di mapping
+      Object.entries(task.value).forEach(([key, val]) => {
+        const displayName = getFieldNameFromKpiStructure(key, task.kpi_id, kpiValueStructure);
+        csvContent += `${date},${deviceName},${kpiName},${escapeCSV(displayName)},${escapeCSV(val)}\n`
+      })
     } else {
-      // For simple primitive values
-      // Try to use the name from the KPI structure if available
+      // Valore primitivo: se c'è solo un campo nel KPI, usa il suo nome, altrimenti lascia "valore"
       let valueName = 'valore';
-      const kpiValueStructure = kpiMap[task.kpi_id]?.valueStructure;
-      
-      if (Array.isArray(kpiValueStructure) && kpiValueStructure.length > 0 && 
-          typeof kpiValueStructure[0] === 'object' && kpiValueStructure[0] !== null && 
-          'name' in kpiValueStructure[0]) {
-        valueName = kpiValueStructure[0].name as string;
+      if (Array.isArray(kpiValueStructure) && kpiValueStructure.length === 1 && kpiValueStructure[0].name) {
+        valueName = kpiValueStructure[0].name;
       }
-      
       csvContent += `${date},${deviceName},${kpiName},${escapeCSV(valueName)},${escapeCSV(task.value)}\n`
     }
   }
