@@ -2,7 +2,7 @@ import type React from "react"
 import { Suspense } from "react"
 import { AlertCircle, Loader2 } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { getTodolistTasksById } from "@/app/actions/actions-todolist"
+import { getTodolistTasksById, getTodolistById } from "@/app/actions/actions-todolist"
 import TodolistClient from "@/components/todolist/todolist-client"
 import { getKpis } from "@/app/actions/actions-kpi"
 import { getDevice } from "@/app/actions/actions-device"
@@ -67,14 +67,15 @@ export default async function Page(
   const { todolistId, deviceId, date, timeSlot } = await Promise.resolve(params);
 
   // Carica in parallelo tutti i dati necessari
-  const [initialData, kpisData, device] = await Promise.all([
+  const [initialData, kpisData, device, todolist] = await Promise.all([
     getTodolistTasksById({
       todolistId,
       offset: 0,
       limit: 20,
     }),
     getKpis({ offset: 0, limit: 100 }),
-    getDevice(deviceId)
+    getDevice(deviceId),
+    getTodolistById(todolistId)
   ]);
 
   return (
@@ -87,6 +88,7 @@ export default async function Page(
         timeSlot={timeSlot}
         initialKpis={kpisData.kpis}
         deviceInfo={device ? { name: device.name, location: device.location } : null}
+        todolistData={todolist}
       />
     </Suspense>
   )

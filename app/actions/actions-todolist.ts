@@ -708,6 +708,25 @@ export async function createMultipleTasks(
 
 // Completa una todolist e tutte le sue task
 export async function completeTodolist(todolistId: string): Promise<void> {
+  // Prima ottieni i dati della todolist per verificare se è scaduta
+  const { data: todolist, error: todolistError } = await (await getSupabaseClient())
+    .from("todolist")
+    .select("device_id, scheduled_execution, status, time_slot_type, time_slot_end")
+    .eq("id", todolistId)
+    .single()
+  
+  if (todolistError) handleError(todolistError)
+  if (!todolist) throw new Error("Todolist non trovata")
+  
+  // Verifica se la todolist è scaduta e non è già completata
+  if (todolist.status !== "completed" && isTodolistExpired(
+    todolist.scheduled_execution, 
+    todolist.time_slot_type, 
+    todolist.time_slot_end
+  )) {
+    throw new Error("Non è possibile completare una todolist scaduta")
+  }
+  
   // Update all tasks to completed
   const { error: tasksError } = await (await getSupabaseClient())
     .from("tasks")
@@ -715,16 +734,6 @@ export async function completeTodolist(todolistId: string): Promise<void> {
     .eq("todolist_id", todolistId)
   
   if (tasksError) handleError(tasksError)
-  
-  // Get todolist info for logging
-  const { data: todolist, error: todolistError } = await (await getSupabaseClient())
-    .from("todolist")
-    .select("device_id, scheduled_execution")
-    .eq("id", todolistId)
-    .single()
-  
-  if (todolistError) handleError(todolistError)
-  if (!todolist) throw new Error("Todolist non trovata")
   
   // Log the activity
   await logCurrentUserActivity('complete_todolist', 'todolist', todolistId, {
@@ -770,15 +779,54 @@ export async function getTodolistsForDeviceToday(deviceId: string, today: string
       id,
       scheduled_execution,
       status,
+      time_slot_type,
+      time_slot_start,
+      time_slot_end,
       created_at
     `)
     .eq("device_id", deviceId)
+    .neq("status", "completed")
     .gte("scheduled_execution", startOfDay.toISOString())
     .lte("scheduled_execution", endOfDay.toISOString())
     .order("scheduled_execution", { ascending: true })
 
   if (error) {
     console.error("Error fetching todolists:", error)
+    return null
+  }
+
+  // Filtra le todolist scadute
+  const filteredData = data?.filter(todolist => 
+    !isTodolistExpired(
+      todolist.scheduled_execution,
+      todolist.time_slot_type,
+      todolist.time_slot_end
+    )
+  ) || []
+
+  return filteredData
+}
+
+// Ottieni i dati completi di una todolist per ID
+export async function getTodolistById(todolistId: string) {
+  const { data, error } = await (await getSupabaseClient())
+    .from("todolist")
+    .select(`
+      id,
+      device_id,
+      scheduled_execution,
+      status,
+      time_slot_type,
+      time_slot_start,
+      time_slot_end,
+      created_at,
+      updated_at
+    `)
+    .eq("id", todolistId)
+    .single()
+
+  if (error) {
+    console.error("Error fetching todolist:", error)
     return null
   }
 

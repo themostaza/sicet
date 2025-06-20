@@ -21,6 +21,7 @@ import { Check, AlertCircle, Info, Save, Loader2, Upload, X, Eye, Calendar as Ca
 import { useRouter } from "next/navigation"
 import { createClientSupabaseClient } from "@/lib/supabase-client"
 import Image from "next/image"
+import { isTodolistExpired } from "@/lib/validation/todolist-schemas"
 
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -47,6 +48,17 @@ interface Props {
   timeSlot: string
   initialKpis?: Kpi[]
   deviceInfo?: { name: string; location: string } | null
+  todolistData?: {
+    id: string
+    device_id: string
+    scheduled_execution: string
+    status: "pending" | "in_progress" | "completed"
+    time_slot_type: "standard" | "custom"
+    time_slot_start: number | null
+    time_slot_end: number | null
+    created_at: string | null
+    updated_at: string | null
+  } | null
 }
 
 // Define types for KPI field
@@ -230,6 +242,7 @@ export default function TodolistClient({
   timeSlot,
   initialKpis = [],
   deviceInfo: initialDeviceInfo = null,
+  todolistData,
 }: Props) {
   const router = useRouter()
   const supabase = createClientSupabaseClient()
@@ -435,11 +448,21 @@ export default function TodolistClient({
       })
     } catch (error) {
       console.error("Error completing todolist:", error)
-      toast({
-        title: "Errore",
-        description: "Impossibile completare la todolist. Riprova più tardi.",
-        variant: "destructive"
-      })
+      
+      // Gestione specifica per todolist scadute
+      if (error instanceof Error && error.message === "Non è possibile completare una todolist scaduta") {
+        toast({
+          title: "Todolist scaduta",
+          description: "Non è possibile completare una todolist dopo la scadenza.",
+          variant: "destructive"
+        })
+      } else {
+        toast({
+          title: "Errore",
+          description: "Impossibile completare la todolist. Riprova più tardi.",
+          variant: "destructive"
+        })
+      }
     } finally {
       setIsCompleting(false)
     }
@@ -769,6 +792,13 @@ export default function TodolistClient({
   // Determina se la todolist è completata
   const isReadOnly = tasks.length > 0 && tasks.every(task => task.status === "completed");
 
+  // Determina se la todolist è scaduta
+  const isExpired = Boolean(todolistData && todolistData.status !== "completed" && isTodolistExpired(
+    todolistData.scheduled_execution,
+    todolistData.time_slot_type,
+    todolistData.time_slot_end
+  ));
+
   /* ---------------- JSX ----------------------- */
   return (
     <>
@@ -785,6 +815,11 @@ export default function TodolistClient({
                   <p className="text-sm text-muted-foreground">
                     {date} – {labelForSlot(timeSlot)}
                   </p>
+                  {isExpired && (
+                    <p className="text-sm text-red-600 font-medium mt-1">
+                      ⚠️ Todolist scaduta
+                    </p>
+                  )}
                 </>
               ) : (
                 <>
@@ -796,23 +831,34 @@ export default function TodolistClient({
 
             <div className="flex gap-2">
               {tasks.some(task => task.status !== "completed") && (
-                <Button 
-                  onClick={handleCompleteTodolist}
-                  disabled={isPending || isCompleting}
-                  className="relative bg-green-600 hover:bg-green-700"
-                >
-                  {isCompleting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Completamento...
-                    </>
-                  ) : (
-                    <>
-                      <Check size={16} className="mr-2" />
-                      Completa Todolist
-                    </>
-                  )}
-                </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        onClick={handleCompleteTodolist}
+                        disabled={isPending || isCompleting || isExpired}
+                        className="relative bg-green-600 hover:bg-green-700"
+                      >
+                        {isCompleting ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Completamento...
+                          </>
+                        ) : (
+                          <>
+                            <Check size={16} className="mr-2" />
+                            Completa Todolist
+                          </>
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    {isExpired && (
+                      <TooltipContent>
+                        <p>Non è possibile completare una todolist scaduta</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
               )}
             </div>
           </div>
