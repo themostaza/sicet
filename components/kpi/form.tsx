@@ -39,6 +39,7 @@ interface Field {
   required: boolean
   min?: string | number
   max?: string | number
+  options?: string[]
 }
 
 // Empty field template
@@ -48,6 +49,7 @@ const emptyField = (index: number): Field => ({
   type: "text",
   description: "",
   required: false,
+  options: []
 })
 
 export default function KpiForm({ kpi, mode, action, disabled }: Props) {
@@ -65,6 +67,7 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
         required: field.required ?? false,
         min: field.min,
         max: field.max,
+        options: field.options ? (Array.isArray(field.options) ? field.options.map((opt: any) => typeof opt === 'string' ? opt : opt.value || opt.label) : []) : []
       }));
     }
     return [emptyField(0)];
@@ -158,6 +161,21 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
           errors[f.id] = "Il valore minimo deve essere inferiore al valore massimo"
         }
       }
+      // Validate selection options for duplicates
+      if (f.type === "select" && f.options) {
+        const optionValues = new Set<string>()
+        for (const option of f.options) {
+          if (option.trim() === "") {
+            errors[f.id] = "Le opzioni di selezione non possono essere vuote"
+            break
+          }
+          if (optionValues.has(option.trim())) {
+            errors[f.id] = "Le opzioni di selezione non possono essere duplicate"
+            break
+          }
+          optionValues.add(option.trim())
+        }
+      }
     }
     setFieldErrors(errors)
     return Object.keys(errors).length === 0
@@ -165,6 +183,9 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
 
   // Check if a field is numeric
   const isNumericField = (type: string) => type === "number" || type === "decimal"
+
+  // Check if a field is selection type
+  const isSelectionField = (type: string) => type === "select"
 
   // Add a new empty field
   const handleAddField = () => {
@@ -322,6 +343,52 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
                         step={field.type === "decimal" ? "0.01" : "1"}
                         disabled={disabled}
                       />
+                    </div>
+                  </div>
+                )}
+                {isSelectionField(field.type) && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium mb-1">Opzioni di selezione</label>
+                    <div className="space-y-2">
+                      {(field.options || []).map((option, optionIndex) => (
+                        <div key={optionIndex} className="flex gap-2">
+                          <Input
+                            placeholder="Opzione"
+                            value={option}
+                            onChange={e => {
+                              const newOptions = [...(field.options || [])]
+                              newOptions[optionIndex] = e.target.value
+                              handleFieldChange(field.id, "options", newOptions)
+                            }}
+                            disabled={disabled}
+                            className="flex-1"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => {
+                              const newOptions = (field.options || []).filter((_, idx) => idx !== optionIndex)
+                              handleFieldChange(field.id, "options", newOptions)
+                            }}
+                            disabled={disabled}
+                            className="p-2 hover:bg-red-100 text-red-600"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          const newOptions = [...(field.options || []), ""]
+                          handleFieldChange(field.id, "options", newOptions)
+                        }}
+                        disabled={disabled}
+                        className="w-full"
+                      >
+                        <Plus className="h-4 w-4 mr-2" /> Aggiungi opzione
+                      </Button>
                     </div>
                   </div>
                 )}

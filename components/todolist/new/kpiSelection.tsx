@@ -26,6 +26,7 @@ interface KpiField {
   min?: string | number;
   max?: string | number;
   required?: boolean;
+  options?: string[];
 }
 
 // Define types for alert conditions
@@ -78,7 +79,8 @@ export function KpiSelection() {
           min: field.min,
           max: field.max,
           required: field.required,
-          matchAlert: field.type === 'text'
+          matchAlert: field.type === 'text',
+          options: field.options ? (Array.isArray(field.options) ? field.options.map((opt: any) => typeof opt === 'string' ? opt : opt.value || opt.label) : []) : undefined
         }));
       } 
       // Handle single field object
@@ -92,7 +94,8 @@ export function KpiSelection() {
           min: valueObj.min,
           max: valueObj.max,
           required: valueObj.required,
-          matchAlert: valueObj.type === 'text'
+          matchAlert: valueObj.type === 'text',
+          options: valueObj.options ? (Array.isArray(valueObj.options) ? valueObj.options.map((opt: any) => typeof opt === 'string' ? opt : opt.value || opt.label) : []) : undefined
         }];
       }
     }

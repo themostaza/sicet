@@ -58,7 +58,8 @@ export const KpiFormSchema = z.object({
     description: z.string().optional(),
     required: z.boolean().optional(),
     min: z.union([z.string(), z.number()]).optional(),
-    max: z.union([z.string(), z.number()]).optional()
+    max: z.union([z.string(), z.number()]).optional(),
+    options: z.array(z.string()).optional()
   }))
 });
 

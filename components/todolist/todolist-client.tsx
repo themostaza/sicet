@@ -58,6 +58,7 @@ interface KpiField {
   required?: boolean;
   min?: number;
   max?: number;
+  options?: string[];
 }
 
 /* --------------------------------------------------------------
@@ -164,7 +165,7 @@ const validateFieldValue = (value: any, field: any): { valid: boolean; message?:
       
     case "select":
       // Check if the value is one of the available options
-      if (field.options && !field.options.some((o: any) => o.value === value)) {
+      if (field.options && !field.options.includes(value)) {
         return { valid: false, message: "Selezionare un'opzione valida" }
       }
       return { valid: true }
@@ -730,9 +731,9 @@ export default function TodolistClient({
               <SelectValue placeholder="Seleziona un'opzione" />
             </SelectTrigger>
             <SelectContent>
-              {field.options?.map((option: any) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.name || option.label}
+              {field.options?.map((option: string) => (
+                <SelectItem key={option} value={option}>
+                  {option}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -752,6 +753,7 @@ export default function TodolistClient({
       case 'decimal': return 'Numero decimale';
       case 'date': return 'Data';
       case 'boolean': return 'Sì/No';
+      case 'select': return 'Selezione';
       case 'image': return 'Immagine';
       default: return '';
     }
