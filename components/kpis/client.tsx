@@ -3,7 +3,7 @@
 import { useState, useDeferredValue, useMemo, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Edit, Plus, Info, Hash, HashIcon, Type, Minus, Plus as PlusIcon, CheckCircle2, XCircle, Trash2 } from "lucide-react"
+import { Plus, Info, Hash, HashIcon, Type, Minus, Plus as PlusIcon, CheckCircle2, XCircle, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import {
   Accordion,
@@ -221,13 +221,6 @@ export default function KpiList({ initialKpis }: Props) {
                       </div>
                     </div>
                     <div className="flex space-x-3 pt-2">
-                      <Button
-                        className="bg-black hover:bg-gray-800"
-                        size="sm"
-                        onClick={() => router.push(`/kpi/${k.id}/edit`)}
-                      >
-                        <Edit className="w-4 h-4 mr-2" /> Modifica
-                      </Button>
                       {role === "admin" && (
                         <KpiDeleteDialog
                           onDelete={async () => {

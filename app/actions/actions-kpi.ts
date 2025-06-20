@@ -8,7 +8,6 @@ import type { SupabaseClient, PostgrestError } from "@supabase/supabase-js";
 import {
   Kpi,
   KpiInsertSchema,
-  KpiUpdateSchema,
   ListParamsSchema
 } from "@/lib/validation/kpi-schemas";
 import { logCurrentUserActivity } from "./actions-activity";
@@ -59,27 +58,6 @@ const toInsertRow = (k: z.infer<typeof KpiInsertSchema>): KpisInsertRow => {
     description: k.description ?? null,
     value: processedValue,
   };
-};
-
-const toUpdateRow = (k: z.infer<typeof KpiUpdateSchema>): KpisUpdateRow => {
-  const patch: KpisUpdateRow = {} as KpisUpdateRow;
-  if (k.name !== undefined) patch.name = k.name;
-  if (k.description !== undefined) patch.description = k.description ?? null;
-  
-  if (k.value !== undefined) {
-    // Stesso trattamento di value come in toInsertRow
-    let processedValue = k.value;
-    if (typeof k.value === 'string') {
-      try {
-        processedValue = JSON.parse(k.value);
-      } catch (e) {
-        throw new KpiActionError("Il valore deve essere un JSON valido", "VALIDATION_ERROR");
-      }
-    }
-    patch.value = processedValue;
-  }
-  
-  return patch;
 };
 
 /** -------------------------------------------------------------------------
@@ -181,35 +159,6 @@ export async function createKpi(raw: unknown): Promise<Kpi> {
       handleZodError(error);
     }
     console.error("Error creating KPI:", error);
-    throw error;
-  }
-}
-
-export async function updateKpi(raw: unknown): Promise<Kpi> {
-  try {
-    const k = KpiUpdateSchema.parse(raw);
-
-    const { data, error } = await (await supabase())
-      .from("kpis")
-      .update(toUpdateRow(k))
-      .eq("id", k.id)
-      .select()
-      .single();
-
-    if (error) handlePostgrestError(error);
-
-    // Log the activity
-    await logCurrentUserActivity('update_kpi', 'kpi', data!.id, {
-      kpi_name: data!.name,
-      kpi_description: data!.description
-    });
-
-    revalidatePath("/kpi");
-    return toKpi(data!);
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      handleZodError(error);
-    }
     throw error;
   }
 }

@@ -14,7 +14,7 @@ import { FormField, FormItem, FormLabel, FormControl, FormMessage, Form } from "
 
 interface Props {
   kpi?: Kpi | null
-  mode: "create" | "edit"
+  mode: "create"
   action: (formData: FormData) => void
   disabled?: boolean
 }
@@ -225,27 +225,6 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
           </div>
         )}
         
-        {mode === "edit" && (
-          <FormField
-            control={form.control}
-            name="id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>ID</FormLabel>
-                <FormControl>
-                  <Input 
-                    {...field} 
-                    disabled 
-                    className="bg-gray-50" 
-                    autoComplete="off" 
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
-
         <FormField
           control={form.control}
           name="name"
@@ -455,10 +434,10 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {mode === "create" ? "Creazione..." : "Salvataggio..."}
+                "Creazione..."
               </>
             ) : (
-              mode === "create" ? "Crea" : "Salva"
+              "Crea"
             )}
           </Button>
         </div>
