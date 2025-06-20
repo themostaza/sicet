@@ -91,7 +91,7 @@ export async function middleware(req: NextRequest) {
       const { data: profile } = await supabase
         .from('profiles')
         .select('role')
-        .eq('email', user.email ?? '')
+        .eq('id', user.id)
         .single()
 
       // If user is authenticated and trying to access login/register, redirect based on role
@@ -121,7 +121,7 @@ export async function middleware(req: NextRequest) {
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('role')
-    .eq('email', user.email ?? '')
+    .eq('id', user.id)
     .single()
 
   if (profileError || !profile) {

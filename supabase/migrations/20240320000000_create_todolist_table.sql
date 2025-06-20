@@ -65,32 +65,6 @@ create table if not exists public.tasks (
     alert_checked boolean default false not null
 );
 
--- Add RLS policies for tasks
-alter table public.tasks enable row level security;
-
--- Drop existing policies if they exist
-drop policy if exists "Users can view tasks" on public.tasks;
-drop policy if exists "Users can insert tasks" on public.tasks;
-drop policy if exists "Users can update tasks" on public.tasks;
-drop policy if exists "Users can delete tasks" on public.tasks;
-
--- Create new policies
-create policy "Users can view tasks"
-    on public.tasks for select
-    using (auth.role() = 'authenticated');
-
-create policy "Users can insert tasks"
-    on public.tasks for insert
-    with check (auth.role() = 'authenticated');
-
-create policy "Users can update tasks"
-    on public.tasks for update
-    using (auth.role() = 'authenticated');
-
-create policy "Users can delete tasks"
-    on public.tasks for delete
-    using (auth.role() = 'authenticated');
-
 -- Create trigger to update todolist status
 create or replace function public.update_todolist_status()
 returns trigger as $$
@@ -138,46 +112,6 @@ create trigger update_todolist_status_trigger
     on public.tasks
     for each row
     execute function public.update_todolist_status();
-
--- Add RLS policies
-alter table public.todolist enable row level security;
-
--- Drop existing policies if they exist
-drop policy if exists "Users can view todolists" on public.todolist;
-drop policy if exists "Users can insert todolists" on public.todolist;
-drop policy if exists "Users can update todolists" on public.todolist;
-drop policy if exists "Users can delete todolists" on public.todolist;
-drop policy if exists "Users can view todolists for their devices" on public.todolist;
-drop policy if exists "Referrers and admins can view all todolists" on public.todolist;
-drop policy if exists "Users can insert todolists for their devices" on public.todolist;
-drop policy if exists "Referrers and admins can insert todolists" on public.todolist;
-drop policy if exists "Users can update todolists for their devices" on public.todolist;
-drop policy if exists "Referrers and admins can update todolists" on public.todolist;
-drop policy if exists "Users can delete todolists for their devices" on public.todolist;
-drop policy if exists "Referrers and admins can delete todolists" on public.todolist;
-
--- Create new policies
-create policy "Users can view todolists"
-    on public.todolist for select
-    using (auth.role() = 'authenticated');
-
-create policy "Users can insert todolists"
-    on public.todolist for insert
-    with check (auth.role() = 'authenticated');
-
-create policy "Users can update todolists"
-    on public.todolist for update
-    using (auth.role() = 'authenticated');
-
-create policy "Users can delete todolists"
-    on public.todolist for delete
-    using (auth.role() = 'authenticated');
-
--- Grant necessary permissions
-grant usage on type public.user_action_type to authenticated;
-grant usage on type public.entity_type to authenticated;
-grant select, insert, update, delete on public.todolist to authenticated;
-grant select, insert, update, delete on public.tasks to authenticated;
 
 -- Add a comment to verify the table was created
 comment on table public.todolist is 'Table for storing todolists'; 

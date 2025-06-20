@@ -61,10 +61,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Aggiorna lo stato del profilo a 'activated'
+    // Aggiorna lo stato del profilo a 'activated' e imposta l'id
     const { error: updateError } = await supabase
       .from('profiles')
-      .update({ status: 'activated' })
+      .update({ status: 'activated', id: user.id })
       .eq('email', email);
 
     if (updateError) {
