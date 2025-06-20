@@ -1,20 +1,20 @@
 import { Resend } from 'resend';
+import type { AlertCondition } from '../actions/actions-alerts';
 
-const resend = new Resend('re_Bdmu5oBt_8Wd5LKQDP95Dco7952yV87AT');
+const resend = new Resend(process.env.RESEND_API_KEY || 're_Bdmu5oBt_8Wd5LKQDP95Dco7952yV87AT');
+
+type TriggeredCondition = {
+  condition: AlertCondition;
+  fieldValue: any;
+};
 
 export type AlertEmailData = {
   kpiName: string;
   kpiDescription?: string | null;
   deviceName: string;
   deviceLocation?: string | null;
-  triggeredValue: any;
-  conditions: Array<{
-    type: 'numeric' | 'text' | 'boolean';
-    min?: number;
-    max?: number;
-    match_text?: string;
-    boolean_value?: boolean;
-  }>;
+  triggeredConditions: TriggeredCondition[];
+  kpiValue: any; // This is the 'value' column from the kpis table
 }
 
 export type TodolistOverdueEmailData = {
@@ -34,79 +34,83 @@ export type TodolistOverdueEmailData = {
   }>;
 }
 
-export async function sendAlertEmail(email: string, data: AlertEmailData) {
-  const { kpiName, kpiDescription, deviceName, deviceLocation, triggeredValue, conditions } = data;
-
-  console.log('Sending KPI alert email to:', email);
-  console.log('Email data:', { kpiName, deviceName, triggeredValue });
-  console.log('Conditions:', conditions);
-
-  // Format conditions for email
-  const formattedConditions = conditions.map(condition => {
-    if (condition.type === 'numeric') {
-      const parts = [];
-      if (condition.min !== undefined) parts.push(`min: ${condition.min}`);
-      if (condition.max !== undefined) parts.push(`max: ${condition.max}`);
-      return `Valore numerico: ${parts.join(', ')}`;
+function getFieldName(fieldId: string, kpiValue: any): string {
+  if (kpiValue && Array.isArray(kpiValue)) {
+    // First, try to find by a specific 'id' property in the field definition
+    const fieldById = kpiValue.find(f => f.id === fieldId);
+    if (fieldById && fieldById.name) {
+      return fieldById.name;
     }
-    if (condition.type === 'text') {
-      return `Testo: deve contenere "${condition.match_text}"`;
+
+    // If not found, try to parse from a generated ID like 'kpiId-fieldname'
+    const nameFromId = fieldId.substring(fieldId.lastIndexOf('-') + 1);
+    const fieldByName = kpiValue.find(f => String(f.name).toLowerCase() === nameFromId.toLowerCase());
+    if (fieldByName && fieldByName.name) {
+      return fieldByName.name;
     }
-    if (condition.type === 'boolean') {
-      return `Booleano: deve essere ${condition.boolean_value ? 'vero' : 'falso'}`;
-    }
-    return '';
-  }).join('\n');
+  }
+  // Fallback to a cleaned-up version of the id
+  return fieldId.substring(fieldId.lastIndexOf('-') + 1);
+}
 
-  // Format the triggered value
-  const formattedValue = typeof triggeredValue === 'object' 
-    ? JSON.stringify(triggeredValue, null, 2)
-    : String(triggeredValue);
+function formatTriggeredCondition(triggered: TriggeredCondition, kpiValue: any): string {
+  const { condition, fieldValue } = triggered;
+  const fieldName = getFieldName(condition.field_id, kpiValue);
 
-  console.log('Formatted conditions:', formattedConditions);
-  console.log('Formatted value:', formattedValue);
+  switch (condition.type) {
+    case 'text':
+      return `<strong>${fieldName} (Testo)</strong>: "${String(fieldValue)}" ⚠️`;
+    case 'numeric':
+      let range = '';
+      if (condition.min !== undefined && condition.max !== undefined) {
+        range = `fuori dal range ${condition.min} - ${condition.max}`;
+      } else if (condition.min !== undefined) {
+        range = `sotto il minimo di ${condition.min}`;
+      } else if (condition.max !== undefined) {
+        range = `sopra il massimo di ${condition.max}`;
+      }
+      return `<strong>${fieldName} (Numero)</strong>: ${fieldValue} ⚠️ ${range}`;
+    case 'boolean':
+      return `<strong>${fieldName} (Sì/No)</strong>: ${fieldValue ? 'sì' : 'no'} ⚠️`;
+    default:
+      return `<strong>${fieldName}</strong>: ${String(fieldValue)}`;
+  }
+}
 
-  // Create a simpler HTML email to avoid potential issues
-  const simpleHtml = `
-    <div>
-      <h2>⚠️ Alert SICET</h2>
-      <p><strong>Nome:</strong> ${kpiName}</p>
-      <p><strong>Punto di Controllo:</strong> ${deviceName}</p>
-      <p><strong>Valore Rilevato:</strong> ${formattedValue}</p>
-      <p><strong>Condizioni:</strong></p>
-      <pre>${formattedConditions}</pre>
-    </div>
+export async function sendAlertEmail(to: string, data: AlertEmailData) {
+  const { kpiName, deviceName, triggeredConditions, kpiValue } = data;
+  const subject = `⚠️ Alert SICET: ${kpiName} su ${deviceName}`;
+
+  const conditionsHtml = triggeredConditions
+    .map(tc => `<p style="margin: 4px 0;">${formatTriggeredCondition(tc, kpiValue)}</p>`)
+    .join('');
+
+  const html = `
+    <html>
+      <body style="font-family: sans-serif; padding: 20px; color: #333;">
+        <div style="max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 8px; padding: 20px;">
+          <h1 style="color: #d9534f; font-size: 24px;">⚠️ Alert SICET</h1>
+          <p><strong>Nome Controllo:</strong> ${kpiName}</p>
+          <p><strong>Punto di Controllo:</strong> ${deviceName}</p>
+          <h3 style="margin-top: 20px; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Dettagli Valori fuori Specifica:</h3>
+          ${conditionsHtml}
+          <br>
+          <p style="font-size: 12px; color: #777;">Questo è un messaggio automatico, per favore non rispondere.</p>
+        </div>
+      </body>
+    </html>
   `;
 
   try {
-    console.log('Attempting to send email via Resend...');
-    console.log('Email payload:', {
-      from: 'SICET Alerts <onboarding@resend.dev>',
-      to: [email],
-      subject: `[SICET Alert] ${kpiName} - ${deviceName}`,
-      htmlLength: simpleHtml.length
+    const response = await resend.emails.send({
+      from: 'Sicet <onboarding@resend.dev>',
+      to,
+      subject,
+      html,
     });
-
-    const { data: emailData, error } = await resend.emails.send({
-      from: 'SICET Alerts <onboarding@resend.dev>',
-      to: [email],
-      subject: `[SICET Alert] ${kpiName} - ${deviceName}`,
-      html: simpleHtml,
-    });
-
-    if (error) {
-      console.error('Resend API error:', error);
-      console.error('Error details:', JSON.stringify(error, null, 2));
-      throw error;
-    }
-
-    console.log('KPI alert email sent successfully:', emailData);
-    return emailData;
+    console.log("Email sent successfully", response);
   } catch (error) {
-    console.error('Failed to send KPI alert email:', error);
-    console.error('Error type:', typeof error);
-    console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
-    console.error('Full error object:', JSON.stringify(error, null, 2));
+    console.error("Error sending email:", error);
     throw error;
   }
 }

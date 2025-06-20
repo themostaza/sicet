@@ -6,26 +6,26 @@ export async function POST(request: NextRequest) {
     console.log('[TEST-KPI-ALERTS] Starting KPI alert test...')
     
     const body = await request.json()
-    const { kpiId, deviceId, value } = body
+    const { kpiId, todolistId, value } = body
     
-    if (!kpiId || !deviceId) {
+    if (!kpiId || !todolistId) {
       return NextResponse.json(
-        { error: 'Missing required parameters: kpiId, deviceId' },
+        { error: 'Missing required parameters: kpiId, todolistId' },
         { status: 400 }
       )
     }
     
-    console.log('[TEST-KPI-ALERTS] Testing with:', { kpiId, deviceId, value })
+    console.log('[TEST-KPI-ALERTS] Testing with:', { kpiId, todolistId, value })
     
     // Check for alerts
-    await checkKpiAlerts(kpiId, deviceId, value)
+    await checkKpiAlerts(kpiId, todolistId, value)
     
     console.log('[TEST-KPI-ALERTS] KPI alert check completed successfully')
     
     return NextResponse.json({
       success: true,
       message: 'KPI alert check completed',
-      tested: { kpiId, deviceId, value }
+      tested: { kpiId, todolistId, value }
     })
     
   } catch (error) {

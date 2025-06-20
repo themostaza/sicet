@@ -5,8 +5,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button"
 import { AlertCircle, Plus, Settings, BellRing } from "lucide-react"
 import { useTodolist } from "./context"
-import { useState, useEffect } from "react"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/sheet"
+import { useState, useEffect, useMemo } from "react"
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -14,15 +14,15 @@ import { createAlert } from "@/app/actions/actions-alerts"
 import { toast } from "@/components/ui/use-toast"
 import { KPI } from "./types"
 import { useToast } from "@/components/ui/use-toast"
+import { KpiSelectionSheetContent } from "./kpiSelectionSheet"
 
 // Define types for KPI and field
 interface KpiField {
   id: string;
   name: string;
   description?: string;
-  type: 'numeric' | 'text' | 'boolean' | string;
+  type: 'numeric' | 'text' | 'boolean' | 'unsupported';
   placeholder?: string;
-  matchAlert?: boolean;
   min?: string | number;
   max?: string | number;
   required?: boolean;
@@ -42,26 +42,31 @@ interface AlertCondition {
 export function KpiSelection() {
   const { toast } = useToast()
   const { 
-    selectedKpisArray, 
     selectedKpis, 
-    isKpiSheetOpen, 
-    setIsKpiSheetOpen,
+    setSelectedKpis, 
+    kpis, 
     errors,
-    deviceId,
-    alertConditions,
     setAlertConditions,
-    alertEmail,
-    setAlertEmail
+    setAlertEmail,
+    alertConditions: globalAlertConditions,
+    alertEmail: globalAlertEmail
   } = useTodolist()
   
+  const [isKpiSheetOpen, setIsKpiSheetOpen] = useState(false)
   const [isAlertSheetOpen, setIsAlertSheetOpen] = useState(false)
   const [selectedKpiForAlert, setSelectedKpiForAlert] = useState<KPI | null>(null)
-  // Add state to track conditions per KPI
+
+  // Global state for all alert configurations
   const [kpiAlertConditions, setKpiAlertConditions] = useState<Record<string, { email: string, conditions: AlertCondition[] }>>({})
 
-  // Stato locale per alert dello sheet
-  const [localAlertEmail, setLocalAlertEmail] = useState("");
-  const [localAlertConditions, setLocalAlertConditions] = useState<AlertCondition[]>([]);
+  // Local state for the currently edited alert in the sheet
+  const [localAlertConditions, setLocalAlertConditions] = useState<AlertCondition[]>([])
+  const [localAlertEmail, setLocalAlertEmail] = useState("")
+
+  const selectedKpisArray = useMemo(() => 
+    kpis.filter(kpi => selectedKpis.has(kpi.id)),
+    [kpis, selectedKpis]
+  )
 
   // Create fields from KPI value data
   const getKpiFields = (kpi: KPI): KpiField[] => {
@@ -79,7 +84,6 @@ export function KpiSelection() {
           min: field.min,
           max: field.max,
           required: field.required,
-          matchAlert: field.type === 'text',
           options: field.options ? (Array.isArray(field.options) ? field.options.map((opt: any) => typeof opt === 'string' ? opt : opt.value || opt.label) : []) : undefined
         }));
       } 
@@ -94,7 +98,6 @@ export function KpiSelection() {
           min: valueObj.min,
           max: valueObj.max,
           required: valueObj.required,
-          matchAlert: valueObj.type === 'text',
           options: valueObj.options ? (Array.isArray(valueObj.options) ? valueObj.options.map((opt: any) => typeof opt === 'string' ? opt : opt.value || opt.label) : []) : undefined
         }];
       }
@@ -113,27 +116,25 @@ export function KpiSelection() {
         name: 'Unità di misura',
         description: 'Unità della grandezza',
         type: 'text',
-        matchAlert: true
       }
     ];
   };
 
   // Map KPI field types to alert field types
-  const mapFieldType = (type: string): 'numeric' | 'text' | 'boolean' | string => {
-    switch (type) {
+  const mapFieldType = (type: string): 'numeric' | 'text' | 'boolean' | 'unsupported' => {
+    switch (String(type).toLowerCase()) {
       case 'number':
       case 'decimal':
         return 'numeric';
       case 'text':
       case 'textarea':
-      case 'select':
         return 'text';
       case 'boolean':
-      case 'Si/No':
-      case 'Sì/No':
+      case 'si/no':
+      case 'sì/no':
         return 'boolean';
       default:
-        return type || 'text';
+        return 'unsupported';
     }
   };
 
@@ -150,65 +151,55 @@ export function KpiSelection() {
     setIsAlertSheetOpen(true)
   }
 
-  const handleCloseAlertSheet = () => {
-    if (!selectedKpiForAlert) return
-
-    // Validazione
-    if (localAlertConditions.length > 0 && !localAlertEmail) {
-      toast({
-        title: "Errore",
-        description: "Inserisci un indirizzo email per ricevere le notifiche",
-        variant: "destructive"
-      })
-      return
-    }
-
-    if (localAlertEmail && localAlertConditions.length === 0) {
-      toast({
-        title: "Errore",
-        description: "Configura almeno una condizione per l'alert",
-        variant: "destructive"
-      })
-      return
-    }
-
-    // Salva solo per questo KPI
-    if (localAlertEmail && localAlertConditions.length > 0) {
-      setKpiAlertConditions(prev => ({
-        ...prev,
-        [selectedKpiForAlert.id]: {
-          email: localAlertEmail,
-          conditions: localAlertConditions
-        }
-      }))
-      toast({
-        title: "Alert configurato",
-        description: "Le condizioni dell'alert sono state salvate"
-      })
-    } else {
-      setKpiAlertConditions(prev => {
-        const { [selectedKpiForAlert.id]: _, ...rest } = prev
-        return rest
-      })
-    }
-
-    setIsAlertSheetOpen(false)
-  }
-
-  // Update the context with all KPI alert conditions when creating todolist
+  // Auto-save alert conditions from the sheet to the main state
   useEffect(() => {
-    // Combine all conditions from all KPIs
-    const allConditions = Object.values(kpiAlertConditions).flatMap(kpi => kpi.conditions)
-    const allEmails = [...new Set(Object.values(kpiAlertConditions).map(kpi => kpi.email))]
+    if (!isAlertSheetOpen || !selectedKpiForAlert) return;
+
+    const handler = setTimeout(() => {
+      const activeConditions = localAlertConditions.filter(c => 
+        (c.type === 'numeric' && (c.min !== undefined || c.max !== undefined)) ||
+        (c.type === 'text' && c.match_text) ||
+        (c.type === 'boolean' && c.boolean_value !== undefined)
+      );
+      
+      const hasActiveConditions = activeConditions.length > 0;
+
+      if (localAlertEmail && hasActiveConditions) {
+        setKpiAlertConditions(prev => ({
+          ...prev,
+          [selectedKpiForAlert.id]: {
+            email: localAlertEmail,
+            conditions: activeConditions
+          }
+        }));
+      } else {
+        setKpiAlertConditions(prev => {
+          if (!selectedKpiForAlert) return prev;
+          const { [selectedKpiForAlert.id]: _, ...rest } = prev;
+          return rest;
+        });
+      }
+    }, 500); // Debounce changes
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [localAlertEmail, localAlertConditions, selectedKpiForAlert, isAlertSheetOpen, setKpiAlertConditions]);
+
+  // Update the global todolist context with all KPI alert conditions when creating todolist
+  useEffect(() => {
+    const allKpisWithAlerts = Object.values(kpiAlertConditions);
+    const allConditions = allKpisWithAlerts.flatMap(kpi => kpi.conditions);
+    const allEmails = [...new Set(allKpisWithAlerts.map(kpi => kpi.email))];
     
     if (allConditions.length > 0 && allEmails.length === 1) {
-      setAlertConditions(allConditions)
-      setAlertEmail(allEmails[0])
+      setAlertConditions(allConditions);
+      setAlertEmail(allEmails[0]);
     } else {
-      setAlertConditions([])
-      setAlertEmail("")
+      setAlertConditions([]);
+      setAlertEmail("");
     }
-  }, [kpiAlertConditions, setAlertConditions, setAlertEmail])
+  }, [kpiAlertConditions, setAlertConditions, setAlertEmail]);
 
   const handleConditionChange = (
     fieldId: string,
@@ -304,16 +295,32 @@ export function KpiSelection() {
         )}
       </CardContent>
 
+      {/* KPI Selection Sheet */}
+      <Sheet open={isKpiSheetOpen} onOpenChange={setIsKpiSheetOpen}>
+        <SheetContent>
+          <SheetHeader>
+            <SheetTitle>Seleziona Controlli</SheetTitle>
+          </SheetHeader>
+          <KpiSelectionSheetContent 
+            onSelectKpi={(kpiId) => {
+              const newSelection = new Set(selectedKpis);
+              if (newSelection.has(kpiId)) {
+                newSelection.delete(kpiId);
+              } else {
+                newSelection.add(kpiId);
+              }
+              setSelectedKpis(newSelection);
+            }}
+          />
+        </SheetContent>
+      </Sheet>
+
       {/* Alert Sheet */}
-      <Sheet open={isAlertSheetOpen} onOpenChange={(open) => {
-        if (!open) {
-          handleCloseAlertSheet()
-        }
-      }}>
+      <Sheet open={isAlertSheetOpen} onOpenChange={setIsAlertSheetOpen}>
         <SheetContent className="sm:max-w-md">
           <SheetHeader>
             <SheetTitle>
-              {selectedKpiForAlert && `Imposta alert per il controllo ${(selectedKpiForAlert as any).name || (selectedKpiForAlert as any).name}`}
+              {selectedKpiForAlert && `Imposta alert per il controllo ${selectedKpiForAlert.name}`}
             </SheetTitle>
           </SheetHeader>
           
@@ -329,7 +336,9 @@ export function KpiSelection() {
               />
             </div>
 
-            {selectedKpiForAlert && getKpiFields(selectedKpiForAlert).map((field) => (
+            {selectedKpiForAlert && getKpiFields(selectedKpiForAlert)
+              .filter(field => field.type !== 'unsupported')
+              .map((field) => (
               <div key={field.id} className="space-y-2">
                 <div className="flex justify-between items-center">
                   <Label htmlFor={field.id}>{field.name}</Label>
@@ -372,9 +381,9 @@ export function KpiSelection() {
                       </div>
                     </div>
                   </div>
-                ) : field.type === 'text' && field.matchAlert ? (
+                ) : field.type === 'text' ? (
                   <div className="space-y-2">
-                    <Label htmlFor={`${field.id}-match`}>Alert when text matches:</Label>
+                    <Label htmlFor={`${field.id}-match`}>Alert when text contains:</Label>
                     <Input 
                       id={`${field.id}-match`} 
                       placeholder="Text to match"
@@ -423,15 +432,6 @@ export function KpiSelection() {
                 ) : null}
               </div>
             ))}
-          </div>
-
-          <div className="flex justify-end mt-6">
-            <Button 
-              type="button"
-              onClick={handleCloseAlertSheet}
-            >
-              Salva e Chiudi
-            </Button>
           </div>
         </SheetContent>
       </Sheet>

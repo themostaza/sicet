@@ -2,44 +2,61 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
-import { AlertCircle, TestTube, CheckCircle, XCircle, Mail } from "lucide-react"
-import { useToast } from "@/components/ui/use-toast"
+import { Switch } from "@/components/ui/switch"
+import { toast } from "@/components/ui/use-toast"
 
 export default function TestKpiAlertsPage() {
-  const { toast } = useToast()
+  const [kpiId, setKpiId] = useState("")
+  const [todolistId, setTodolistId] = useState("")
+  const [testValue, setTestValue] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [result, setResult] = useState<any>(null)
-  
-  const [formData, setFormData] = useState({
-    kpiId: "",
-    deviceId: "",
-    value: ""
-  })
 
-  const handleTest = async () => {
-    if (!formData.kpiId || !formData.deviceId) {
+  // Test values for different field types
+  const testValues = {
+    text: "testo breve",
+    textarea: "testo lungo con più righe",
+    number: 3,
+    decimal: 2.5,
+    boolean: true,
+    image: "https://example.com/image.jpg"
+  }
+
+  const handleTestAlert = async (fieldType: string, value: any) => {
+    if (!kpiId || !todolistId) {
       toast({
         title: "Errore",
-        description: "Inserisci KPI ID e Device ID",
+        description: "Inserisci KPI ID e Todolist ID",
         variant: "destructive"
       })
       return
     }
 
     setIsLoading(true)
-    setResult(null)
-
     try {
-      // Parse the value as JSON if it looks like JSON, otherwise use as string
-      let parsedValue
-      try {
-        parsedValue = JSON.parse(formData.value)
-      } catch {
-        parsedValue = formData.value
+      // Create test value structure based on field type
+      let testValueStructure: any
+      
+      if (fieldType === 'text' || fieldType === 'textarea') {
+        testValueStructure = {
+          id: `${kpiId}-${fieldType}`,
+          value: value
+        }
+      } else if (fieldType === 'number' || fieldType === 'decimal') {
+        testValueStructure = {
+          id: `${kpiId}-${fieldType}`,
+          value: value
+        }
+      } else if (fieldType === 'boolean') {
+        testValueStructure = {
+          id: `${kpiId}-${fieldType}`,
+          value: value
+        }
+      } else {
+        testValueStructure = value
       }
 
       const response = await fetch('/api/test-kpi-alerts', {
@@ -48,32 +65,32 @@ export default function TestKpiAlertsPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          kpiId: formData.kpiId,
-          deviceId: formData.deviceId,
-          value: parsedValue
+          kpiId,
+          todolistId,
+          value: testValueStructure
         }),
       })
 
-      const data = await response.json()
-      setResult(data)
+      const result = await response.json()
 
       if (response.ok) {
         toast({
           title: "Test completato",
-          description: "Controlla i log per i dettagli",
+          description: `Alert test per ${fieldType} completato con successo`,
         })
+        console.log('Test result:', result)
       } else {
         toast({
           title: "Errore nel test",
-          description: data.error || "Errore sconosciuto",
+          description: result.error || "Errore sconosciuto",
           variant: "destructive"
         })
       }
     } catch (error) {
       console.error('Test error:', error)
       toast({
-        title: "Errore",
-        description: "Errore durante il test",
+        title: "Errore nel test",
+        description: "Errore durante l'esecuzione del test",
         variant: "destructive"
       })
     } finally {
@@ -81,50 +98,50 @@ export default function TestKpiAlertsPage() {
     }
   }
 
-  const handleTestResend = async () => {
-    if (!formData.deviceId) {
+  const handleCustomTest = async () => {
+    if (!kpiId || !todolistId || !testValue) {
       toast({
         title: "Errore",
-        description: "Inserisci almeno il Device ID per il test Resend",
+        description: "Inserisci tutti i campi richiesti",
         variant: "destructive"
       })
       return
     }
 
     setIsLoading(true)
-    setResult(null)
-
     try {
-      const response = await fetch('/api/test-resend', {
+      const response = await fetch('/api/test-kpi-alerts', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          email: 'desalvadorfrancesco@gmail.com' // Email di test
+          kpiId,
+          todolistId,
+          value: testValue
         }),
       })
 
-      const data = await response.json()
-      setResult(data)
+      const result = await response.json()
 
       if (response.ok) {
         toast({
-          title: "Test Resend completato",
-          description: "Controlla la tua email",
+          title: "Test completato",
+          description: "Test personalizzato completato con successo",
         })
+        console.log('Custom test result:', result)
       } else {
         toast({
-          title: "Errore nel test Resend",
-          description: data.error || "Errore sconosciuto",
+          title: "Errore nel test",
+          description: result.error || "Errore sconosciuto",
           variant: "destructive"
         })
       }
     } catch (error) {
-      console.error('Resend test error:', error)
+      console.error('Custom test error:', error)
       toast({
-        title: "Errore",
-        description: "Errore durante il test Resend",
+        title: "Errore nel test",
+        description: "Errore durante l'esecuzione del test personalizzato",
         variant: "destructive"
       })
     } finally {
@@ -133,162 +150,135 @@ export default function TestKpiAlertsPage() {
   }
 
   return (
-    <div className="container mx-auto py-6 max-w-4xl">
-      <div className="flex items-center gap-2 mb-6">
-        <TestTube className="h-6 w-6 text-blue-600" />
-        <h1 className="text-2xl font-bold">Test Alert KPI</h1>
+    <div className="container py-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">Test KPI Alerts</h1>
+        <p className="text-muted-foreground">
+          Testa gli alert KPI per tutti i tipi di campo
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Form */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5" />
-              Simula Completamento Todolist
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Configurazione Test</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="kpiId">KPI ID</Label>
               <Input
                 id="kpiId"
-                value={formData.kpiId}
-                onChange={(e) => setFormData(prev => ({ ...prev, kpiId: e.target.value }))}
-                placeholder="ID del KPI da testare"
+                value={kpiId}
+                onChange={(e) => setKpiId(e.target.value)}
+                placeholder="Inserisci KPI ID"
               />
             </div>
-
             <div>
-              <Label htmlFor="deviceId">Device ID</Label>
+              <Label htmlFor="todolistId">Todolist ID</Label>
               <Input
-                id="deviceId"
-                value={formData.deviceId}
-                onChange={(e) => setFormData(prev => ({ ...prev, deviceId: e.target.value }))}
-                placeholder="ID del dispositivo"
+                id="todolistId"
+                value={todolistId}
+                onChange={(e) => setTodolistId(e.target.value)}
+                placeholder="Inserisci Todolist ID"
               />
             </div>
+          </div>
+        </CardContent>
+      </Card>
 
-            <div>
-              <Label htmlFor="value">Valore KPI (JSON o stringa)</Label>
-              <Textarea
-                id="value"
-                value={formData.value}
-                onChange={(e) => setFormData(prev => ({ ...prev, value: e.target.value }))}
-                placeholder='Es: {"id": "field1", "value": 150} oppure "testo"'
-                rows={4}
-              />
-            </div>
-
-            <Button 
-              onClick={handleTest} 
-              disabled={isLoading}
-              className="w-full"
-            >
-              {isLoading ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                  Test in corso...
-                </>
-              ) : (
-                <>
-                  <TestTube className="h-4 w-4 mr-2" />
-                  Esegui Test
-                </>
-              )}
-            </Button>
-
-            <Button 
-              onClick={handleTestResend} 
+      <Card>
+        <CardHeader>
+          <CardTitle>Test per Tipo di Campo</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <Button
+              onClick={() => handleTestAlert('text', testValues.text)}
               disabled={isLoading}
               variant="outline"
-              className="w-full mt-2"
             >
-              {isLoading ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2" />
-                  Test Resend...
-                </>
-              ) : (
-                <>
-                  <Mail className="h-4 w-4 mr-2" />
-                  Test Resend
-                </>
-              )}
+              Test Text: "{testValues.text}"
             </Button>
-          </CardContent>
-        </Card>
+            
+            <Button
+              onClick={() => handleTestAlert('textarea', testValues.textarea)}
+              disabled={isLoading}
+              variant="outline"
+            >
+              Test Textarea: "{testValues.textarea}"
+            </Button>
+            
+            <Button
+              onClick={() => handleTestAlert('number', testValues.number)}
+              disabled={isLoading}
+              variant="outline"
+            >
+              Test Number: {testValues.number}
+            </Button>
+            
+            <Button
+              onClick={() => handleTestAlert('decimal', testValues.decimal)}
+              disabled={isLoading}
+              variant="outline"
+            >
+              Test Decimal: {testValues.decimal}
+            </Button>
+            
+            <Button
+              onClick={() => handleTestAlert('boolean', testValues.boolean)}
+              disabled={isLoading}
+              variant="outline"
+            >
+              Test Boolean: {testValues.boolean ? 'Sì' : 'No'}
+            </Button>
+            
+            <Button
+              onClick={() => handleTestAlert('image', testValues.image)}
+              disabled={isLoading}
+              variant="outline"
+            >
+              Test Image: "{testValues.image}"
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* Results */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Risultati del Test</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {result ? (
-              <div className="space-y-4">
-                {result.success ? (
-                  <div className="flex items-center gap-2 text-green-600">
-                    <CheckCircle className="h-5 w-5" />
-                    <span className="font-medium">Test completato con successo</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-red-600">
-                    <XCircle className="h-5 w-5" />
-                    <span className="font-medium">Test fallito</span>
-                  </div>
-                )}
-
-                <div className="bg-gray-50 p-4 rounded-md">
-                  <h4 className="font-medium mb-2">Dettagli:</h4>
-                  <pre className="text-sm overflow-auto">
-                    {JSON.stringify(result, null, 2)}
-                  </pre>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center text-gray-500 py-8">
-                <TestTube className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                <p>Esegui un test per vedere i risultati</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Instructions */}
-      <Card className="mt-6">
+      <Card>
         <CardHeader>
-          <CardTitle>Istruzioni</CardTitle>
+          <CardTitle>Test Personalizzato</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <h4 className="font-medium mb-2">Come usare questo test:</h4>
-            <ol className="list-decimal list-inside space-y-1 text-sm">
-              <li>Inserisci l'ID del KPI che vuoi testare</li>
-              <li>Inserisci l'ID del dispositivo</li>
-              <li>Inserisci il valore che dovrebbe triggerare l'alert</li>
-              <li>Clicca "Esegui Test"</li>
-            </ol>
+            <Label htmlFor="testValue">Valore di Test (JSON)</Label>
+            <Textarea
+              id="testValue"
+              value={testValue}
+              onChange={(e) => setTestValue(e.target.value)}
+              placeholder='{"id": "field-id", "value": "test value"}'
+              rows={4}
+            />
           </div>
+          <Button
+            onClick={handleCustomTest}
+            disabled={isLoading}
+          >
+            {isLoading ? "Testando..." : "Esegui Test Personalizzato"}
+          </Button>
+        </CardContent>
+      </Card>
 
-          <div>
-            <h4 className="font-medium mb-2">Formati valore supportati:</h4>
-            <ul className="list-disc list-inside space-y-1 text-sm">
-              <li><strong>Stringa semplice:</strong> <code>"testo"</code></li>
-              <li><strong>Numero:</strong> <code>150</code></li>
-              <li><strong>Oggetto singolo:</strong> <code>{"{id: \"field1\", value: 150}"}</code></li>
-              <li><strong>Array di oggetti:</strong> <code>[{"{id: \"field1\", value: 150}"}, {"{id: \"field2\", value: \"testo\"}"}]</code></li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="font-medium mb-2">Cosa succede:</h4>
-            <p className="text-sm">
-              Il test simula il completamento di una todolist con il valore specificato. 
-              Se ci sono alert configurati per quel KPI e dispositivo, verranno controllati 
-              e le email verranno inviate se le condizioni sono soddisfatte.
-            </p>
+      <Card>
+        <CardHeader>
+          <CardTitle>Esempi di Valori di Test</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2 text-sm">
+            <p><strong>Testo semplice:</strong> <code>"testo breve"</code></p>
+            <p><strong>Testo lungo:</strong> <code>"testo lungo con più righe"</code></p>
+            <p><strong>Numero:</strong> <code>3</code></p>
+            <p><strong>Decimale:</strong> <code>2.5</code></p>
+            <p><strong>Booleano:</strong> <code>true</code> o <code>false</code></p>
+            <p><strong>Struttura complessa:</strong> <code>[{"{id: \"A\", value: \"testo\"}"}, {"{id: \"C\", value: 5}"}]</code></p>
           </div>
         </CardContent>
       </Card>

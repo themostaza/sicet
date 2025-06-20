@@ -37,7 +37,7 @@ const AlertSchema = z.object({
 })
 
 type Alert = z.infer<typeof AlertSchema>
-type AlertCondition = z.infer<typeof AlertConditionSchema>
+export type AlertCondition = z.infer<typeof AlertConditionSchema>
 
 // Helper to parse database alert to Alert type
 const parseAlert = (dbAlert: Database['public']['Tables']['kpi_alerts']['Row']): Alert => {
@@ -99,13 +99,14 @@ async function logAlertTrigger(
   alert: Alert,
   kpiId: string,
   todolistId: string,
-  triggeredValue: any,
+  triggeredConditions: { condition: AlertCondition; fieldValue: any }[],
   errorMessage?: string
 ): Promise<void> {
+  const supabaseClient = await supabase()
   // First get the KPI and device details for the email
-  const { data: kpiData, error: kpiError } = await (await supabase())
+  const { data: kpiData, error: kpiError } = await supabaseClient
     .from('kpis')
-    .select('name, description')
+    .select('name, description, value') // Fetch value for field definitions
     .eq('id', kpiId)
     .single()
 
@@ -115,7 +116,7 @@ async function logAlertTrigger(
   }
 
   // Recupera la todolist per ottenere il device_id
-  const { data: todolistData, error: todolistError } = await (await supabase())
+  const { data: todolistData, error: todolistError } = await supabaseClient
     .from('todolist')
     .select('device_id')
     .eq('id', todolistId)
@@ -126,7 +127,7 @@ async function logAlertTrigger(
   }
 
   // Ora recupera il device
-  const { data: deviceData, error: deviceError } = await (await supabase())
+  const { data: deviceData, error: deviceError } = await supabaseClient
     .from('devices')
     .select('name, location')
     .eq('id', todolistData.device_id)
@@ -140,12 +141,12 @@ async function logAlertTrigger(
   // Create the log entry
   const log: Database['public']['Tables']['kpi_alert_logs']['Insert'] = {
     alert_id: alert.id,
-    triggered_value: triggeredValue,
+    triggered_value: triggeredConditions as any, // Storing the array of triggered conditions
     error_message: errorMessage,
     email_sent: false // Will be updated after sending email
   }
 
-  const { data: logData, error: logError } = await (await supabase())
+  const { data: logData, error: logError } = await supabaseClient
     .from('kpi_alert_logs')
     .insert(log)
     .select()
@@ -163,12 +164,12 @@ async function logAlertTrigger(
       kpiDescription: kpiData.description,
       deviceName: deviceData.name,
       deviceLocation: deviceData.location,
-      triggeredValue,
-      conditions: alert.conditions
+      triggeredConditions: triggeredConditions,
+      kpiValue: kpiData.value
     })
 
     // Update the log to mark email as sent
-    const { error: updateError } = await (await supabase())
+    const { error: updateError } = await supabaseClient
       .from('kpi_alert_logs')
       .update({
         email_sent: true,
@@ -182,7 +183,7 @@ async function logAlertTrigger(
   } catch (emailError) {
     console.error('Error sending alert email:', emailError)
     // Update the log with the email error
-    const { error: updateError } = await (await supabase())
+    const { error: updateError } = await supabaseClient
       .from('kpi_alert_logs')
       .update({
         error_message: emailError instanceof Error ? emailError.message : 'Failed to send email'
@@ -275,14 +276,13 @@ export async function checkKpiAlerts(
     }
 
     console.log('Checking alert:', alert)
-    let shouldTrigger = false
-    let triggeredValue: any = null
+    const triggeredConditions: { condition: AlertCondition; fieldValue: any }[] = []
 
     // Check each condition
     for (const condition of alert.conditions) {
       console.log('Checking condition:', condition)
       
-      // Estrai il valore del campo in base alla struttura del valore
+      // Extract field value based on the value structure
       let fieldValue: any = undefined
 
       if (value === null || value === undefined) {
@@ -290,33 +290,40 @@ export async function checkKpiAlerts(
         continue
       }
 
+      // Handle different value structures
       if (Array.isArray(value)) {
-        // Se il valore è un array, cerca il campo con l'ID corrispondente
-        let field = value.find(v => v && typeof v === 'object' && v.id === condition.field_id)
-        if (!field) {
+        // If value is an array, find the field with matching ID
+        const field = value.find(v => v && typeof v === 'object' && v.id === condition.field_id)
+        if (field) {
+          fieldValue = field.value
+        } else {
+          // Try to find by field name if ID doesn't match
           const fieldName = condition.field_id.split('-').pop()?.toLowerCase()
           if (fieldName) {
-            field = value.find(v => v && typeof v === 'object' && 
+            const fieldByName = value.find(v => v && typeof v === 'object' && 
               (v.name?.toLowerCase() === fieldName || 
                v.id?.toLowerCase().endsWith(fieldName)))
+            if (fieldByName) {
+              fieldValue = fieldByName.value
+            }
           }
         }
-        fieldValue = field?.value
-        console.log('Array value, found field:', { field, fieldValue, condition_field_id: condition.field_id })
+        console.log('Array value, found field:', { fieldValue, condition_field_id: condition.field_id })
       } else if (typeof value === 'object') {
+        // Handle object value structure
         if ('id' in value && value.id === condition.field_id) {
           fieldValue = value.value
-          console.log('Object with matching id, fieldValue:', fieldValue)
         } else if ('value' in value) {
           fieldValue = value.value
-          console.log('Object with value property, fieldValue:', fieldValue)
         } else {
+          // If it's a simple object, use it directly
           fieldValue = value
-          console.log('Using object as value:', fieldValue)
         }
+        console.log('Object value, fieldValue:', fieldValue)
       } else {
+        // Handle primitive values
         fieldValue = value
-        console.log('Using primitive value:', fieldValue)
+        console.log('Primitive value:', fieldValue)
       }
 
       if (fieldValue === undefined || fieldValue === null) {
@@ -326,19 +333,17 @@ export async function checkKpiAlerts(
 
       console.log('Evaluating condition with value:', { type: condition.type, fieldValue, condition })
 
+      let conditionTriggered = false
       switch (condition.type) {
         case 'numeric':
           const numValue = Number(fieldValue)
           if (!isNaN(numValue)) {
-            if (condition.min !== undefined && numValue < condition.min) {
-              console.log('Numeric condition triggered (min):', { numValue, min: condition.min })
-              shouldTrigger = true
-              triggeredValue = numValue
-            }
-            if (condition.max !== undefined && numValue > condition.max) {
-              console.log('Numeric condition triggered (max):', { numValue, max: condition.max })
-              shouldTrigger = true
-              triggeredValue = numValue
+            if (
+              (condition.min !== undefined && numValue < condition.min) ||
+              (condition.max !== undefined && numValue > condition.max)
+            ) {
+              console.log('Numeric condition triggered:', { numValue, condition })
+              conditionTriggered = true
             }
           } else {
             console.log('Invalid numeric value:', fieldValue)
@@ -346,38 +351,52 @@ export async function checkKpiAlerts(
           break
 
         case 'text':
-          if (condition.match_text && String(fieldValue).includes(condition.match_text)) {
-            console.log('Text condition triggered:', { fieldValue, match: condition.match_text })
-            shouldTrigger = true
+          const textValue = String(fieldValue)
+          if (condition.match_text && textValue.toLowerCase().includes(condition.match_text.toLowerCase())) {
+            console.log('Text condition triggered:', { textValue, match: condition.match_text })
+            conditionTriggered = true
           }
           break
 
         case 'boolean':
           if (condition.boolean_value !== undefined) {
-            const boolValue = typeof fieldValue === 'string' 
-              ? fieldValue.toLowerCase() === 'true' || fieldValue.toLowerCase() === 'si' || fieldValue.toLowerCase() === 'sì'
-              : Boolean(fieldValue)
+            let boolValue: boolean
+            
+            if (typeof fieldValue === 'string') {
+              const lowerValue = fieldValue.toLowerCase().trim()
+              boolValue = lowerValue === 'true' || 
+                         lowerValue === 'si' || 
+                         lowerValue === 'sì' || 
+                         lowerValue === 'yes' || 
+                         lowerValue === '1' ||
+                         lowerValue === 'on'
+            } else if (typeof fieldValue === 'number') {
+              boolValue = fieldValue !== 0
+            } else {
+              boolValue = Boolean(fieldValue)
+            }
+            
             if (boolValue === condition.boolean_value) {
               console.log('Boolean condition triggered:', { boolValue, expected: condition.boolean_value })
-              shouldTrigger = true
+              conditionTriggered = true
             }
           }
           break
       }
 
-      if (shouldTrigger) {
-        console.log(`ALERT TRIGGERED: KPI ${kpiId} triggered alert for todolist ${todolistId}`)
-        console.log(`Would send email to ${alert.email} with value:`, triggeredValue)
-        
-        // Log the alert trigger
-        try {
-          await logAlertTrigger(alert, kpiId, todolistId, triggeredValue)
-        } catch (error) {
-          console.error('Error logging alert trigger:', error)
-        }
-        break
+      if (conditionTriggered) {
+        triggeredConditions.push({ condition, fieldValue })
       } else {
         console.log('Condition not triggered for this value.')
+      }
+    }
+
+    if (triggeredConditions.length > 0) {
+      console.log(`ALERT TRIGGERED: KPI ${kpiId} triggered alert for todolist ${todolistId} with ${triggeredConditions.length} conditions.`)
+      try {
+        await logAlertTrigger(alert, kpiId, todolistId, triggeredConditions)
+      } catch (error) {
+        console.error('Error logging alert trigger:', error)
       }
     }
   }

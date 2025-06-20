@@ -128,3 +128,48 @@ export function KpiSelectionSheet() {
     </Sheet>
   )
 }
+
+export function KpiSelectionSheetContent({ onSelectKpi }: { onSelectKpi: (kpiId: string) => void }) {
+  const { kpis, selectedKpis, kpiSearchTerm, setKpiSearchTerm } = useTodolist()
+
+  const filteredKpis = kpis.filter(kpi =>
+    kpi.name.toLowerCase().includes(kpiSearchTerm.toLowerCase()) ||
+    kpi.description?.toLowerCase().includes(kpiSearchTerm.toLowerCase())
+  )
+
+  return (
+    <div className="py-4">
+      <Input
+        placeholder="Cerca controlli..."
+        value={kpiSearchTerm}
+        onChange={(e) => setKpiSearchTerm(e.target.value)}
+        className="mb-4"
+      />
+      <div className="border rounded-md">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[50px]">Sel.</TableHead>
+              <TableHead>Nome</TableHead>
+              <TableHead>Descrizione</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredKpis.map((kpi) => (
+              <TableRow key={kpi.id}>
+                <TableCell>
+                  <Checkbox
+                    checked={selectedKpis.has(kpi.id)}
+                    onCheckedChange={() => onSelectKpi(kpi.id)}
+                  />
+                </TableCell>
+                <TableCell>{kpi.name}</TableCell>
+                <TableCell>{kpi.description}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  )
+}
