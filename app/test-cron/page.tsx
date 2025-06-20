@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Clock, Mail, AlertTriangle, CheckCircle, XCircle } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
+import { formatDateForDisplay } from "@/lib/utils"
 
 interface CronJobResult {
   success: boolean
@@ -123,7 +124,7 @@ export default function TestCronPage() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              {lastRunTime.toLocaleString("it-IT")}
+              {formatDateForDisplay(lastRunTime.toString())}
             </p>
           </CardContent>
         </Card>

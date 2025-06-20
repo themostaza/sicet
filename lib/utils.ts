@@ -28,3 +28,32 @@ export function escapeCSV(value: any): string {
   
   return stringValue
 }
+
+// Date formatting utility to prevent hydration mismatches
+export function formatDateForDisplay(dateString: string | null | undefined): string {
+  if (!dateString) return 'N/A'
+  
+  try {
+    // Parse ISO string directly to avoid timezone issues
+    // Expected format: "2025-06-20T11:58:44.123Z" or "2025-06-20T11:58:44"
+    const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/)
+    
+    if (match) {
+      const [, year, month, day, hours, minutes, seconds] = match
+      return `${day}/${month}/${year}, ${hours}:${minutes}:${seconds}`
+    }
+    
+    // If it's not an ISO string, try to parse it as a regular date string
+    // This handles cases where the date might be in a different format
+    const dateMatch = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (dateMatch) {
+      const [, year, month, day] = dateMatch
+      return `${day}/${month}/${year}, 00:00:00`
+    }
+    
+    // If all else fails, return the original string or N/A
+    return dateString || 'N/A'
+  } catch (error) {
+    return 'N/A'
+  }
+}

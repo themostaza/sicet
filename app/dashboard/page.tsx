@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { 
@@ -23,6 +23,7 @@ import { getKpis } from "@/app/actions/actions-kpi"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
   PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, RadarChart, 
   PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ComposedChart, Scatter } from 'recharts'
+import { formatDateForDisplay } from "@/lib/utils"
 
 export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
@@ -148,12 +149,36 @@ export default function DashboardPage() {
     ? Math.round((stats.todolist.completed / stats.todolist.all) * 100) 
     : 0;
 
+  // Client component for last update time
+  function LastUpdateTime() {
+    const [currentTime, setCurrentTime] = useState<string>('')
+
+    useEffect(() => {
+      const updateTime = () => {
+        const now = new Date()
+        const day = now.getDate().toString().padStart(2, '0')
+        const month = (now.getMonth() + 1).toString().padStart(2, '0')
+        const year = now.getFullYear()
+        const hours = now.getHours().toString().padStart(2, '0')
+        const minutes = now.getMinutes().toString().padStart(2, '0')
+        const seconds = now.getSeconds().toString().padStart(2, '0')
+        setCurrentTime(`${day}/${month}/${year}, ${hours}:${minutes}:${seconds}`)
+      }
+      
+      updateTime()
+      const interval = setInterval(updateTime, 1000)
+      return () => clearInterval(interval)
+    }, [])
+
+    return <span>{currentTime}</span>
+  }
+
   return (
     <div className="flex-1 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Dashboard Analitica</h1>
         <div className="text-sm text-muted-foreground">
-          Ultimo aggiornamento: {new Date().toLocaleString('it-IT')}
+          Ultimo aggiornamento: <LastUpdateTime />
         </div>
       </div>
 

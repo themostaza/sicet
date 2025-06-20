@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader as DialogHeaderUI, DialogTitle as D
 import { AlertActions } from "./alert-actions"
 import { AlertDelete } from "./alert-delete"
 import { toast } from "@/components/ui/use-toast"
+import { formatDateForDisplay } from "@/lib/utils"
 
 function renderKpiConditions(alert: any) {
   const fields = Array.isArray(alert.kpis?.value)
@@ -231,7 +232,7 @@ export default function AlertsClient({
                                 <TableCell>{alert.todolist?.devices?.name || 'Punto di controllo sconosciuto'}</TableCell>
                                 <TableCell>{alert.email}</TableCell>
                                 <TableCell>{renderKpiConditions(alert)}</TableCell>
-                                <TableCell>{alert.created_at ? new Date(alert.created_at).toLocaleString('it-IT') : 'N/A'}</TableCell>
+                                <TableCell>{formatDateForDisplay(alert.created_at)}</TableCell>
                                 <TableCell>
                                   <AlertDelete 
                                     alert={alert} 
@@ -319,7 +320,7 @@ export default function AlertsClient({
                                     {alert.todolist?.status === 'completed' ? 'Completata' : 'In corso'}
                                   </Badge>
                                 </TableCell>
-                                <TableCell>{alert.created_at ? new Date(alert.created_at).toLocaleString('it-IT') : 'N/A'}</TableCell>
+                                <TableCell>{formatDateForDisplay(alert.created_at)}</TableCell>
                                 <TableCell>
                                   <AlertDelete 
                                     alert={alert} 
@@ -399,7 +400,7 @@ export default function AlertsClient({
                           <TableCell>{alert.todolist?.devices?.name || 'Punto di controllo sconosciuto'}</TableCell>
                           <TableCell>{alert.email}</TableCell>
                           <TableCell>{renderKpiConditions(alert)}</TableCell>
-                          <TableCell>{alert.created_at ? new Date(alert.created_at).toLocaleString('it-IT') : 'N/A'}</TableCell>
+                          <TableCell>{formatDateForDisplay(alert.created_at)}</TableCell>
                           <TableCell>
                             <AlertDelete 
                               alert={alert} 
@@ -487,7 +488,7 @@ export default function AlertsClient({
                               {alert.todolist?.status === 'completed' ? 'Completata' : 'In corso'}
                             </Badge>
                           </TableCell>
-                          <TableCell>{alert.created_at ? new Date(alert.created_at).toLocaleString('it-IT') : 'N/A'}</TableCell>
+                          <TableCell>{formatDateForDisplay(alert.created_at)}</TableCell>
                           <TableCell>
                             <AlertDelete 
                               alert={alert} 

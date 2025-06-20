@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Loader2, AlertTriangle, CheckCircle, Clock } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
+import { formatDateForDisplay } from "@/lib/utils"
 
 export default function TodolistAlertsPage() {
   const { toast } = useToast()
@@ -102,7 +103,7 @@ export default function TodolistAlertsPage() {
                   <CheckCircle className="h-4 w-4 text-green-600" />
                   <span className="text-sm font-medium">Ultimo controllo:</span>
                   <span className="text-sm text-muted-foreground">
-                    {new Date(lastResult.timestamp).toLocaleString('it-IT')}
+                    {formatDateForDisplay(lastResult.timestamp)}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">

@@ -334,7 +334,7 @@ export const toTask = (row: {
   status: row.status as "pending" | "in_progress" | "completed",
   value: row.value,
   created_at: row.created_at ?? undefined,
-  updated_at: row.updated_at ?? row.created_at ?? new Date().toISOString(),
+  updated_at: row.updated_at ?? row.created_at ?? undefined,
   alert_checked: row.alert_checked
 })
 
@@ -351,7 +351,7 @@ export const toTodolist = (row: {
   scheduled_execution: row.scheduled_execution,
   status: row.status,
   created_at: row.created_at ?? undefined,
-  updated_at: row.updated_at ?? row.created_at ?? new Date().toISOString()
+  updated_at: row.updated_at ?? row.created_at ?? undefined
 })
 
 // Utility per convertire valori del database in CustomTimeSlot

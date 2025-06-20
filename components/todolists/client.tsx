@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useState, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Calendar, AlertTriangle, ArrowRight, CheckCircle2, Plus, Clock, Trash2, Filter, ArrowUp, ArrowDown } from "lucide-react"
@@ -17,6 +17,7 @@ import { deleteTodolistById } from "@/app/actions/actions-todolist"
 import { toast } from "@/components/ui/use-toast"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Checkbox as UICheckbox } from "@/components/ui/checkbox"
+import { formatDateForDisplay } from "@/lib/utils"
 import { format } from "date-fns"
 import { it } from "date-fns/locale"
 
@@ -32,7 +33,7 @@ type TodolistItem = {
   time_slot_type: "standard" | "custom"
   time_slot_start: number | null
   time_slot_end: number | null
-  created_at: string
+  created_at: string | "N/A"
   tasks: Array<{
     id: string
     kpi_id: string
@@ -95,11 +96,14 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
     if (sortColumn === "created_at") {
       aValue = a.created_at
       bValue = b.created_at
-      if (aValue && bValue) {
+      if (aValue && bValue && aValue !== "N/A" && bValue !== "N/A") {
         const aDate = new Date(aValue as string).getTime()
         const bDate = new Date(bValue as string).getTime()
         return sortDirection === "asc" ? aDate - bDate : bDate - aDate
       }
+      // Handle "N/A" values - put them at the end
+      if (aValue === "N/A" && bValue !== "N/A") return 1
+      if (aValue !== "N/A" && bValue === "N/A") return -1
       return 0
     }
     if (sortColumn === "count") {
@@ -519,7 +523,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                       <TableCell onClick={() => canClick && handleRowClick(item)}>{getStatusDisplay(item)}</TableCell>
                       <TableCell onClick={() => canClick && handleRowClick(item)}>{item.count}</TableCell>
                       <TableCell onClick={() => canClick && handleRowClick(item)}>
-                        {item.created_at ? new Date(item.created_at).toLocaleString('it-IT') : 'N/A'}
+                        {item.created_at === "N/A" ? "N/A" : formatDateForDisplay(item.created_at)}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">

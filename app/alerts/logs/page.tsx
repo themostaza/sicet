@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { AlertCircle, CheckSquare, Mail, AlertTriangle } from "lucide-react"
 import React from "react"
+import { formatDateForDisplay } from "@/lib/utils"
 
 // Tipi
 import { Database } from "@/supabase/database.types"
@@ -143,7 +144,7 @@ export default async function AlertLogsPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            {log.triggered_at ? new Date(log.triggered_at).toLocaleString('it-IT') : 'N/A'}
+                            {formatDateForDisplay(log.triggered_at)}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -208,7 +209,7 @@ export default async function AlertLogsPage() {
                             )}
                           </TableCell>
                           <TableCell>
-                            {log.sent_at ? new Date(log.sent_at).toLocaleString('it-IT') : 'N/A'}
+                            {formatDateForDisplay(log.sent_at)}
                           </TableCell>
                         </TableRow>
                       ))}
