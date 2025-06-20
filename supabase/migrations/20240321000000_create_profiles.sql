@@ -12,7 +12,7 @@ create table if not exists public.profiles (
   id uuid default gen_random_uuid() primary key,
   email text not null unique,
   role text not null check (role in ('operator', 'admin', 'referrer')),
-  status text not null check (status in ('registered', 'activated')) default 'registered',
+  status text not null check (status in ('registered', 'activated', 'reset-password')) default 'registered',
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );

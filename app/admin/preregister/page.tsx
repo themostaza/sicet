@@ -26,9 +26,10 @@ import { useFormValidation } from '@/hooks/use-form-validation';
 import { validationRules, ValidationRule } from '@/lib/validation';
 import { FormField } from '@/components/form/form-field';
 import { UserDeleteDialog } from '@/app/admin/user-delete-dialog';
+import { useToast } from '@/components/ui/use-toast';
 
 type Role       = 'operator' | 'admin' | 'referrer';
-type Status     = 'registered' | 'activated';
+type Status     = 'registered' | 'activated' | 'reset-password';
 type ProfileRow = { id: string; email: string; role: Role; status: Status; created_at: string };
 
 const supabase = createClient(
@@ -42,6 +43,13 @@ type PreRegisterFormValues = {
 };
 
 export default function PreRegisterPage() {
+  const [isClient, setIsClient] = useState(false);
+  const { toast: shadcnToast } = useToast();
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   const validationSchema: Record<keyof PreRegisterFormValues, ValidationRule[]> = {
     email: [
       validationRules.required('Email obbligatoria'),
@@ -115,7 +123,44 @@ export default function PreRegisterPage() {
     else       setProfiles(data ?? []);
   };
 
-  useEffect(() => { fetchProfiles(); }, []);
+  useEffect(() => { 
+    if (isClient) {
+      fetchProfiles(); 
+    }
+  }, [isClient]);
+
+  // Mostra toast informativo se ci sono utenti in stato reset-password
+  useEffect(() => {
+    if (isClient && profiles.length > 0) {
+      const resetPasswordUsers = profiles.filter(p => p.status === 'reset-password');
+      if (resetPasswordUsers.length > 0) {
+        shadcnToast({
+          title: "Utenti in attesa di reset password",
+          description: `${resetPasswordUsers.length} utente${resetPasswordUsers.length > 1 ? 'i' : ''} ${resetPasswordUsers.length > 1 ? 'sono' : 'è'} in attesa di impostare la password. Possono andare su /reset per reimpostare la registrazione.`,
+          duration: 5000,
+        });
+      }
+    }
+  }, [profiles, isClient, shadcnToast]);
+
+  // Non renderizzare nulla finché non siamo lato client
+  if (!isClient) {
+    return (
+      <div className="container mx-auto py-6">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div className="lg:col-span-1">
+              <div className="h-64 bg-gray-200 rounded"></div>
+            </div>
+            <div className="lg:col-span-3">
+              <div className="h-64 bg-gray-200 rounded"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-6">
@@ -190,24 +235,56 @@ export default function PreRegisterPage() {
                          profile.role === 'admin' ? 'Admin' : 'Referente'}
                       </TableCell>
                       <TableCell className="capitalize">
-                        {profile.status === 'registered' ? 'Pre-registrato' : 'Attivato'}
+                        {profile.status === 'registered' ? 'Pre-registrato' :
+                         profile.status === 'activated' ? 'Attivato' : 'Reset Password'}
                       </TableCell>
                       <TableCell>
                         {new Date(profile.created_at).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="text-right">
-                        <UserDeleteDialog 
-                          userId={profile.id} 
-                          userEmail={profile.email} 
-                          onDelete={() => {
-                            // Force a re-render by creating a new array
-                            fetchProfiles().then(() => {
-                              // Additional check to ensure the table is updated
-                              const updatedProfiles = profiles.filter(p => p.id !== profile.id);
-                              setProfiles(updatedProfiles);
-                            });
-                          }} 
-                        />
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                const response = await fetch('/api/admin/reset-password', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ email: profile.email })
+                                });
+
+                                const result = await response.json();
+
+                                if (!response.ok) {
+                                  toast.error(result.error || 'Errore durante il reset password');
+                                  return;
+                                }
+
+                                toast.success('Reset password attivato per ' + profile.email);
+                                fetchProfiles();
+                              } catch (error) {
+                                toast.error('Si è verificato un errore imprevisto');
+                              }
+                            }}
+                            disabled={profile.status === 'reset-password'}
+                            title={profile.status === 'reset-password' ? 'Reset password già attivato per questo utente' : 'Attiva reset password per questo utente'}
+                          >
+                            Reset Password
+                          </Button>
+                          <UserDeleteDialog 
+                            userId={profile.id} 
+                            userEmail={profile.email} 
+                            onDelete={() => {
+                              // Force a re-render by creating a new array
+                              fetchProfiles().then(() => {
+                                // Additional check to ensure the table is updated
+                                const updatedProfiles = profiles.filter(p => p.id !== profile.id);
+                                setProfiles(updatedProfiles);
+                              });
+                            }} 
+                          />
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

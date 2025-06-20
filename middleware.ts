@@ -62,12 +62,17 @@ export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname
   const referer = req.headers.get('referer')
 
+  // Skip middleware for API routes - they handle their own authentication
+  if (path.startsWith('/api/')) {
+    return res
+  }
+
   // Define public routes that don't require authentication
   const publicRoutes = [
     '/auth/login', 
     '/register', 
     '/auth/reset-password',
-    '/api/auth/signup'  // Endpoint per la registrazione
+    '/reset'  // Pagina di reset password
   ]
 
   // Check if the path is public
