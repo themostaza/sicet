@@ -23,13 +23,6 @@ export async function logActivity(
   entityId: string,
   metadata: Record<string, any> = {}
 ): Promise<void> {
-  console.log('Attempting to log activity:', {
-    userId,
-    actionType,
-    entityType,
-    entityId,
-    metadata
-  });
 
   try {
     const { data, error } = await (await supabase())
@@ -54,7 +47,6 @@ export async function logActivity(
       return;
     }
 
-    console.log('Successfully logged activity:', data);
   } catch (e) {
     console.error('Unexpected error while logging activity:', e);
   }
@@ -77,7 +69,6 @@ async function getCurrentUserId(): Promise<string | null> {
       return null;
     }
 
-    console.log('Current user found:', user.id);
     return user.id;
   } catch (e) {
     console.error('Unexpected error getting current user:', e);
@@ -94,12 +85,6 @@ export async function logCurrentUserActivity(
   entityId: string,
   metadata: Record<string, any> = {}
 ): Promise<void> {
-  console.log('Starting logCurrentUserActivity for:', {
-    actionType,
-    entityType,
-    entityId,
-    metadata
-  });
 
   const userId = await getCurrentUserId();
   if (!userId) {

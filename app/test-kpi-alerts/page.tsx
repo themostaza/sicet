@@ -78,7 +78,6 @@ export default function TestKpiAlertsPage() {
           title: "Test completato",
           description: `Alert test per ${fieldType} completato con successo`,
         })
-        console.log('Test result:', result)
       } else {
         toast({
           title: "Errore nel test",
@@ -129,7 +128,6 @@ export default function TestKpiAlertsPage() {
           title: "Test completato",
           description: "Test personalizzato completato con successo",
         })
-        console.log('Custom test result:', result)
       } else {
         toast({
           title: "Errore nel test",

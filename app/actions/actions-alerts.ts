@@ -77,7 +77,6 @@ export async function createAlert(
 
 // Get alerts for a KPI
 export async function getKpiAlerts(kpiId: string): Promise<Alert[]> {
-  console.log('Getting alerts for KPI:', kpiId)
   const { data, error } = await (await supabase())
     .from('kpi_alerts')
     .select('*')
@@ -90,7 +89,6 @@ export async function getKpiAlerts(kpiId: string): Promise<Alert[]> {
   }
   
   const alerts = (data ?? []).map(parseAlert)
-  console.log('Found alerts:', alerts)
   return alerts
 }
 
@@ -262,31 +260,25 @@ export async function checkKpiAlerts(
   todolistId: string,
   value: any
 ): Promise<void> {
-  console.log('Checking alerts for:', { kpiId, todolistId, value })
   
   // Get active alerts for this KPI
   const alerts = await getKpiAlerts(kpiId)
-  console.log('Active alerts:', alerts)
   
   for (const alert of alerts) {
     // Skip if alert is for a different todolist
     if (alert.todolist_id !== todolistId) {
-      console.log('Skipping alert for different todolist:', alert.todolist_id)
       continue
     }
 
-    console.log('Checking alert:', alert)
     const triggeredConditions: { condition: AlertCondition; fieldValue: any }[] = []
 
     // Check each condition
     for (const condition of alert.conditions) {
-      console.log('Checking condition:', condition)
       
       // Extract field value based on the value structure
       let fieldValue: any = undefined
 
       if (value === null || value === undefined) {
-        console.log('Value is null or undefined, skipping condition')
         continue
       }
 
@@ -308,7 +300,6 @@ export async function checkKpiAlerts(
             }
           }
         }
-        console.log('Array value, found field:', { fieldValue, condition_field_id: condition.field_id })
       } else if (typeof value === 'object') {
         // Handle object value structure
         if ('id' in value && value.id === condition.field_id) {
@@ -319,19 +310,15 @@ export async function checkKpiAlerts(
           // If it's a simple object, use it directly
           fieldValue = value
         }
-        console.log('Object value, fieldValue:', fieldValue)
       } else {
         // Handle primitive values
         fieldValue = value
-        console.log('Primitive value:', fieldValue)
       }
 
       if (fieldValue === undefined || fieldValue === null) {
-        console.log('Field value is undefined or null, skipping condition')
         continue
       }
 
-      console.log('Evaluating condition with value:', { type: condition.type, fieldValue, condition })
 
       let conditionTriggered = false
       switch (condition.type) {
@@ -342,18 +329,15 @@ export async function checkKpiAlerts(
               (condition.min !== undefined && numValue < condition.min) ||
               (condition.max !== undefined && numValue > condition.max)
             ) {
-              console.log('Numeric condition triggered:', { numValue, condition })
               conditionTriggered = true
             }
           } else {
-            console.log('Invalid numeric value:', fieldValue)
           }
           break
 
         case 'text':
           const textValue = String(fieldValue)
           if (condition.match_text && textValue.toLowerCase().includes(condition.match_text.toLowerCase())) {
-            console.log('Text condition triggered:', { textValue, match: condition.match_text })
             conditionTriggered = true
           }
           break
@@ -377,7 +361,6 @@ export async function checkKpiAlerts(
             }
             
             if (boolValue === condition.boolean_value) {
-              console.log('Boolean condition triggered:', { boolValue, expected: condition.boolean_value })
               conditionTriggered = true
             }
           }
@@ -386,13 +369,10 @@ export async function checkKpiAlerts(
 
       if (conditionTriggered) {
         triggeredConditions.push({ condition, fieldValue })
-      } else {
-        console.log('Condition not triggered for this value.')
       }
     }
 
     if (triggeredConditions.length > 0) {
-      console.log(`ALERT TRIGGERED: KPI ${kpiId} triggered alert for todolist ${todolistId} with ${triggeredConditions.length} conditions.`)
       try {
         await logAlertTrigger(alert, kpiId, todolistId, triggeredConditions)
       } catch (error) {

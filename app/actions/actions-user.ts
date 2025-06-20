@@ -50,20 +50,13 @@ export async function deleteUser(email: string) {
     const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers()
     if (listError) {
       console.error('Error listing users:', listError)
-      // Non lanciare errore qui, potrebbe essere che l'utente non abbia ancora un account Supabase
-      console.log('Impossibile recuperare la lista utenti, ma il profilo è stato eliminato')
     } else {
       const userToDelete = users.find(u => u.email === email)
       if (userToDelete) {
         const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userToDelete.id)
         if (deleteError) {
           console.error('Error deleting user:', deleteError)
-          // Se l'eliminazione dell'utente fallisce, non possiamo fare molto
-          // ma almeno il profilo è stato eliminato
-          console.log('Impossibile eliminare l\'utente Supabase, ma il profilo è stato eliminato')
         }
-      } else {
-        console.log('Utente Supabase non trovato, probabilmente non ancora registrato')
       }
     }
 

@@ -25,13 +25,10 @@ export function UserBox() {
 
     const getUser = async () => {
       try {
-        console.log("UserBox: Getting user...")
         const { data: { user }, error } = await supabase.auth.getUser()
-        console.log("UserBox: getUser response:", { user, error })
         
         if (error) {
           if (error.name === 'AuthSessionMissingError') {
-            console.log("UserBox: No active session")
             setUser(null)
             setRole(null)
             setLoading(false)
@@ -44,15 +41,12 @@ export function UserBox() {
         setUser(user)
 
         if (user) {
-          console.log("UserBox: Getting profile for user:", user.email)
           const { data: profile, error: profileError } = await supabase
             .from("profiles")
             .select("role")
             .eq("email", user.email)
             .single()
-          
-          console.log("UserBox: Profile response:", { profile, profileError })
-          
+                    
           if (profileError) {
             console.error("UserBox: Error getting profile:", profileError)
             return
@@ -62,7 +56,6 @@ export function UserBox() {
         }
       } catch (error: any) {
         if (error?.name === 'AuthSessionMissingError') {
-          console.log("UserBox: No active session (caught)")
           setUser(null)
           setRole(null)
         } else {
@@ -75,7 +68,6 @@ export function UserBox() {
 
     getUser()
 
-    console.log("UserBox: Setting up auth state change listener")
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "INITIAL_SESSION") {
         initialSessionChecked = true;
@@ -87,19 +79,16 @@ export function UserBox() {
     })
 
     return () => {
-      console.log("UserBox: Cleaning up auth state change listener")
       subscription.unsubscribe()
     }
   }, [supabase])
 
   const handleLogout = async () => {
-    console.log("UserBox: Logging out...")
     const { error } = await supabase.auth.signOut()
     if (error) {
       console.error("UserBox: Error during logout:", error)
       return
     }
-    console.log("UserBox: Logout successful")
     router.push("/auth/login")
     router.refresh()
   }

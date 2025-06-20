@@ -176,7 +176,6 @@ export async function getTodolistTasksById(params: unknown): Promise<{ tasks: Ta
 
 // Aggiorna stato task
 export async function updateTaskStatus(taskId: string, status: string): Promise<Task> {
-  console.log(`[updateTaskStatus] Starting update for task ${taskId} with status ${status}`)
   
   // First get the task to get its todolist_id
   const { data: taskData, error: taskError } = await (await getSupabaseClient())
@@ -193,15 +192,6 @@ export async function updateTaskStatus(taskId: string, status: string): Promise<
     console.error(`[updateTaskStatus] Task not found: ${taskId}`)
     throw new Error("Task not found")
   }
-
-  console.log(`[updateTaskStatus] Task data:`, {
-    taskId,
-    todolistId: taskData.todolist_id,
-    kpiId: taskData.kpi_id,
-    hasValue: !!taskData.value,
-    alertChecked: taskData.alert_checked,
-    status
-  })
 
   // Update the task status
   const { data, error } = await (await getSupabaseClient())
@@ -571,8 +561,6 @@ export async function createTodolist(
         .insert(alertData)
 
       if (alertError) handleError(alertError)
-    } else {
-      console.log(`Alert already exists for todolist ${todolist!.id}, skipping creation`)
     }
   }
   
@@ -672,8 +660,6 @@ export async function createMultipleTasks(
         .insert(alertData)
 
       if (alertError) handleError(alertError)
-    } else {
-      console.log(`Alert already exists for todolist ${todolist!.id}, skipping creation`)
     }
   }
   

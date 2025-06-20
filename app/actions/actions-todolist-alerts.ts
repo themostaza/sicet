@@ -230,8 +230,6 @@ export async function sendTodolistOverdueNotification(todolist: OverdueTodolist)
 
       if (deleteError) {
         console.error("Error deleting todolist alert:", deleteError)
-      } else {
-        console.log(`Alert ${todolist.alert.id} deleted after sending email for todolist ${todolist.id}`)
       }
     } catch (disableError) {
       console.error("Error in alert delete logic:", disableError)

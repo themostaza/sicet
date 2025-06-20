@@ -18,9 +18,7 @@ export async function POST(request: NextRequest) {
 
     // Process overdue todolists
     const result = await processOverdueTodolists()
-    
-    console.log(`Cron job processed ${result.processed} overdue todolists with ${result.errors} errors`)
-    
+        
     return NextResponse.json({
       success: true,
       message: `Processed ${result.processed} overdue todolists with ${result.errors} errors`,
