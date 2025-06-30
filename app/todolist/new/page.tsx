@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
+import { Progress } from "@/components/ui/progress"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { ArrowLeft, Loader2 } from "lucide-react"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { createTodolist, createMultipleTasks } from "@/app/actions/actions-todolist"
@@ -31,6 +33,8 @@ function TodolistCreationForm() {
   const router = useRouter()
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [creationProgress, setCreationProgress] = useState(0)
+  const [createdCount, setCreatedCount] = useState(0)
 
   const {
     selectedDevices,
@@ -72,6 +76,10 @@ function TodolistCreationForm() {
       return
     }
 
+    // Reset progress
+    setCreationProgress(0)
+    setCreatedCount(0)
+
     // Creazione todolist
     setIsSubmitting(true)
     try {
@@ -90,6 +98,8 @@ function TodolistCreationForm() {
 
   const createTodolistsAndAlerts = async () => {
     const todolistResults = []
+    let currentProgress = 0
+    
     // Prima crea tutte le todolist (e tasks)
     for (const deviceId of selectedDevices) {
       for (const entry of dateEntries) {
@@ -104,6 +114,11 @@ function TodolistCreationForm() {
           email
         )
         todolistResults.push({ todolist, deviceId, kpiIds })
+        
+        // Update progress
+        currentProgress++
+        setCreatedCount(currentProgress)
+        setCreationProgress((currentProgress / totalTodolistCount) * 100)
       }
     }
 
@@ -116,10 +131,10 @@ function TodolistCreationForm() {
       }
     }
 
-    const createdCount = todolistResults.length
+    const finalCreatedCount = todolistResults.length
     toast({
       title: "Todolist create con successo",
-      description: `Sono state create ${createdCount} todolist`,
+      description: `Sono state create ${finalCreatedCount} todolist`,
     })
     router.push("/todolist")
   }
@@ -166,6 +181,39 @@ function TodolistCreationForm() {
       <DeviceSelectionSheet />
       <KpiSelectionSheet />
       <DateSelectionSheet />
+
+      {/* Progress Modal */}
+      <Dialog open={isSubmitting} onOpenChange={(open) => {
+        // Prevent closing the dialog during creation
+        if (isSubmitting && !open) {
+          return
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Creazione Todolist
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="text-center">
+              <p className="text-sm text-muted-foreground mb-2">
+                Creazione todolist in corso...
+              </p>
+              <div className="flex items-center justify-center gap-2 text-lg font-semibold">
+                <span>{createdCount}</span>
+                <span className="text-muted-foreground">/</span>
+                <span>{totalTodolistCount}</span>
+              </div>
+            </div>
+            <Progress value={creationProgress} className="h-3" />
+            <p className="text-xs text-center text-muted-foreground">
+              {Math.round(creationProgress)}% completato
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
