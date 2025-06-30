@@ -22,6 +22,11 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
     redirect("/device")
   }
 
+  async function onCancel() {
+    "use server"
+    redirect("/devices")
+  }
+
   async function onDelete() {
     "use server"
     await deleteDevice(params.id)
@@ -34,7 +39,7 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
         <CardTitle>Modifica Device</CardTitle>
       </CardHeader>
       <CardContent>
-        <DeviceForm device={device} mode="edit" action={onSubmit} />
+        <DeviceForm device={device} mode="edit" action={onSubmit} cancelAction={onCancel} />
       </CardContent>
       <CardFooter>
       <DeviceDeleteDialog onDelete={onDelete}>

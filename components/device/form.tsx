@@ -18,11 +18,12 @@ interface Props {
   device?: Device | null
   mode: "create" | "edit"
   action: (formData: FormData) => void
+  cancelAction?: () => void
   disabled?: boolean
   defaultId?: string
 }
 
-export default function DeviceForm({ device, mode, action, disabled, defaultId }: Props) {
+export default function DeviceForm({ device, mode, action, cancelAction, disabled, defaultId }: Props) {
   const [tags, setTags] = useState<string[]>(device?.tags ?? [])
   const [tagInput, setTagInput] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -171,7 +172,17 @@ export default function DeviceForm({ device, mode, action, disabled, defaultId }
           )}
         />
 
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          {cancelAction && (
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={cancelAction}
+              disabled={disabled || isSubmitting}
+            >
+              Annulla
+            </Button>
+          )}
           <Button 
             type="submit" 
             disabled={disabled || isSubmitting} 
