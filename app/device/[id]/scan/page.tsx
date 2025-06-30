@@ -4,39 +4,48 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { getCurrentTimeSlot } from "@/lib/validation/todolist-schemas"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2 } from "lucide-react"
+import { Loader2, MapPin, Info } from "lucide-react"
 import { use } from "react"
 import { getTodolistsForDeviceToday } from "@/app/actions/actions-todolist"
+import { getDevice } from "@/app/actions/actions-device"
 import { TodolistSelector } from "./todolist-selector"
+import { Badge } from "@/components/ui/badge"
 
 export default function DeviceScanPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const { id } = use(params)
   const [loading, setLoading] = useState(true)
   const [todolists, setTodolists] = useState<any[] | null>(null)
+  const [device, setDevice] = useState<any>(null)
 
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0]
     
-    const loadTodolists = async () => {
+    const loadData = async () => {
       try {
-        const data = await getTodolistsForDeviceToday(id, today)
-        setTodolists(data)
+        // Carica i dati del dispositivo e le todolist in parallelo
+        const [deviceData, todolistsData] = await Promise.all([
+          getDevice(id),
+          getTodolistsForDeviceToday(id, today)
+        ])
+        
+        setDevice(deviceData)
+        setTodolists(todolistsData)
         
         // Se c'è una sola todolist, vai direttamente a quella
-        if (data && data.length === 1) {
-          const timeSlot = getCurrentTimeSlot(new Date(data[0].scheduled_execution))
-          router.push(`/todolist/view/${data[0].id}/${id}/${today}/${timeSlot}`)
+        if (todolistsData && todolistsData.length === 1) {
+          const timeSlot = getCurrentTimeSlot(new Date(todolistsData[0].scheduled_execution))
+          router.push(`/todolist/view/${todolistsData[0].id}/${id}/${today}/${timeSlot}`)
           return
         }
       } catch (error) {
-        console.error("Error loading todolists:", error)
+        console.error("Error loading data:", error)
       } finally {
         setLoading(false)
       }
     }
 
-    loadTodolists()
+    loadData()
   }, [id, router])
 
   if (loading) {
@@ -50,7 +59,22 @@ export default function DeviceScanPage({ params }: { params: Promise<{ id: strin
             </CardTitle>
           </CardHeader>
           <CardContent className="text-center text-muted-foreground">
-            <p>Stiamo caricando le todolist disponibili</p>
+            <p>Stiamo caricando le informazioni del dispositivo</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!device) {
+    return (
+      <div className="container max-w-md py-12">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg text-destructive">Dispositivo non trovato</CardTitle>
+          </CardHeader>
+          <CardContent className="text-center text-muted-foreground">
+            <p>Il dispositivo richiesto non esiste o non è accessibile.</p>
           </CardContent>
         </Card>
       </div>
@@ -58,7 +82,46 @@ export default function DeviceScanPage({ params }: { params: Promise<{ id: strin
   }
 
   return (
-    <div className="container max-w-md py-12">
+    <div className="container max-w-md py-12 space-y-6">
+      {/* Header con informazioni del dispositivo */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <MapPin className="h-5 w-5 text-primary" />
+            Punto di Controllo
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <h3 className="font-semibold text-lg">{device.name}</h3>
+            {device.location && (
+              <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                <MapPin className="h-3 w-3" />
+                {device.location}
+              </p>
+            )}
+          </div>
+          
+          {device.description && (
+            <div className="flex items-start gap-2 text-sm text-muted-foreground">
+              <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              <p>{device.description}</p>
+            </div>
+          )}
+          
+          {device.tags && device.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {device.tags.map((tag: string, index: number) => (
+                <Badge key={index} variant="secondary" className="text-xs">
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Selettore todolist */}
       <TodolistSelector 
         todolists={todolists || []} 
         deviceId={id} 
