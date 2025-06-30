@@ -130,12 +130,39 @@ export function KpiSelectionSheet() {
 }
 
 export function KpiSelectionSheetContent({ onSelectKpi }: { onSelectKpi: (kpiId: string) => void }) {
-  const { kpis, selectedKpis, kpiSearchTerm, setKpiSearchTerm } = useTodolist()
+  const { kpis, selectedKpis, setSelectedKpis, kpiSearchTerm, setKpiSearchTerm } = useTodolist()
 
   const filteredKpis = kpis.filter(kpi =>
     kpi.name.toLowerCase().includes(kpiSearchTerm.toLowerCase()) ||
     kpi.description?.toLowerCase().includes(kpiSearchTerm.toLowerCase())
   )
+
+  // Calcola se tutti i KPI filtrati sono selezionati
+  const allKpiSelected = filteredKpis.length > 0 && 
+    filteredKpis.every(kpi => selectedKpis.has(kpi.id))
+
+  // Calcola se alcuni KPI filtrati sono selezionati
+  const someKpiSelected = !allKpiSelected && 
+    filteredKpis.some(kpi => selectedKpis.has(kpi.id))
+
+  // Gestisce la selezione/deselezione di tutti i KPI
+  const handleToggleAllKpis = () => {
+    if (allKpiSelected) {
+      // Deseleziona tutti i KPI filtrati
+      const visibleIds = new Set(filteredKpis.map(k => k.id))
+      setSelectedKpis(prev => {
+        const next = new Set(prev)
+        for (const id of visibleIds) {
+          next.delete(id)
+        }
+        return next
+      })
+    } else {
+      // Seleziona tutti i KPI filtrati
+      const visibleIds = filteredKpis.map(k => k.id)
+      setSelectedKpis(prev => new Set([...prev, ...visibleIds]))
+    }
+  }
 
   return (
     <div className="py-4">
@@ -149,7 +176,13 @@ export function KpiSelectionSheetContent({ onSelectKpi }: { onSelectKpi: (kpiId:
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[50px]">Sel.</TableHead>
+              <TableHead className="w-[50px]">
+                <Checkbox
+                  checked={allKpiSelected}
+                  onCheckedChange={handleToggleAllKpis}
+                  aria-label="Seleziona tutti i controlli"
+                />
+              </TableHead>
               <TableHead>Nome</TableHead>
               <TableHead>Descrizione</TableHead>
             </TableRow>

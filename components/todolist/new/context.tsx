@@ -80,8 +80,8 @@ interface TodolistContextType {
   setDeviceSearchTerm: (term: string) => void
   setKpiSearchTerm: (term: string) => void
   setSelectedTags: (tags: Set<string>) => void
-  setManualSelectedDevices: (devices: Set<string>) => void
-  setSelectedKpis: (kpis: Set<string>) => void
+  setManualSelectedDevices: (devices: Set<string> | ((prev: Set<string>) => Set<string>)) => void
+  setSelectedKpis: (kpis: Set<string> | ((prev: Set<string>) => Set<string>)) => void
   setDateEntries: (entries: DateTimeEntry[]) => void
   setDefaultTimeSlot: (timeSlot: TimeSlotValue) => void
   setIntervalDays: (days: number) => void
