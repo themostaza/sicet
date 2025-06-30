@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -21,21 +20,16 @@ import {
 } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { createClient } from '@supabase/supabase-js';
 import { useFormValidation } from '@/hooks/use-form-validation';
 import { validationRules, ValidationRule } from '@/lib/validation';
 import { FormField } from '@/components/form/form-field';
 import { UserDeleteDialog } from '@/app/admin/user-delete-dialog';
 import { useToast } from '@/components/ui/use-toast';
+import { preregisterUser, getPreregisteredUsers } from '@/app/actions/actions-user';
 
 type Role       = 'operator' | 'admin' | 'referrer';
 type Status     = 'registered' | 'activated' | 'reset-password';
 type ProfileRow = { id: string; email: string; role: Role; status: Status; created_at: string };
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 type PreRegisterFormValues = {
   email: string;
@@ -79,33 +73,12 @@ export default function PreRegisterPage() {
     validationSchema,
     onSubmit: async (values: PreRegisterFormValues): Promise<void> => {
       try {
-        /* già esiste? */
-        const { data: already } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('email', values.email)
-          .single();
-
-        if (already) { 
-          toast.error('Email già registrata'); 
-          return; 
-        }
-
-        /* Inserisci riga profilo */
-        const { error: insErr } = await supabase
-          .from('profiles')
-          .insert([{ email: values.email, role: values.role, status: 'registered' }]);
-
-        if (insErr) { 
-          toast.error('Errore durante la registrazione del profilo'); 
-          return; 
-        }
-
+        await preregisterUser(values.email, values.role);
         toast.success('Utente pre-registrato con successo!');
         resetForm();
         fetchProfiles();
       } catch (error) {
-        toast.error('Si è verificato un errore imprevisto');
+        toast.error(error instanceof Error ? error.message : 'Errore durante la pre-registrazione');
       }
     }
   });
@@ -114,13 +87,12 @@ export default function PreRegisterPage() {
 
   /* carica elenco profili */
   const fetchProfiles = async () => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) toast.error('Errore nel recupero utenti');
-    else       setProfiles(data ?? []);
+    try {
+      const result = await getPreregisteredUsers();
+      setProfiles(result.profiles || []);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Errore nel recupero utenti');
+    }
   };
 
   useEffect(() => { 
