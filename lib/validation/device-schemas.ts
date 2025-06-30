@@ -2,7 +2,7 @@ import { z } from "zod";
 
 // Schema base condiviso tra client e server
 export const DeviceFormSchema = z.object({
-  id: z.string().uuid({ message: "ID deve essere un UUID v4 valido" }),
+  id: z.string().regex(/^D[A-Z0-9]{7}$/, { message: "ID deve essere nel formato D seguito da 7 caratteri alfanumerici (es: DABC1234)" }),
   name: z.string().min(2, { message: "Il nome deve contenere almeno 2 caratteri" }).max(60, { message: "Il nome non può superare i 60 caratteri" }),
   location: z.string().min(2, { message: "La posizione deve contenere almeno 2 caratteri" }).max(120, { message: "La posizione non può superare i 120 caratteri" }),
   description: z.string().max(250, { message: "La descrizione non può superare i 250 caratteri" }).optional().or(z.literal("")),
@@ -25,7 +25,7 @@ export const DeviceInsertSchema = DeviceSchema.omit({
 });
 
 export const DeviceUpdateSchema = DeviceSchema.partial().extend({
-  id: z.string().uuid({ message: "ID deve essere un UUID v4 valido" }),
+  id: z.string().regex(/^D[A-Z0-9]{7}$/, { message: "ID deve essere nel formato D seguito da 7 caratteri alfanumerici (es: DABC1234)" }),
 });
 
 export const ListParamsSchema = z.object({

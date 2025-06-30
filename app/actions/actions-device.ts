@@ -12,6 +12,7 @@ import {
   ListParamsSchema 
 } from "@/lib/validation/device-schemas";
 import { logCurrentUserActivity } from "./actions-activity";
+import { generateDeviceId } from "@/lib/utils";
 
 /** -------------------------------------------------------------------------
  * 1 · SUPABASE CLIENT TIPIZZATO
@@ -42,7 +43,7 @@ const toDevice = (row: DevicesRow): Device => ({
 });
 
 const toInsertRow = (d: z.infer<typeof DeviceInsertSchema>): DevicesInsertRow => ({
-  id: d.id,
+  id: d.id || generateDeviceId(),
   name: d.name,
   location: d.location,
   description: d.description ?? null,

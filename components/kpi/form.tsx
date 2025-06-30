@@ -11,6 +11,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { FormField, FormItem, FormLabel, FormControl, FormMessage, Form } from "@/components/ui/form"
+import { generateKpiId } from "@/lib/utils"
 
 interface Props {
   kpi?: Kpi | null
@@ -79,7 +80,7 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
   const form = useForm<z.infer<typeof KpiFormSchema>>({
     resolver: zodResolver(KpiFormSchema),
     defaultValues: {
-      id: kpi?.id || crypto.randomUUID(),
+      id: kpi?.id || generateKpiId(),
       name: kpi?.name || "",
       description: kpi?.description || "",
       value: [] // Inizializzato vuoto e aggiornato nel useEffect

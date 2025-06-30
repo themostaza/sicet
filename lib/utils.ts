@@ -57,3 +57,32 @@ export function formatDateForDisplay(dateString: string | null | undefined): str
     return 'N/A'
   }
 }
+
+/**
+ * Genera un ID alfanumerico corto (8 caratteri)
+ * Usa caratteri maiuscoli e numeri per evitare confusione
+ */
+export function generateShortId(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < 8; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+/**
+ * Genera un ID alfanumerico corto unico per device
+ * Formato: D + 7 caratteri alfanumerici (es: DABC1234)
+ */
+export function generateDeviceId(): string {
+  return 'D' + generateShortId().substring(0, 7);
+}
+
+/**
+ * Genera un ID alfanumerico corto unico per KPI
+ * Formato: K + 7 caratteri alfanumerici (es: KXYZ5678)
+ */
+export function generateKpiId(): string {
+  return 'K' + generateShortId().substring(0, 7);
+}

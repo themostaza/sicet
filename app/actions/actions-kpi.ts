@@ -11,6 +11,7 @@ import {
   ListParamsSchema
 } from "@/lib/validation/kpi-schemas";
 import { logCurrentUserActivity } from "./actions-activity";
+import { generateKpiId } from "@/lib/utils";
 
 /** -------------------------------------------------------------------------
  * 1 · SUPABASE CLIENT TIPIZZATO
@@ -49,8 +50,8 @@ const toInsertRow = (k: z.infer<typeof KpiInsertSchema>): KpisInsertRow => {
     }
   }
   
-  // Generate a unique ID if one isn't provided
-  const id = k.id || crypto.randomUUID();
+  // Generate a unique short ID if one isn't provided
+  const id = k.id || generateKpiId();
   
   return {
     id,

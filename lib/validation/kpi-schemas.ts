@@ -16,7 +16,7 @@ export const JsonSchema: z.ZodType<
 
 // Schema base per KPI
 export const KpiSchema = z.object({
-  id: z.string(),
+  id: z.string().regex(/^K[A-Z0-9]{7}$/, { message: "ID deve essere nel formato K seguito da 7 caratteri alfanumerici (es: KXYZ5678)" }),
   name: z.string(),
   description: z.string().nullable(),
   value: z.any(),
@@ -33,7 +33,7 @@ export const ListParamsSchema = z.object({
 
 // Schema per creazione KPI
 export const KpiInsertSchema = z.object({
-  id: z.string().optional(),
+  id: z.string().regex(/^K[A-Z0-9]{7}$/, { message: "ID deve essere nel formato K seguito da 7 caratteri alfanumerici (es: KXYZ5678)" }).optional(),
   name: z.string().min(1, { message: "Nome richiesto" }),
   description: z.string().optional(),
   value: z.any().optional(),
