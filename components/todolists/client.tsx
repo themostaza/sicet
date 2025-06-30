@@ -1,9 +1,9 @@
 "use client"
 
-import React, { useEffect, useState, useMemo, useCallback } from "react"
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, AlertTriangle, ArrowRight, CheckCircle2, Plus, Clock, Trash2, Filter, ArrowUp, ArrowDown } from "lucide-react"
+import { Calendar, AlertTriangle, ArrowRight, CheckCircle2, Plus, Clock, Trash2, Filter, ArrowUp, ArrowDown, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -44,7 +44,7 @@ type TodolistItem = {
 type FilterType = "all" | "today" | "overdue" | "future" | "completed"
 
 type Props = {
-  todolistsByFilter: Record<FilterType, TodolistItem[]>
+  todolistsByFilter?: Record<FilterType, TodolistItem[]>
   counts: Record<FilterType, number>
   initialFilter: FilterType
   userRole: string | null
@@ -60,6 +60,8 @@ const timeSlotOrder: Record<TimeSlot, number> = {
   custom: 6
 }
 
+const ITEMS_PER_PAGE = 20
+
 export default function TodolistListClient({ todolistsByFilter, counts, initialFilter, userRole, devices }: Props) {
   const router = useRouter()
   const [activeFilter, setActiveFilter] = useState<FilterType>(userRole === 'operator' ? 'today' : initialFilter)
@@ -70,64 +72,153 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
   const [isBulkDeleting, setIsBulkDeleting] = useState(false)
   const [sortColumn, setSortColumn] = useState<string>("date")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
+  
+  // Infinite scroll state
+  const [todolists, setTodolists] = useState<TodolistItem[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [hasMore, setHasMore] = useState(true)
+  const [currentOffset, setCurrentOffset] = useState(0)
+  const [totalCount, setTotalCount] = useState(0)
+  const observerRef = useRef<IntersectionObserver | null>(null)
+  const loadingRef = useRef<HTMLDivElement>(null)
 
   const isOperator = userRole === 'operator'
   const isAdmin = userRole === 'admin'
 
-  const filtered = todolistsByFilter[activeFilter].filter(item => {
-    const matchesDate = !selectedDate || item.date === format(selectedDate, 'yyyy-MM-dd')
-    const matchesDevice = selectedDevice === "all" || item.device_id === selectedDevice
-    return matchesDate && matchesDevice
-  })
+  // Fetch todolists with pagination
+  const fetchTodolists = useCallback(async (reset: boolean = false) => {
+    if (isLoading) return
 
-  const sorted = [...filtered].sort((a, b) => {
-    let aValue = a[sortColumn as keyof TodolistItem]
-    let bValue = b[sortColumn as keyof TodolistItem]
-    if (sortColumn === "date" || sortColumn === "scheduled_execution") {
-      aValue = a.scheduled_execution
-      bValue = b.scheduled_execution
-      if (aValue && bValue) {
-        const aDate = new Date(aValue as string).getTime()
-        const bDate = new Date(bValue as string).getTime()
-        return sortDirection === "asc" ? aDate - bDate : bDate - aDate
+    setIsLoading(true)
+    const offset = reset ? 0 : currentOffset
+
+    try {
+      const params = new URLSearchParams({
+        filter: activeFilter,
+        offset: offset.toString(),
+        limit: ITEMS_PER_PAGE.toString(),
+        ...(selectedDate && { selectedDate: format(selectedDate, 'yyyy-MM-dd') }),
+        ...(selectedDevice !== "all" && { selectedDevice })
+      })
+
+      const response = await fetch(`/api/todolist/paginated?${params}`)
+      if (!response.ok) {
+        throw new Error('Failed to fetch todolists')
+      }
+
+      const data = await response.json()
+      
+      if (reset) {
+        setTodolists(data.todolists)
+        setCurrentOffset(data.todolists.length)
+      } else {
+        // Prevent duplicates by filtering out items that already exist
+        setTodolists(prev => {
+          const existingIds = new Set(prev.map(item => item.id))
+          const newItems = data.todolists.filter((item: TodolistItem) => !existingIds.has(item.id))
+          return [...prev, ...newItems]
+        })
+        setCurrentOffset(prev => prev + data.todolists.length)
+      }
+      
+      setHasMore(data.hasMore)
+      setTotalCount(data.totalCount)
+    } catch (error) {
+      console.error('Error fetching todolists:', error)
+      toast({
+        title: "Errore",
+        description: "Impossibile caricare le todolist. Riprova più tardi.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }, [activeFilter, selectedDate, selectedDevice, currentOffset, isLoading])
+
+  // Reset and fetch when filters change
+  useEffect(() => {
+    setCurrentOffset(0)
+    setTodolists([])
+    setHasMore(true)
+    setSelectedItems(new Set()) // Clear selected items when filters change
+    fetchTodolists(true)
+  }, [activeFilter, selectedDate, selectedDevice])
+
+  // Intersection observer for infinite scroll
+  useEffect(() => {
+    if (!hasMore || isLoading) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoading) {
+          fetchTodolists()
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    if (loadingRef.current) {
+      observer.observe(loadingRef.current)
+    }
+
+    observerRef.current = observer
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect()
+      }
+    }
+  }, [hasMore, isLoading, fetchTodolists])
+
+  const sorted = useMemo(() => {
+    return [...todolists].sort((a, b) => {
+      let aValue = a[sortColumn as keyof TodolistItem]
+      let bValue = b[sortColumn as keyof TodolistItem]
+      if (sortColumn === "date" || sortColumn === "scheduled_execution") {
+        aValue = a.scheduled_execution
+        bValue = b.scheduled_execution
+        if (aValue && bValue) {
+          const aDate = new Date(aValue as string).getTime()
+          const bDate = new Date(bValue as string).getTime()
+          return sortDirection === "asc" ? aDate - bDate : bDate - aDate
+        }
+        return 0
+      }
+      if (sortColumn === "created_at") {
+        aValue = a.created_at
+        bValue = b.created_at
+        if (aValue && bValue && aValue !== "N/A" && bValue !== "N/A") {
+          const aDate = new Date(aValue as string).getTime()
+          const bDate = new Date(bValue as string).getTime()
+          return sortDirection === "asc" ? aDate - bDate : bDate - aDate
+        }
+        if (aValue === "N/A" && bValue !== "N/A") return 1
+        if (aValue !== "N/A" && bValue === "N/A") return -1
+        return 0
+      }
+      if (sortColumn === "count") {
+        return sortDirection === "asc"
+          ? (a.count as number) - (b.count as number)
+          : (b.count as number) - (a.count as number)
+      }
+      if (sortColumn === "status") {
+        return sortDirection === "asc"
+          ? String(a.status).localeCompare(String(b.status))
+          : String(b.status).localeCompare(String(a.status))
+      }
+      if (sortColumn === "device_name") {
+        return sortDirection === "asc"
+          ? String(a.device_name).localeCompare(String(b.device_name))
+          : String(b.device_name).localeCompare(String(a.device_name))
+      }
+      if (sortColumn === "time_slot") {
+        return sortDirection === "asc"
+          ? String(a.time_slot).localeCompare(String(b.time_slot))
+          : String(b.time_slot).localeCompare(String(a.time_slot))
       }
       return 0
-    }
-    if (sortColumn === "created_at") {
-      aValue = a.created_at
-      bValue = b.created_at
-      if (aValue && bValue && aValue !== "N/A" && bValue !== "N/A") {
-        const aDate = new Date(aValue as string).getTime()
-        const bDate = new Date(bValue as string).getTime()
-        return sortDirection === "asc" ? aDate - bDate : bDate - aDate
-      }
-      // Handle "N/A" values - put them at the end
-      if (aValue === "N/A" && bValue !== "N/A") return 1
-      if (aValue !== "N/A" && bValue === "N/A") return -1
-      return 0
-    }
-    if (sortColumn === "count") {
-      return sortDirection === "asc"
-        ? (a.count as number) - (b.count as number)
-        : (b.count as number) - (a.count as number)
-    }
-    if (sortColumn === "status") {
-      return sortDirection === "asc"
-        ? String(a.status).localeCompare(String(b.status))
-        : String(b.status).localeCompare(String(a.status))
-    }
-    if (sortColumn === "device_name") {
-      return sortDirection === "asc"
-        ? String(a.device_name).localeCompare(String(b.device_name))
-        : String(b.device_name).localeCompare(String(a.device_name))
-    }
-    if (sortColumn === "time_slot") {
-      return sortDirection === "asc"
-        ? String(a.time_slot).localeCompare(String(b.time_slot))
-        : String(b.time_slot).localeCompare(String(a.time_slot))
-    }
-    return 0
-  })
+    })
+  }, [todolists, sortColumn, sortDirection])
 
   const handleSort = (col: string) => {
     if (sortColumn === col) {
@@ -162,7 +253,11 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
         title: "Todolist eliminata",
         description: "La todolist è stata eliminata con successo.",
       })
-      router.refresh()
+      // Refresh the list
+      setCurrentOffset(0)
+      setTodolists([])
+      setHasMore(true)
+      fetchTodolists(true)
     } catch (error) {
       console.error("Error deleting todolist:", error)
       toast({
@@ -210,7 +305,11 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
       })
       
       setSelectedItems(new Set())
-      router.refresh()
+      // Refresh the list
+      setCurrentOffset(0)
+      setTodolists([])
+      setHasMore(true)
+      fetchTodolists(true)
     } catch (error) {
       console.error("Error deleting todolists:", error)
       toast({
@@ -486,7 +585,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sorted.length === 0 ? (
+              {sorted.length === 0 && !isLoading ? (
                 <TableRow>
                   <TableCell colSpan={isAdmin ? 8 : 7} className="text-center text-muted-foreground py-8">
                     Nessuna todolist trovata.
@@ -502,7 +601,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                   const canClick = !isOperator || (activeFilter === 'today' || activeFilter === 'completed')
                   return (
                     <TableRow
-                      key={item.id}
+                      key={`${item.id}-${item.device_id}-${item.date}-${item.time_slot}`}
                       className={cn(
                         canClick && 'cursor-pointer',
                         isExpired && 'opacity-75'
@@ -571,6 +670,18 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
               )}
             </TableBody>
           </Table>
+          
+          {/* Infinite scroll loading indicator */}
+          {hasMore && (
+            <div ref={loadingRef} className="flex justify-center py-4">
+              {isLoading && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Caricamento...
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

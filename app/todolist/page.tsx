@@ -1,19 +1,9 @@
 import { createServerSupabaseClient } from "@/lib/supabase-server"
-import { getTodolistsGroupedWithFilters } from "@/app/actions/actions-todolist"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { AlertCircle } from "lucide-react"
 import TodolistListClient from "@/components/todolists/client"
 
 export const dynamic = 'force-dynamic'
-
-type TimeSlot = "mattina" | "pomeriggio" | "sera" | "notte";
-
-const timeSlotOrder: Record<TimeSlot, number> = {
-  mattina: 1,
-  pomeriggio: 2,
-  sera: 3,
-  notte: 4,
-};
 
 export default async function TodolistPage() {
   try {
@@ -36,13 +26,48 @@ export default async function TodolistPage() {
       .select('id, name')
       .order('name')
 
-    const { filtered, counts } = await getTodolistsGroupedWithFilters()
+    // Get initial counts for the filter badges
+    const { count: allCount } = await supabase
+      .from("todolist")
+      .select("*", { count: "exact", head: true })
+
+    const today = new Date().toISOString().split("T")[0]
+    const { count: todayCount } = await supabase
+      .from("todolist")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "pending")
+      .gte("scheduled_execution", `${today}T00:00:00`)
+      .lt("scheduled_execution", `${today}T23:59:59`)
+
+    const { count: overdueCount } = await supabase
+      .from("todolist")
+      .select("*", { count: "exact", head: true })
+      .neq("status", "completed")
+      .lt("scheduled_execution", new Date().toISOString())
+
+    const { count: futureCount } = await supabase
+      .from("todolist")
+      .select("*", { count: "exact", head: true })
+      .neq("status", "completed")
+      .gt("scheduled_execution", `${today}T23:59:59`)
+
+    const { count: completedCount } = await supabase
+      .from("todolist")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "completed")
+
+    const counts = {
+      all: allCount || 0,
+      today: todayCount || 0,
+      overdue: overdueCount || 0,
+      future: futureCount || 0,
+      completed: completedCount || 0,
+    }
 
     return (
       <TodolistListClient
-        todolistsByFilter={filtered}
         counts={counts}
-        initialFilter="all"
+        initialFilter="today"
         userRole={userRole}
         devices={devices || []}
       />

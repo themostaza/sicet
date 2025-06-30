@@ -818,3 +818,159 @@ export async function getTodolistById(todolistId: string) {
 
   return data
 }
+
+// Ottieni le todolist con paginazione per infinite scroll
+export async function getTodolistsWithPagination(params: {
+  filter: "all" | "today" | "overdue" | "future" | "completed"
+  offset: number
+  limit: number
+  selectedDate?: string
+  selectedDevice?: string
+}) {
+  try {
+    const { filter, offset, limit, selectedDate, selectedDevice } = params
+    const supabase = await createServerSupabaseClient()
+    
+    let query = supabase
+      .from("todolist")
+      .select(`
+        id,
+        device_id,
+        scheduled_execution,
+        status,
+        created_at,
+        time_slot_type,
+        time_slot_start,
+        time_slot_end,
+        devices (
+          name
+        ),
+        tasks (
+          id,
+          kpi_id,
+          status
+        )
+      `, { count: "exact" })
+
+    // Apply filters
+    const now = new Date()
+    const today = now.toISOString().split("T")[0]
+
+    if (filter === "today") {
+      query = query
+        .eq("status", "pending")
+        .gte("scheduled_execution", `${today}T00:00:00`)
+        .lt("scheduled_execution", `${today}T23:59:59`)
+    } else if (filter === "overdue") {
+      query = query
+        .neq("status", "completed")
+        .lt("scheduled_execution", now.toISOString())
+    } else if (filter === "future") {
+      query = query
+        .neq("status", "completed")
+        .gt("scheduled_execution", `${today}T23:59:59`)
+    } else if (filter === "completed") {
+      query = query.eq("status", "completed")
+    }
+
+    // Apply date filter if specified
+    if (selectedDate) {
+      query = query
+        .gte("scheduled_execution", `${selectedDate}T00:00:00`)
+        .lt("scheduled_execution", `${selectedDate}T23:59:59`)
+    }
+
+    // Apply device filter if specified
+    if (selectedDevice && selectedDevice !== "all") {
+      query = query.eq("device_id", selectedDevice)
+    }
+
+    // Apply pagination and ordering
+    const { data, count, error } = await query
+      .order("scheduled_execution", { ascending: false })
+      .range(offset, offset + limit - 1)
+
+    if (error) {
+      console.error("Error fetching todolists with pagination:", error)
+      throw new TodolistActionError(
+        "Errore nel recupero delle todolist",
+        "FETCH_ERROR"
+      )
+    }
+
+    if (!data) {
+      return { todolists: [], hasMore: false, totalCount: 0 }
+    }
+
+    // Process todolists
+    const processedTodolists = data.map((item) => {
+      try {
+        const date = new Date(item.scheduled_execution).toISOString().split("T")[0]
+        let timeSlotValue: TimeSlotValue
+        
+        if (item.time_slot_type === "custom" && item.time_slot_start !== null && item.time_slot_end !== null) {
+          const startTime = minutesToTime(item.time_slot_start)
+          const endTime = minutesToTime(item.time_slot_end)
+          const customSlot: CustomTimeSlot = {
+            type: "custom",
+            startHour: startTime.hour,
+            startMinute: startTime.minute,
+            endHour: endTime.hour,
+            endMinute: endTime.minute
+          }
+          timeSlotValue = customSlot
+        } else {
+          const standardSlot = getTimeSlotFromDateTime(item.scheduled_execution)
+          timeSlotValue = standardSlot
+        }
+        
+        return {
+          id: item.id,
+          device_id: item.device_id,
+          device_name: item.devices?.name || "Unknown Device",
+          date,
+          time_slot: timeSlotValue,
+          scheduled_execution: item.scheduled_execution,
+          status: item.status as "pending" | "in_progress" | "completed",
+          count: item.tasks ? item.tasks.length : 0,
+          time_slot_type: item.time_slot_type,
+          time_slot_start: item.time_slot_start,
+          time_slot_end: item.time_slot_end,
+          created_at: item.created_at ?? "N/A",
+          tasks: item.tasks || []
+        }
+      } catch (err) {
+        console.error("Error processing todolist item:", err, item)
+        return null
+      }
+    }).filter(Boolean) as Array<{
+      id: string
+      device_id: string
+      device_name: string
+      date: string
+      time_slot: TimeSlotValue
+      scheduled_execution: string
+      status: "pending" | "in_progress" | "completed"
+      count: number
+      time_slot_type: "standard" | "custom"
+      time_slot_start: number | null
+      time_slot_end: number | null
+      created_at: string | "N/A"
+      tasks: Array<{ id: string; kpi_id: string; status: string }>
+    }>
+
+    const hasMore = count !== null ? offset + limit < count : processedTodolists.length === limit
+
+    return {
+      todolists: processedTodolists,
+      hasMore,
+      totalCount: count || 0
+    }
+  } catch (err) {
+    console.error("Unexpected error in getTodolistsWithPagination:", err)
+    throw new TodolistActionError(
+      "Errore inatteso nel recupero delle todolist",
+      "UNEXPECTED_ERROR"
+    )
+  }
+}
