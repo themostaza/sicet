@@ -98,7 +98,7 @@ interface TodolistContextType {
   handleToggleAllKpis: () => void
   updateDateEntry: (date: Date, timeSlot: TimeSlotValue) => void
   removeDateEntry: (index: number) => void
-  applyIntervalSelection: () => void
+  applyIntervalSelection: (timeSlot?: TimeSlotValue) => void
   updateExistingDateEntry: (index: number, newDate: Date, newTimeSlot: TimeSlotValue) => void
   
   // New fields
@@ -417,7 +417,7 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
     const dateStr = format(normalizedDate, "yyyy-MM-dd")
     
     setDateEntries(prev => {
-      // Check if this date+timeSlot combination already exists
+      // Check if this exact date+timeSlot combination already exists
       const existingIndex = prev.findIndex(
         entry => 
           format(entry.date, "yyyy-MM-dd") === dateStr &&
@@ -430,7 +430,7 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
         // Entry already exists, no need to update
         return prev
       } else {
-        // Add as new entry
+        // Add as new entry - allow multiple time slots for the same date
         return [...prev, { 
           date: normalizedDate, 
           timeSlot, 
@@ -479,8 +479,11 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
   }, [])
   
   // Apply interval selection
-  const applyIntervalSelection = useCallback(() => {
+  const applyIntervalSelection = useCallback((timeSlot?: TimeSlotValue) => {
     if (!startDate || intervalDays < 1 || monthsToRepeat < 1) return
+    
+    // Use provided timeSlot or fall back to defaultTimeSlot
+    const slotToUse = timeSlot || defaultTimeSlot
     
     // Generate dates at regular intervals
     const newDates: Date[] = []
@@ -495,9 +498,9 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
       currentDate.setDate(currentDate.getDate() + intervalDays)
     }
     
-    // Add each date with the default time slot
+    // Add each date with the specified time slot
     for (const newDate of newDates) {
-      updateDateEntry(newDate, defaultTimeSlot)
+      updateDateEntry(newDate, slotToUse)
     }
     
     // Show feedback message

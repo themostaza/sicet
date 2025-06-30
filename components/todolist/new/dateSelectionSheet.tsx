@@ -121,7 +121,8 @@ export function DateSelectionSheet() {
   const handleApplyInterval = () => {
     if (!tempSelectedDate) return
     setStartDate(tempSelectedDate)
-    applyIntervalSelection()
+    // Pass the current selectedTimeSlot directly to applyIntervalSelection
+    applyIntervalSelection(selectedTimeSlot)
   }
 
   const handleReset = () => {
