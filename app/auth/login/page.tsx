@@ -72,11 +72,11 @@ export default function LoginPage() {
 
       // Redirect based on role
       if (profile?.role === 'admin') {
-        router.push('/admin');
+        router.push('/dashboard');
       } else if (profile?.role === 'operator') {
-        router.push('/operator');
+        router.push('/todolist');
       } else {
-        router.push('/referrer');
+        router.push('/summary');
       }
     }
   });
