@@ -19,7 +19,7 @@ export default function Page() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Nuovo KPI</CardTitle>
+        <CardTitle>Nuovo controllo</CardTitle>
       </CardHeader>
       <CardContent>
         <KpiForm mode="create" action={onSubmit} />
