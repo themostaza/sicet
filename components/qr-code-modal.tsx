@@ -1,11 +1,16 @@
 "use client"
 
 import { useState, useRef } from "react"
-import { X, Download, Copy, Check } from "lucide-react"
+import { Download, Copy, Check } from "lucide-react"
 import { QRCodeSVG } from "qrcode.react"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import Link from "next/link"
-import { getCurrentTimeSlot } from "@/lib/validation/todolist-schemas"
 
 interface QRCodeModalProps {
   isOpen: boolean
@@ -17,8 +22,6 @@ interface QRCodeModalProps {
 export function QRCodeModal({ isOpen, onClose, deviceId, deviceName }: QRCodeModalProps) {
   const [copied, setCopied] = useState(false)
   const qrRef = useRef<HTMLDivElement>(null)
-
-  if (!isOpen) return null
 
   const scanUrl = `/device/${deviceId}/scan`
   const fullUrl = `${window.location.origin}${scanUrl}`
@@ -87,18 +90,13 @@ export function QRCodeModal({ isOpen, onClose, deviceId, deviceName }: QRCodeMod
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="relative w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
-        <button
-          onClick={onClose}
-          className="absolute right-4 top-4 text-gray-500 hover:text-gray-700"
-          aria-label="Chiudi"
-        >
-          <X size={20} />
-        </button>
-
-        <h2 className="text-xl font-bold">Codice QR per {deviceName}</h2>
-        <p className="mt-2 text-sm text-gray-500">
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Codice QR per {deviceName}</DialogTitle>
+        </DialogHeader>
+        
+        <p className="text-sm text-muted-foreground">
           Scansiona questo codice per visualizzare e completare le attività per questo dispositivo.
         </p>
 
@@ -136,7 +134,7 @@ export function QRCodeModal({ isOpen, onClose, deviceId, deviceName }: QRCodeMod
             <Download size={16} className="mr-2" /> Scarica Codice QR
           </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
