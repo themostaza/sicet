@@ -3,7 +3,7 @@
 import { useState, useDeferredValue, useMemo, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { QrCode, Edit, Plus, MapPin, Info, Trash2 } from "lucide-react"
+import { QrCode, Edit, Plus, MapPin, Info, Trash2, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { QRCodeModal } from "@/components/qr-code-modal"
 import {
@@ -12,6 +12,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion"
+import { Badge } from "@/components/ui/badge"
 import type { Device } from "@/lib/validation/device-schemas"
 import { getDevices } from "@/app/actions/actions-device"
 import { DeviceDeleteDialog } from "@/components/device/device-delete-dialog"
@@ -24,6 +25,7 @@ interface Props {
 export default function DeviceList({ initialDevices }: Props) {
   const router = useRouter()
   const [search, setSearch] = useState("")
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
   const deferred = useDeferredValue(search)
   const [qr, setQr] = useState<{ open: boolean; device?: Device }>({ open: false })
   const [devices, setDevices] = useState<Device[]>(initialDevices)
@@ -32,15 +34,43 @@ export default function DeviceList({ initialDevices }: Props) {
   const loaderRef = useRef<HTMLDivElement | null>(null)
   const [role, setRole] = useState<string | null>(null)
 
+  // Extract all unique tags from devices
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>()
+    devices.forEach(device => {
+      device.tags?.forEach(tag => tagSet.add(tag))
+    })
+    return Array.from(tagSet).sort()
+  }, [devices])
+
   const list = useMemo(() => {
     const term = deferred.toLowerCase()
-    return devices.filter(
-      (d) =>
+    return devices.filter((d) => {
+      // Text search filter
+      const matchesSearch = 
         d.name.toLowerCase().includes(term) ||
         (d.location ?? "").toLowerCase().includes(term) ||
-        d.tags?.some((t) => t.toLowerCase().includes(term)),
+        d.tags?.some((t) => t.toLowerCase().includes(term))
+      
+      // Tag filter - show devices that have ANY of the selected tags
+      const matchesTags = selectedTags.length === 0 || 
+        selectedTags.some(selectedTag => d.tags?.includes(selectedTag))
+      
+      return matchesSearch && matchesTags
+    })
+  }, [devices, deferred, selectedTags])
+
+  const toggleTag = (tag: string) => {
+    setSelectedTags(prev => 
+      prev.includes(tag) 
+        ? prev.filter(t => t !== tag)
+        : [...prev, tag]
     )
-  }, [devices, deferred])
+  }
+
+  const clearAllTags = () => {
+    setSelectedTags([])
+  }
 
   const openQr = (device: Device) => setQr({ open: true, device })
 
@@ -123,15 +153,96 @@ export default function DeviceList({ initialDevices }: Props) {
         </div>
       </div>
 
+      {/* Tag Filter Section */}
+      {allTags.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium text-gray-700">Filtra per tag</h3>
+            {selectedTags.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearAllTags}
+                className="text-xs text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-3 h-3 mr-1" />
+                Cancella tutti
+              </Button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {allTags.map((tag) => (
+              <Badge
+                key={tag}
+                variant={selectedTags.includes(tag) ? "default" : "outline"}
+                className={`cursor-pointer transition-colors ${
+                  selectedTags.includes(tag)
+                    ? "bg-black text-white hover:bg-gray-800"
+                    : "hover:bg-gray-100"
+                }`}
+                onClick={() => toggleTag(tag)}
+              >
+                {tag}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Filter Summary */}
+      {(search || selectedTags.length > 0) && (
+        <div className="flex items-center justify-between text-sm text-gray-600 bg-gray-50 px-4 py-2 rounded-lg">
+          <div>
+            Mostrando {list.length} di {devices.length} dispositivi
+            {(search || selectedTags.length > 0) && (
+              <span className="ml-2">
+                {search && <span className="inline-block bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs mr-2">Ricerca: "{search}"</span>}
+                {selectedTags.length > 0 && (
+                  <span className="inline-block bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs">
+                    Tag: {selectedTags.join(", ")}
+                  </span>
+                )}
+              </span>
+            )}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSearch("")
+              clearAllTags()
+            }}
+            className="text-xs"
+          >
+            <X className="w-3 h-3 mr-1" />
+            Cancella filtri
+          </Button>
+        </div>
+      )}
+
       {list.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed">
           <Info className="mx-auto h-12 w-12 text-gray-400" />
           <h3 className="mt-2 text-lg font-medium text-gray-900">Nessun device trovato</h3>
           <p className="mt-1 text-sm text-gray-500">
-            {search ? "Nessun risultato per la ricerca corrente." : "Inizia creando un nuovo device."}
+            {search || selectedTags.length > 0 
+              ? "Nessun risultato per i filtri applicati." 
+              : "Inizia creando un nuovo device."
+            }
           </p>
-          {search ? (
-            <Button variant="outline" className="mt-4" onClick={() => setSearch("")}>Cancella ricerca</Button>
+          {(search || selectedTags.length > 0) ? (
+            <div className="mt-4 space-x-2">
+              {search && (
+                <Button variant="outline" onClick={() => setSearch("")}>
+                  Cancella ricerca
+                </Button>
+              )}
+              {selectedTags.length > 0 && (
+                <Button variant="outline" onClick={clearAllTags}>
+                  Cancella filtri tag
+                </Button>
+              )}
+            </div>
           ) : (
             <Button className="mt-4 bg-black hover:bg-gray-800" onClick={() => router.push("/device/new")}>              
               <Plus className="mr-2 h-4 w-4" /> Nuovo Device
