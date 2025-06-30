@@ -826,9 +826,10 @@ export async function getTodolistsWithPagination(params: {
   limit: number
   selectedDate?: string
   selectedDevice?: string
+  selectedTags?: string[]
 }) {
   try {
-    const { filter, offset, limit, selectedDate, selectedDevice } = params
+    const { filter, offset, limit, selectedDate, selectedDevice, selectedTags } = params
     const supabase = await createServerSupabaseClient()
     
     let query = supabase
@@ -843,7 +844,8 @@ export async function getTodolistsWithPagination(params: {
         time_slot_start,
         time_slot_end,
         devices (
-          name
+          name,
+          tags
         ),
         tasks (
           id,
@@ -902,67 +904,79 @@ export async function getTodolistsWithPagination(params: {
       return { todolists: [], hasMore: false, totalCount: 0 }
     }
 
-    // Process todolists
-    const processedTodolists = data.map((item) => {
-      try {
-        const date = new Date(item.scheduled_execution).toISOString().split("T")[0]
-        let timeSlotValue: TimeSlotValue
-        
-        if (item.time_slot_type === "custom" && item.time_slot_start !== null && item.time_slot_end !== null) {
-          const startTime = minutesToTime(item.time_slot_start)
-          const endTime = minutesToTime(item.time_slot_end)
-          const customSlot: CustomTimeSlot = {
-            type: "custom",
-            startHour: startTime.hour,
-            startMinute: startTime.minute,
-            endHour: endTime.hour,
-            endMinute: endTime.minute
+    // Process todolists and apply tag filtering
+    const processedTodolists = data
+      .map((item) => {
+        try {
+          const date = new Date(item.scheduled_execution).toISOString().split("T")[0]
+          let timeSlotValue: TimeSlotValue
+          
+          if (item.time_slot_type === "custom" && item.time_slot_start !== null && item.time_slot_end !== null) {
+            const startTime = minutesToTime(item.time_slot_start)
+            const endTime = minutesToTime(item.time_slot_end)
+            const customSlot: CustomTimeSlot = {
+              type: "custom",
+              startHour: startTime.hour,
+              startMinute: startTime.minute,
+              endHour: endTime.hour,
+              endMinute: endTime.minute
+            }
+            timeSlotValue = customSlot
+          } else {
+            const standardSlot = getTimeSlotFromDateTime(item.scheduled_execution)
+            timeSlotValue = standardSlot
           }
-          timeSlotValue = customSlot
-        } else {
-          const standardSlot = getTimeSlotFromDateTime(item.scheduled_execution)
-          timeSlotValue = standardSlot
+          
+          return {
+            id: item.id,
+            device_id: item.device_id,
+            device_name: item.devices?.name || "Unknown Device",
+            device_tags: item.devices?.tags || [],
+            date,
+            time_slot: timeSlotValue,
+            scheduled_execution: item.scheduled_execution,
+            status: item.status as "pending" | "in_progress" | "completed",
+            count: item.tasks ? item.tasks.length : 0,
+            time_slot_type: item.time_slot_type,
+            time_slot_start: item.time_slot_start,
+            time_slot_end: item.time_slot_end,
+            created_at: item.created_at ?? "N/A",
+            tasks: item.tasks || []
+          }
+        } catch (err) {
+          console.error("Error processing todolist item:", err, item)
+          return null
         }
-        
-        return {
-          id: item.id,
-          device_id: item.device_id,
-          device_name: item.devices?.name || "Unknown Device",
-          date,
-          time_slot: timeSlotValue,
-          scheduled_execution: item.scheduled_execution,
-          status: item.status as "pending" | "in_progress" | "completed",
-          count: item.tasks ? item.tasks.length : 0,
-          time_slot_type: item.time_slot_type,
-          time_slot_start: item.time_slot_start,
-          time_slot_end: item.time_slot_end,
-          created_at: item.created_at ?? "N/A",
-          tasks: item.tasks || []
-        }
-      } catch (err) {
-        console.error("Error processing todolist item:", err, item)
-        return null
-      }
-    }).filter(Boolean) as Array<{
-      id: string
-      device_id: string
-      device_name: string
-      date: string
-      time_slot: TimeSlotValue
-      scheduled_execution: string
-      status: "pending" | "in_progress" | "completed"
-      count: number
-      time_slot_type: "standard" | "custom"
-      time_slot_start: number | null
-      time_slot_end: number | null
-      created_at: string | "N/A"
-      tasks: Array<{ id: string; kpi_id: string; status: string }>
-    }>
+      })
+      .filter(Boolean) as Array<{
+        id: string
+        device_id: string
+        device_name: string
+        device_tags: string[]
+        date: string
+        time_slot: TimeSlotValue
+        scheduled_execution: string
+        status: "pending" | "in_progress" | "completed"
+        count: number
+        time_slot_type: "standard" | "custom"
+        time_slot_start: number | null
+        time_slot_end: number | null
+        created_at: string | "N/A"
+        tasks: Array<{ id: string; kpi_id: string; status: string }>
+      }>
 
-    const hasMore = count !== null ? offset + limit < count : processedTodolists.length === limit
+    // Apply tag filtering if specified
+    let filteredTodolists = processedTodolists
+    if (selectedTags && selectedTags.length > 0) {
+      filteredTodolists = processedTodolists.filter(todolist => 
+        selectedTags.some(selectedTag => todolist.device_tags.includes(selectedTag))
+      )
+    }
+
+    const hasMore = count !== null ? offset + limit < count : filteredTodolists.length === limit
 
     return {
-      todolists: processedTodolists,
+      todolists: filteredTodolists,
       hasMore,
       totalCount: count || 0
     }

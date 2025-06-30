@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, AlertTriangle, ArrowRight, CheckCircle2, Plus, Clock, Trash2, Filter, ArrowUp, ArrowDown, Loader2 } from "lucide-react"
+import { Calendar, AlertTriangle, ArrowRight, CheckCircle2, Plus, Clock, Trash2, Filter, ArrowUp, ArrowDown, Loader2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -20,11 +20,13 @@ import { Checkbox as UICheckbox } from "@/components/ui/checkbox"
 import { formatDateForDisplay } from "@/lib/utils"
 import { format } from "date-fns"
 import { it } from "date-fns/locale"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
 type TodolistItem = {
   id: string
   device_id: string
   device_name: string
+  device_tags: string[]
   date: string
   time_slot: TimeSlotValue
   scheduled_execution: string
@@ -48,7 +50,8 @@ type Props = {
   counts: Record<FilterType, number>
   initialFilter: FilterType
   userRole: string | null
-  devices: Array<{ id: string; name: string }>
+  devices: Array<{ id: string; name: string; tags?: string[] | null }>
+  allTags: string[]
 }
 
 const timeSlotOrder: Record<TimeSlot, number> = {
@@ -62,16 +65,18 @@ const timeSlotOrder: Record<TimeSlot, number> = {
 
 const ITEMS_PER_PAGE = 20
 
-export default function TodolistListClient({ todolistsByFilter, counts, initialFilter, userRole, devices }: Props) {
+export default function TodolistListClient({ todolistsByFilter, counts, initialFilter, userRole, devices, allTags }: Props) {
   const router = useRouter()
   const [activeFilter, setActiveFilter] = useState<FilterType>(userRole === 'operator' ? 'today' : initialFilter)
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined)
   const [selectedDevice, setSelectedDevice] = useState<string>("all")
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
   const [isBulkDeleting, setIsBulkDeleting] = useState(false)
   const [sortColumn, setSortColumn] = useState<string>("date")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false)
   
   // Infinite scroll state
   const [todolists, setTodolists] = useState<TodolistItem[]>([])
@@ -84,6 +89,28 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
 
   const isOperator = userRole === 'operator'
   const isAdmin = userRole === 'admin'
+
+  const toggleTag = (tag: string) => {
+    setSelectedTags(prev => 
+      prev.includes(tag) 
+        ? prev.filter(t => t !== tag)
+        : [...prev, tag]
+    )
+  }
+
+  const clearAllTags = () => {
+    setSelectedTags([])
+  }
+
+  const clearAllFilters = () => {
+    setSelectedDate(undefined)
+    setSelectedDevice("all")
+    clearAllTags()
+  }
+
+  const applyFilters = () => {
+    setIsFilterModalOpen(false)
+  }
 
   // Fetch todolists with pagination
   const fetchTodolists = useCallback(async (reset: boolean = false) => {
@@ -98,7 +125,8 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
         offset: offset.toString(),
         limit: ITEMS_PER_PAGE.toString(),
         ...(selectedDate && { selectedDate: format(selectedDate, 'yyyy-MM-dd') }),
-        ...(selectedDevice !== "all" && { selectedDevice })
+        ...(selectedDevice !== "all" && { selectedDevice }),
+        ...(selectedTags.length > 0 && { selectedTags: selectedTags.join(',') })
       })
 
       const response = await fetch(`/api/todolist/paginated?${params}`)
@@ -133,7 +161,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
     } finally {
       setIsLoading(false)
     }
-  }, [activeFilter, selectedDate, selectedDevice, currentOffset, isLoading])
+  }, [activeFilter, selectedDate, selectedDevice, currentOffset, isLoading, selectedTags])
 
   // Reset and fetch when filters change
   useEffect(() => {
@@ -142,7 +170,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
     setHasMore(true)
     setSelectedItems(new Set()) // Clear selected items when filters change
     fetchTodolists(true)
-  }, [activeFilter, selectedDate, selectedDevice])
+  }, [activeFilter, selectedDate, selectedDevice, selectedTags])
 
   // Intersection observer for infinite scroll
   useEffect(() => {
@@ -482,59 +510,165 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
         </div>
 
         {isAdmin && (
-          <div className="flex flex-wrap gap-4 mb-4">
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-muted-foreground" />
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-[200px] justify-start text-left font-normal",
-                      !selectedDate && "text-muted-foreground"
-                    )}
-                  >
-                    <Calendar className="mr-2 h-4 w-4" />
-                    {selectedDate ? format(selectedDate, "PPP", { locale: it }) : "Seleziona data"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <CalendarComponent
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={setSelectedDate}
-                    initialFocus
-                    locale={it}
-                  />
-                </PopoverContent>
-              </Popover>
-              {selectedDate && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSelectedDate(undefined)}
-                  className="h-8 px-2"
-                >
-                  <Trash2 className="h-4 w-4" />
+          <div className="flex items-center gap-2 mb-4">
+            <Dialog open={isFilterModalOpen} onOpenChange={setIsFilterModalOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="flex items-center gap-2">
+                  <Filter className="h-4 w-4" />
+                  Filtri
+                  {(selectedDate || selectedDevice !== "all" || selectedTags.length > 0) && (
+                    <Badge variant="secondary" className="ml-1">
+                      {(selectedDate ? 1 : 0) + (selectedDevice !== "all" ? 1 : 0) + selectedTags.length}
+                    </Badge>
+                  )}
                 </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Filtri</DialogTitle>
+                  <DialogDescription>
+                    Seleziona i filtri per personalizzare la visualizzazione delle todolist
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-6">
+                  {/* Date Filter */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-medium">Data</h3>
+                    <div className="flex items-center gap-2">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !selectedDate && "text-muted-foreground"
+                            )}
+                          >
+                            <Calendar className="mr-2 h-4 w-4" />
+                            {selectedDate ? format(selectedDate, "PPP", { locale: it }) : "Seleziona data"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <CalendarComponent
+                            mode="single"
+                            selected={selectedDate}
+                            onSelect={setSelectedDate}
+                            initialFocus
+                            locale={it}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      {selectedDate && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedDate(undefined)}
+                          className="h-8 px-2"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Device Filter */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-medium">Dispositivo</h3>
+                    <Select value={selectedDevice} onValueChange={setSelectedDevice}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleziona dispositivo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tutti i dispositivi</SelectItem>
+                        {devices.map(device => (
+                          <SelectItem key={device.id} value={device.id}>
+                            {device.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Tag Filter */}
+                  {allTags.length > 0 && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-medium">Tag</h3>
+                        {selectedTags.length > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={clearAllTags}
+                            className="text-xs text-gray-500 hover:text-gray-700"
+                          >
+                            <X className="w-3 h-3 mr-1" />
+                            Cancella tutti
+                          </Button>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {allTags.map((tag) => (
+                          <Badge
+                            key={tag}
+                            variant={selectedTags.includes(tag) ? "default" : "outline"}
+                            className={`cursor-pointer transition-colors ${
+                              selectedTags.includes(tag)
+                                ? "bg-black text-white hover:bg-gray-800"
+                                : "hover:bg-gray-100"
+                            }`}
+                            onClick={() => toggleTag(tag)}
+                          >
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2 pt-4">
+                    <Button
+                      variant="outline"
+                      onClick={clearAllFilters}
+                      className="flex-1"
+                    >
+                      Cancella tutti
+                    </Button>
+                    <Button
+                      onClick={applyFilters}
+                      className="flex-1"
+                    >
+                      Applica filtri
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        )}
+
+        {/* Filter Summary */}
+        {(selectedDate || selectedDevice !== "all" || selectedTags.length > 0) && (
+          <div className="flex items-center justify-between text-sm text-gray-600 bg-gray-50 px-4 py-2 rounded-lg mb-4">
+            <div>
+              Filtri applicati:
+              {selectedDate && <span className="inline-block bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs mr-2 ml-2">Data: {format(selectedDate, "PPP", { locale: it })}</span>}
+              {selectedDevice !== "all" && <span className="inline-block bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs mr-2">Dispositivo: {devices.find(d => d.id === selectedDevice)?.name}</span>}
+              {selectedTags.length > 0 && (
+                <span className="inline-block bg-purple-100 text-purple-800 px-2 py-0.5 rounded text-xs">
+                  Tag: {selectedTags.join(", ")}
+                </span>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-muted-foreground" />
-              <Select value={selectedDevice} onValueChange={setSelectedDevice}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Seleziona dispositivo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tutti i dispositivi</SelectItem>
-                  {devices.map(device => (
-                    <SelectItem key={device.id} value={device.id}>
-                      {device.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearAllFilters}
+              className="text-xs"
+            >
+              <X className="w-3 h-3 mr-1" />
+              Cancella filtri
+            </Button>
           </div>
         )}
 
@@ -616,7 +750,20 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                           />
                         </TableCell>
                       )}
-                      <TableCell onClick={() => canClick && handleRowClick(item)}>{item.device_name}</TableCell>
+                      <TableCell onClick={() => canClick && handleRowClick(item)}>
+                        <div>
+                          <div className="font-medium">{item.device_name}</div>
+                          {item.device_tags && item.device_tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {item.device_tags.map((tag) => (
+                                <span key={tag} className="inline-block bg-gray-100 rounded-full px-2 py-0.5 text-xs text-gray-800">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell onClick={() => canClick && handleRowClick(item)}>{item.date}</TableCell>
                       <TableCell onClick={() => canClick && handleRowClick(item)}>{formatTimeSlot(item.time_slot)}</TableCell>
                       <TableCell onClick={() => canClick && handleRowClick(item)}>{getStatusDisplay(item)}</TableCell>

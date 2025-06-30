@@ -20,11 +20,23 @@ export default async function TodolistPage() {
       userRole = profile?.role ?? null
     }
 
-    // Fetch devices list
+    // Fetch devices list with tags
     const { data: devices } = await supabase
       .from('devices')
-      .select('id, name')
+      .select('id, name, tags')
       .order('name')
+
+    // Extract all unique tags from devices
+    const allTags = devices?.reduce((tags: string[], device) => {
+      if (device.tags) {
+        device.tags.forEach(tag => {
+          if (!tags.includes(tag)) {
+            tags.push(tag)
+          }
+        })
+      }
+      return tags
+    }, []) || []
 
     // Get initial counts for the filter badges
     const { count: allCount } = await supabase
@@ -70,6 +82,7 @@ export default async function TodolistPage() {
         initialFilter="today"
         userRole={userRole}
         devices={devices || []}
+        allTags={allTags}
       />
     )
   } catch (error) {

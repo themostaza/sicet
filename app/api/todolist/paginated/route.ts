@@ -10,6 +10,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "20")
     const selectedDate = searchParams.get("selectedDate") || undefined
     const selectedDevice = searchParams.get("selectedDevice") || undefined
+    const selectedTags = searchParams.get("selectedTags") ? searchParams.get("selectedTags")!.split(",") : undefined
 
     if (!filter) {
       return NextResponse.json(
@@ -23,7 +24,8 @@ export async function GET(request: NextRequest) {
       offset,
       limit,
       selectedDate,
-      selectedDevice
+      selectedDevice,
+      selectedTags
     })
 
     return NextResponse.json(result)
