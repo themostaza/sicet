@@ -28,9 +28,9 @@ export function KpiDeleteDialog({ onDelete, disabled, children }: KpiDeleteDialo
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Elimina KPI?</AlertDialogTitle>
+          <AlertDialogTitle>Elimina controllo?</AlertDialogTitle>
           <AlertDialogDescription>
-            Sei sicuro di voler eliminare questo KPI? Questa azione non può essere annullata.
+            Sei sicuro di voler eliminare questo controllo? Questa azione non può essere annullata.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
