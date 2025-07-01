@@ -36,7 +36,7 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Modifica Device</CardTitle>
+        <CardTitle>Modifica Punto di Controllo</CardTitle>
       </CardHeader>
       <CardContent>
         <DeviceForm device={device} mode="edit" action={onSubmit} cancelAction={onCancel} />

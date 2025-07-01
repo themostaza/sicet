@@ -24,7 +24,7 @@ export default function Page() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Nuovo Device</CardTitle>
+        <CardTitle>Nuovo Punto di Controllo</CardTitle>
       </CardHeader>
       <CardContent>
         <DeviceForm mode="create" action={onSubmit} defaultId={defaultId} />

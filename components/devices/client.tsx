@@ -120,9 +120,9 @@ export default function DeviceList({ initialDevices }: Props) {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Dispositivi</h1>
+        <h1 className="text-2xl font-bold">Punti di Controllo</h1>
         <Button className="bg-black hover:bg-gray-800" onClick={() => router.push("/device/new")}>        
-          <Plus className="mr-2 h-4 w-4" /> Nuovo Device
+          <Plus className="mr-2 h-4 w-4" /> Nuovo Punto di Controllo
         </Button>
       </div>
 
@@ -227,7 +227,7 @@ export default function DeviceList({ initialDevices }: Props) {
           <p className="mt-1 text-sm text-gray-500">
             {search || selectedTags.length > 0 
               ? "Nessun risultato per i filtri applicati." 
-              : "Inizia creando un nuovo device."
+              : "Inizia creando un nuovo punto di controllo."
             }
           </p>
           {(search || selectedTags.length > 0) ? (
@@ -245,7 +245,7 @@ export default function DeviceList({ initialDevices }: Props) {
             </div>
           ) : (
             <Button className="mt-4 bg-black hover:bg-gray-800" onClick={() => router.push("/device/new")}>              
-              <Plus className="mr-2 h-4 w-4" /> Nuovo Device
+              <Plus className="mr-2 h-4 w-4" /> Nuovo Punto di Controllo
             </Button>
           )}
         </div>
