@@ -74,7 +74,7 @@ export default function PreRegisterPage() {
     onSubmit: async (values: PreRegisterFormValues): Promise<void> => {
       try {
         await preregisterUser(values.email, values.role);
-        toast.success('Utente pre-registrato con successo!');
+        toast.success('Utente pre-registrato con successo! L\'utente può ora andare su /reset per impostare la password.');
         resetForm();
         fetchProfiles();
       } catch (error) {
@@ -107,8 +107,8 @@ export default function PreRegisterPage() {
       const resetPasswordUsers = profiles.filter(p => p.status === 'reset-password');
       if (resetPasswordUsers.length > 0) {
         shadcnToast({
-          title: "Utenti in attesa di reset password",
-          description: `${resetPasswordUsers.length} utente${resetPasswordUsers.length > 1 ? 'i' : ''} ${resetPasswordUsers.length > 1 ? 'sono' : 'è'} in attesa di impostare la password. Possono andare su /reset per reimpostare la registrazione.`,
+          title: "Utenti in attesa di impostare password",
+          description: `${resetPasswordUsers.length} utente${resetPasswordUsers.length > 1 ? 'i' : ''} ${resetPasswordUsers.length > 1 ? 'sono' : 'è'} in attesa di impostare la password. Possono andare su /reset per completare la registrazione.`,
           duration: 5000,
         });
       }
@@ -208,7 +208,8 @@ export default function PreRegisterPage() {
                       </TableCell>
                       <TableCell className="capitalize">
                         {profile.status === 'registered' ? 'Pre-registrato' :
-                         profile.status === 'activated' ? 'Attivato' : 'Reset Password'}
+                         profile.status === 'activated' ? 'Attivato' : 
+                         profile.status === 'reset-password' ? 'Reset Password' : profile.status}
                       </TableCell>
                       <TableCell>
                         {new Date(profile.created_at).toLocaleDateString()}
@@ -240,7 +241,7 @@ export default function PreRegisterPage() {
                               }
                             }}
                             disabled={profile.status === 'reset-password'}
-                            title={profile.status === 'reset-password' ? 'Reset password già attivato per questo utente' : 'Attiva reset password per questo utente'}
+                            title={profile.status === 'reset-password' ? 'Utente già in attesa di impostare password' : 'Attiva reset password per questo utente'}
                           >
                             Reset Password
                           </Button>
@@ -248,12 +249,8 @@ export default function PreRegisterPage() {
                             userId={profile.id} 
                             userEmail={profile.email} 
                             onDelete={() => {
-                              // Force a re-render by creating a new array
-                              fetchProfiles().then(() => {
-                                // Additional check to ensure the table is updated
-                                const updatedProfiles = profiles.filter(p => p.id !== profile.id);
-                                setProfiles(updatedProfiles);
-                              });
+                              // Refresh the profiles list from the server
+                              fetchProfiles();
                             }} 
                           />
                         </div>

@@ -35,16 +35,19 @@ export async function deleteUser(email: string) {
       throw new Error('Non autorizzato: richiesto ruolo admin')
     }
 
-    // Prima elimina dal profilo
-    const { error: profileDeleteError } = await supabase
+    // Prima elimina dal profilo usando il client admin per bypassare RLS
+    const { data: deletedProfile, error: profileDeleteError } = await supabaseAdmin
       .from('profiles')
       .delete()
       .eq('email', email)
+      .select()
 
     if (profileDeleteError) {
       console.error('Error deleting profile:', profileDeleteError)
       throw new Error('Errore durante l\'eliminazione del profilo')
     }
+
+    console.log('Profile deleted successfully:', deletedProfile)
 
     // Poi elimina l'utente usando il client admin (se esiste)
     const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers()
@@ -123,7 +126,7 @@ export async function preregisterUser(email: string, role: 'operator' | 'admin' 
       .insert([{ 
         email, 
         role, 
-        status: 'registered' 
+        status: 'reset-password' 
       }])
       .select()
       .single()
@@ -138,7 +141,7 @@ export async function preregisterUser(email: string, role: 'operator' | 'admin' 
 
     return { 
       success: true, 
-      message: 'Utente pre-registrato con successo',
+      message: 'Utente pre-registrato con successo. L\'utente può ora andare su /reset per impostare la password.',
       profile: newProfile
     }
 
@@ -181,6 +184,8 @@ export async function getPreregisteredUsers() {
       console.error('Error fetching profiles:', fetchError)
       throw new Error('Errore nel recupero utenti')
     }
+
+    console.log('Fetched profiles:', profiles)
 
     return { 
       success: true, 

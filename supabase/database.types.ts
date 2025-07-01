@@ -248,7 +248,7 @@ export interface Database {
           id: string
           email: string
           role: 'operator' | 'admin' | 'referrer'
-          status: 'registered' | 'activated'
+          status: 'registered' | 'activated' | 'reset-password'
           created_at: string
           updated_at: string
         }
@@ -256,7 +256,7 @@ export interface Database {
           id?: string
           email: string
           role: 'operator' | 'admin' | 'referrer'
-          status?: 'registered' | 'activated'
+          status?: 'registered' | 'activated' | 'reset-password'
           created_at?: string
           updated_at?: string
         }
@@ -264,7 +264,7 @@ export interface Database {
           id?: string
           email?: string
           role?: 'operator' | 'admin' | 'referrer'
-          status?: 'registered' | 'activated'
+          status?: 'registered' | 'activated' | 'reset-password'
           created_at?: string
           updated_at?: string
         }

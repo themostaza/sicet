@@ -20,7 +20,6 @@ export default function LoginPage() {
   );
 
   const [loginError, setLoginError] = useState<string | null>(null);
-  const [isResettingPassword, setIsResettingPassword] = useState(false);
 
   const validationSchema = {
     email: [
@@ -38,8 +37,7 @@ export default function LoginPage() {
     handleChange,
     handleBlur,
     handleSubmit: handleFormSubmit,
-    isSubmitting,
-    validateFields
+    isSubmitting
   } = useFormValidation({
     initialValues: {
       email: '',
@@ -81,45 +79,7 @@ export default function LoginPage() {
     }
   });
 
-  const handleResetPassword = async () => {
-    // Validate email field
-    const emailValidation = validateFields();
-    if (!emailValidation || !values.email) {
-      toast.error('Inserisci un indirizzo email valido');
-      return;
-    }
 
-    setIsResettingPassword(true);
-    try {
-      // Check if user exists
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', values.email)
-        .single();
-
-      if (!profile) {
-        toast.error('Email non registrata');
-        return;
-      }
-
-      // Send reset password email
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(values.email, {
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/register?email=${encodeURIComponent(values.email)}&source=user`
-      });
-
-      if (resetError) {
-        toast.error('Errore nell\'invio della mail di reset');
-        return;
-      }
-
-      toast.success('Email di reset password inviata!');
-    } catch (error) {
-      toast.error('Si è verificato un errore imprevisto');
-    } finally {
-      setIsResettingPassword(false);
-    }
-  };
 
   return (
     <div className="container max-w-md mx-auto py-12">
@@ -164,9 +124,15 @@ export default function LoginPage() {
                 {isSubmitting ? 'Accesso in corso...' : 'Accedi'}
               </Button>
               
-              <Link href="/register?source=user" className="text-center text-sm text-gray-500 hover:text-gray-700">
-                Password dimenticata?
-              </Link>
+              <div className="flex flex-col gap-2 pt-2 border-t">
+                <Link href="/reset" className="text-center text-sm text-blue-600 hover:text-blue-800 font-medium">
+                  Registrati
+                </Link>
+                
+                <Link href="/reset" className="text-center text-sm text-gray-500 hover:text-gray-700">
+                  Password dimenticata?
+                </Link>
+              </div>
             </div>
           </form>
         </CardContent>

@@ -27,7 +27,7 @@ export function UserDeleteDialog({ userId, userEmail, onDelete }: UserDeleteDial
       } catch (error) {
         console.error('Error in delete operation:', error)
         toast.error(error instanceof Error ? error.message : 'Si è verificato un errore imprevisto')
-        onDelete() // Ricarica i profili in caso di errore
+        // Don't call onDelete() on error as it might refresh the list incorrectly
       }
     })
   }
