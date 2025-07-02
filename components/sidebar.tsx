@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
-import { LayoutGrid, Layers, ClipboardList, FileText, Menu, BellRing, AlertCircle, Users } from "lucide-react"
+import { LayoutGrid, Layers, ClipboardList, FileText, Menu, BellRing, AlertCircle, Users, BarChart2, Database } from "lucide-react"
 import NavLinkWithLoading from "./ui/NavLinkWithLoading"
 import { Button } from "./ui/button"
 import {
@@ -34,7 +34,7 @@ const menuItemsByRole: Record<Role, Array<{
     },
     {
       href: "/summary",
-      icon: <LayoutGrid size={20} />,
+      icon: <BarChart2 size={20} />,
       label: "Statistiche"
     },
     {
@@ -54,7 +54,7 @@ const menuItemsByRole: Record<Role, Array<{
     },
     {
       href: "/export",
-      icon: <FileText size={20} />,
+      icon: <Database size={20} />,
       label: "Esporta Dati"
     },
     {
