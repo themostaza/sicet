@@ -89,7 +89,11 @@ export default function PreRegisterPage() {
   const fetchProfiles = async () => {
     try {
       const result = await getPreregisteredUsers();
-      setProfiles(result.profiles || []);
+      setProfiles((result.profiles || []).map(profile => ({
+        ...profile,
+        role: profile.role as Role,
+        status: profile.status as Status
+      })));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Errore nel recupero utenti');
     }

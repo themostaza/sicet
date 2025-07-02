@@ -173,11 +173,16 @@ export async function getOverdueTodolists(): Promise<OverdueTodolist[]> {
     .filter(todolist => 
       todolist.alert && 
       todolist.alert.length > 0 &&
-      isTodolistOverdue(todolist) && 
+      (todolist.time_slot_type === "standard" || todolist.time_slot_type === "custom") &&
+      isTodolistOverdue({
+        ...todolist,
+        time_slot_type: todolist.time_slot_type as "standard" | "custom"
+      }) && 
       !areAllTasksCompleted(todolist.tasks)
     )
     .map(todolist => ({
       ...todolist,
+      time_slot_type: todolist.time_slot_type as "standard" | "custom",
       alert: todolist.alert[0] // Take the first alert since it's a one-to-one relationship
     })) as OverdueTodolist[]
 }

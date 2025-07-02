@@ -27,8 +27,22 @@ export async function GET(request: NextRequest) {
 
     const total = todolists.length
     const completed = todolists.filter(t => t.completion_date !== null).length
-    const pending = todolists.filter(t => t.completion_date === null && !isTodolistExpired(t.scheduled_execution, t.time_slot_type, t.time_slot_end)).length
-    const overdue = todolists.filter(t => (t.status === "pending" || t.status === "in_progress") && isTodolistExpired(t.scheduled_execution, t.time_slot_type, t.time_slot_end)).length
+    const pending = todolists.filter(t =>
+      t.completion_date === null &&
+      !isTodolistExpired(
+        t.scheduled_execution,
+        (t.time_slot_type === "standard" || t.time_slot_type === "custom") ? t.time_slot_type as "standard" | "custom" : undefined,
+        t.time_slot_end
+      )
+    ).length
+    const overdue = todolists.filter(t =>
+      (t.status === "pending" || t.status === "in_progress") &&
+      isTodolistExpired(
+        t.scheduled_execution,
+        (t.time_slot_type === "standard" || t.time_slot_type === "custom") ? t.time_slot_type as "standard" | "custom" : undefined,
+        t.time_slot_end
+      )
+    ).length
     const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0
     const overdueRate = total > 0 ? Math.round((overdue / total) * 100) : 0
 

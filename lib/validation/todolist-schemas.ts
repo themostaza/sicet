@@ -325,7 +325,7 @@ export const toTask = (row: {
   status: string
   value: any
   created_at: string | null
-  alert_checked: boolean
+  alert_checked: boolean | null
   updated_at: string | null
 }) => ({
   id: row.id,
@@ -335,7 +335,7 @@ export const toTask = (row: {
   value: row.value,
   created_at: row.created_at ?? undefined,
   updated_at: row.updated_at ?? row.created_at ?? undefined,
-  alert_checked: row.alert_checked
+  alert_checked: row.alert_checked ?? false
 })
 
 export const toTodolist = (row: {

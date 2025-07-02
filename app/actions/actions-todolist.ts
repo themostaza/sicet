@@ -130,7 +130,10 @@ export async function getTodolist(params: unknown): Promise<Todolist | null> {
     handleError(error)
   }
 
-  return data ? toTodolist(data) : null
+  return data ? toTodolist({
+    ...data,
+    status: data.status as "pending" | "in_progress" | "completed"
+  }) : null
 }
 
 // Ottieni le task per una todolist (con paginazione)
@@ -707,7 +710,7 @@ export async function completeTodolist(todolistId: string): Promise<void> {
   // Verifica se la todolist è scaduta e non è già completata
   if (todolist.status !== "completed" && isTodolistExpired(
     todolist.scheduled_execution, 
-    todolist.time_slot_type, 
+    todolist.time_slot_type as "standard" | "custom", 
     todolist.time_slot_end
   )) {
     throw new Error("Non è possibile completare una todolist scaduta")
@@ -785,7 +788,7 @@ export async function getTodolistsForDeviceToday(deviceId: string, today: string
   const filteredData = data?.filter(todolist => 
     !isTodolistExpired(
       todolist.scheduled_execution,
-      todolist.time_slot_type,
+      todolist.time_slot_type as "standard" | "custom",
       todolist.time_slot_end
     )
   ) || []

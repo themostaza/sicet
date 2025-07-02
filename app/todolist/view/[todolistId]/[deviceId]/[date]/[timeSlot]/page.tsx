@@ -78,6 +78,17 @@ export default async function Page(
     getTodolistById(todolistId)
   ]);
 
+  // Transform todolist fields to expected types for the component
+  const safeTodolist = todolist && todolist !== null ? {
+    ...todolist,
+    status: ["pending", "in_progress", "completed"].includes(todolist.status)
+      ? todolist.status as "pending" | "in_progress" | "completed"
+      : "pending",
+    time_slot_type: ["standard", "custom"].includes(todolist.time_slot_type)
+      ? todolist.time_slot_type as "standard" | "custom"
+      : "standard"
+  } : null;
+
   return (
     <Suspense fallback={<div className="p-6">Caricamento todolist...</div>}>
       <TodolistClient
@@ -88,7 +99,7 @@ export default async function Page(
         timeSlot={timeSlot}
         initialKpis={kpisData.kpis}
         deviceInfo={device ? { name: device.name, location: device.location } : null}
-        todolistData={todolist}
+        todolistData={safeTodolist}
       />
     </Suspense>
   )

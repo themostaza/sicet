@@ -38,12 +38,23 @@ export async function GET(request: NextRequest) {
     // Calcola le metriche
     const total = todolists.length
     const completed = todolists.filter(t => t.completion_date !== null).length
-    const pending = todolists.filter(t => t.completion_date === null && !isTodolistExpired(t.scheduled_execution, t.time_slot_type, t.time_slot_end)).length
+    const pending = todolists.filter(t =>
+      t.completion_date === null &&
+      !isTodolistExpired(
+        t.scheduled_execution,
+        (t.time_slot_type === "standard" || t.time_slot_type === "custom") ? t.time_slot_type as "standard" | "custom" : undefined,
+        t.time_slot_end
+      )
+    ).length
     const inProgress = todolists.filter(t => t.status === 'in_progress').length // opzionale, legacy
     // Calcola scadute: pending o in_progress e isTodolistExpired
     const overdue = todolists.filter(t => 
       (t.status === 'pending' || t.status === 'in_progress') && 
-      isTodolistExpired(t.scheduled_execution, t.time_slot_type, t.time_slot_end)
+      isTodolistExpired(
+        t.scheduled_execution,
+        (t.time_slot_type === "standard" || t.time_slot_type === "custom") ? t.time_slot_type as "standard" | "custom" : undefined,
+        t.time_slot_end
+      )
     ).length
 
     // Calcola percentuali per il grafico a torta
