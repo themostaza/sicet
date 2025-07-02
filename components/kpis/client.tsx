@@ -86,9 +86,11 @@ export default function KpiList({ initialKpis }: Props) {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Controlli</h1>
-        <Button className="bg-black hover:bg-gray-800" onClick={() => router.push("/kpi/new")}>
-          <Plus className="mr-2 h-4 w-4" /> Nuovo Controllo
-        </Button>
+        {role !== 'operator' && (
+          <Button className="bg-black hover:bg-gray-800" onClick={() => router.push("/kpi/new")}>        
+            <Plus className="mr-2 h-4 w-4" /> Nuovo Controllo
+          </Button>
+        )}
       </div>
 
       <div className="relative">

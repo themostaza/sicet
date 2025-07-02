@@ -121,9 +121,11 @@ export default function DeviceList({ initialDevices }: Props) {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Punti di Controllo</h1>
-        <Button className="bg-black hover:bg-gray-800" onClick={() => router.push("/device/new")}>        
-          <Plus className="mr-2 h-4 w-4" /> Nuovo Punto di Controllo
-        </Button>
+        {role !== 'operator' && (
+          <Button className="bg-black hover:bg-gray-800" onClick={() => router.push("/device/new")}>        
+            <Plus className="mr-2 h-4 w-4" /> Nuovo Punto di Controllo
+          </Button>
+        )}
       </div>
 
       <div className="relative">

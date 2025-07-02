@@ -142,6 +142,13 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(redirectUrl)
   }
 
+  // Blocca l'accesso alle pagine di creazione per operator
+  const creationPages = ['/device/new', '/kpi/new', '/todolist/new']
+  if (role === 'operator' && creationPages.includes(path)) {
+    // Redirect alla pagina principale consentita
+    return NextResponse.redirect(new URL('/todolist', req.url))
+  }
+
   return res
 }
 

@@ -461,7 +461,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
             </AlertDialog>
           )}
         </div>
-        {!isOperator && (
+        {userRole !== 'operator' && (
           <Button onClick={handleCreateTodolist}>
             <Plus className="mr-2 h-4 w-4" />
             Nuova Todolist
