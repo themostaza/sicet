@@ -2,21 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Activity, Clock, User, Search, Filter } from 'lucide-react';
-import { format } from 'date-fns';
-import { it } from 'date-fns/locale';
-import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
-import { CalendarIcon } from 'lucide-react';
 import type { Database } from '@/supabase/database.types';
-import type { PostgrestError } from '@supabase/supabase-js';
+import { Loader2, Users, Activity as ActivityIcon } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import TabOperatori from './components/TabOperatori';
+import TabAttivita from './components/TabAttivita';
 
 type UserActivity = Database['public']['Tables']['user_activities']['Row'] & {
   profile?: {
@@ -79,6 +70,12 @@ const getMetadataLabel = (key: string): string => {
   return labelMap[key] || key;
 };
 
+const roleLabels: Record<string, string> = {
+  operator: 'Operatore',
+  admin: 'Admin',
+  referrer: 'Referente',
+};
+
 export default function ActivityDashboard() {
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -98,6 +95,18 @@ export default function ActivityDashboard() {
     to: undefined,
   });
   const [users, setUsers] = useState<Array<{ id: string; email: string; role: string }>>([]);
+  const [activeTab, setActiveTab] = useState<'operatori' | 'attivita'>('operatori');
+
+  // Stato per tab operatori
+  const [operatori, setOperatori] = useState<Array<{
+    id: string;
+    email: string;
+    role: string;
+    completed_todolists: number;
+  }>>([]);
+  const [operatoriLoading, setOperatoriLoading] = useState(false);
+  const [operatoriError, setOperatoriError] = useState<string | null>(null);
+  const [selectedRole, setSelectedRole] = useState<'operator' | 'admin' | 'referrer' | 'all'>('operator');
 
   // Carica utenti all'avvio
   useEffect(() => {
@@ -175,6 +184,30 @@ export default function ActivityDashboard() {
     loadActivities();
   }, [users]);
 
+  // Carica dati operatori quando cambia intervallo date o tab
+  useEffect(() => {
+    if (activeTab !== 'operatori') return;
+    async function loadOperatori() {
+      setOperatoriLoading(true);
+      setOperatoriError(null);
+      try {
+        const params = new URLSearchParams();
+        if (dateRange.from) params.append('from', dateRange.from.toISOString());
+        if (dateRange.to) params.append('to', dateRange.to.toISOString());
+        params.append('role', selectedRole);
+        const res = await fetch(`/api/summary/operators?${params.toString()}`);
+        if (!res.ok) throw new Error('Errore nel recupero degli operatori');
+        const data = await res.json();
+        setOperatori(data.operators || []);
+      } catch (err) {
+        setOperatoriError(err instanceof Error ? err.message : 'Errore sconosciuto');
+      } finally {
+        setOperatoriLoading(false);
+      }
+    }
+    loadOperatori();
+  }, [dateRange, activeTab, selectedRole]);
+
   // Filtra le attività
   const filteredActivities = activities.filter((activity) => {
     const matchesUser = selectedUsers.length === 0 || 
@@ -209,206 +242,37 @@ export default function ActivityDashboard() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Dashboard Attività</h1>
       </div>
-
-      {/* Filtri */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Filtri</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Selezione Utenti */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Utenti</label>
-              <Select
-                value={selectedUsers.length === 0 ? 'all' : selectedUsers.join(',')}
-                onValueChange={(value) => setSelectedUsers(value === 'all' ? [] : value.split(','))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleziona utenti" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tutti gli utenti</SelectItem>
-                  {users.map((user) => (
-                    <SelectItem key={user.id} value={user.email}>
-                      {user.email} ({user.role})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Selezione Azioni */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Azioni</label>
-              <Select
-                value={selectedActions.length === 0 ? 'all' : selectedActions.join(',')}
-                onValueChange={(value) => handleSelectChange(value, setSelectedActions, 'action')}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleziona azioni" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tutte le azioni</SelectItem>
-                  {Object.entries(simplifiedActionLabels).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Selezione Entità */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Entità</label>
-              <Select
-                value={selectedEntities.length === 0 ? 'all' : selectedEntities.join(',')}
-                onValueChange={(value) => handleSelectChange(value, setSelectedEntities, 'entity')}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleziona entità" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tutte le entità</SelectItem>
-                  {Object.entries(entityTypeLabels).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Selezione Intervallo Date */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Intervallo Date</label>
-              <div className="grid gap-2">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !dateRange.from && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateRange.from ? (
-                        dateRange.to ? (
-                          <>
-                            {format(dateRange.from, "d MMM yyyy", { locale: it })} -{" "}
-                            {format(dateRange.to, "d MMM yyyy", { locale: it })}
-                          </>
-                        ) : (
-                          format(dateRange.from, "d MMM yyyy", { locale: it })
-                        )
-                      ) : (
-                        <span>Seleziona intervallo date</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      initialFocus
-                      mode="range"
-                      defaultMonth={dateRange.from}
-                      selected={{
-                        from: dateRange.from,
-                        to: dateRange.to
-                      }}
-                      onSelect={(range) => {
-                        if (range) {
-                          setDateRange({
-                            from: range.from,
-                            to: range.to
-                          });
-                        } else {
-                          setDateRange({
-                            from: undefined,
-                            to: undefined
-                          });
-                        }
-                      }}
-                      numberOfMonths={2}
-                      locale={it}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Timeline delle attività */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <Activity className="h-5 w-5 mr-2" />
-            Timeline Attività
-          </CardTitle>
-          <CardDescription>
-            Visualizza tutte le attività degli utenti nel sistema
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ScrollArea className="h-[600px] pr-4">
-            <div className="space-y-4">
-              {isLoading ? (
-                <div className="flex items-center justify-center h-32">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                </div>
-              ) : error ? (
-                <div className="text-center text-red-500 py-8">{error}</div>
-              ) : filteredActivities.length === 0 ? (
-                <div className="text-center text-muted-foreground py-8">
-                  Nessuna attività trovata
-                </div>
-              ) : (
-                filteredActivities.map((activity) => (
-                  <div key={activity.id} className="flex gap-4 p-4 rounded-lg border bg-card">
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <Badge 
-                          variant="outline" 
-                          className={simplifiedActionColors[simplifiedActionTypeMap[activity.action_type]]}
-                        >
-                          {simplifiedActionLabels[simplifiedActionTypeMap[activity.action_type]]}
-                        </Badge>
-                        <span className="text-sm text-muted-foreground">
-                          {entityTypeLabels[activity.entity_type]}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <User className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">{activity.profile?.email}</span>
-                        <span className="text-muted-foreground">•</span>
-                        <span className="text-muted-foreground">{activity.profile?.role}</span>
-                      </div>
-                      {activity.metadata && Object.keys(activity.metadata).length > 0 && (
-                        <div className="text-sm text-muted-foreground">
-                          {Object.entries(activity.metadata).map(([key, value]) => (
-                            <span key={key} className="mr-2">
-                              {getMetadataLabel(key)}: {typeof value === 'object' ? JSON.stringify(value) : value}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex items-start gap-2 text-sm text-muted-foreground">
-                      <Clock className="h-4 w-4" />
-                      <time dateTime={activity.created_at}>
-                        {format(new Date(activity.created_at), "d MMM yyyy 'alle' HH:mm", { locale: it })}
-                      </time>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </ScrollArea>
-        </CardContent>
-      </Card>
+      <Tabs value={activeTab} onValueChange={v => setActiveTab(v as 'operatori' | 'attivita')}>
+        <TabsList className="mb-4">
+          <TabsTrigger value="operatori"><Users className="inline mr-2 w-4 h-4" />Operatori</TabsTrigger>
+          <TabsTrigger value="attivita"><ActivityIcon className="inline mr-2 w-4 h-4" />Attività</TabsTrigger>
+        </TabsList>
+        <TabsContent value="operatori">
+          <TabOperatori
+            dateRange={dateRange}
+            setDateRange={setDateRange}
+            selectedRole={selectedRole}
+            setSelectedRole={setSelectedRole}
+          />
+        </TabsContent>
+        <TabsContent value="attivita">
+          <TabAttivita
+            users={users}
+            selectedUsers={selectedUsers}
+            setSelectedUsers={setSelectedUsers}
+            selectedActions={selectedActions}
+            setSelectedActions={(v: string[]) => setSelectedActions(v as any)}
+            selectedEntities={selectedEntities}
+            setSelectedEntities={(v: string[]) => setSelectedEntities(v as any)}
+            dateRange={dateRange}
+            setDateRange={setDateRange}
+            handleSelectChange={handleSelectChange}
+            filteredActivities={filteredActivities}
+            isLoading={isLoading}
+            error={error}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 } 
