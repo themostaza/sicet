@@ -27,7 +27,7 @@ export async function deleteUser(email: string) {
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role')
-      .eq('email', session.user.email)
+      .eq('auth_id', session.user.id)
       .single()
 
     if (profileError || !profile || profile.role !== 'admin') {
@@ -35,33 +35,48 @@ export async function deleteUser(email: string) {
       throw new Error('Non autorizzato: richiesto ruolo admin')
     }
 
-    // Prima elimina dal profilo usando il client admin per bypassare RLS
-    const { data: deletedProfile, error: profileDeleteError } = await supabaseAdmin
+    // Trova il profilo da cancellare
+    const { data: profileToDelete, error: findError } = await supabaseAdmin
       .from('profiles')
-      .delete()
+      .select('id, auth_id')
       .eq('email', email)
-      .select()
+      .eq('status', 'reset-password')
+      .single()
 
-    if (profileDeleteError) {
-      console.error('Error deleting profile:', profileDeleteError)
-      throw new Error('Errore durante l\'eliminazione del profilo')
+    if (findError) {
+      console.error('Error finding profile:', findError)
+      throw new Error('Profilo non trovato o già cancellato')
     }
 
-    console.log('Profile deleted successfully:', deletedProfile)
+    if (!profileToDelete) {
+      throw new Error('Profilo non trovato')
+    }
 
-    // Poi elimina l'utente usando il client admin (se esiste)
-    const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers()
-    if (listError) {
-      console.error('Error listing users:', listError)
-    } else {
-      const userToDelete = users.find(u => u.email === email)
-      if (userToDelete) {
-        const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userToDelete.id)
-        if (deleteError) {
-          console.error('Error deleting user:', deleteError)
-        }
+    // Se esiste un utente auth, cancellalo
+    if (profileToDelete.auth_id) {
+      const { error: deleteAuthError } = await supabaseAdmin.auth.admin.deleteUser(profileToDelete.auth_id)
+      if (deleteAuthError) {
+        console.error('Error deleting auth user:', deleteAuthError)
+        // Non bloccare se la cancellazione auth fallisce
       }
     }
+
+    // Aggiorna il profilo: imposta auth_id a null e status a 'deleted'
+    const { data: updatedProfile, error: updateError } = await supabaseAdmin
+      .from('profiles')
+      .update({ 
+        auth_id: null, 
+        status: 'deleted' 
+      })
+      .eq('id', profileToDelete.id)
+      .select()
+
+    if (updateError) {
+      console.error('Error updating profile:', updateError)
+      throw new Error('Errore durante la cancellazione del profilo')
+    }
+
+    console.log('Profile deleted successfully:', updatedProfile)
 
     // Revalidate the preregister page
     revalidatePath('/admin/preregister')
@@ -98,17 +113,17 @@ export async function preregisterUser(email: string, role: 'operator' | 'admin' 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role')
-      .eq('id', user.id)
+      .eq('auth_id', user.id)
       .single()
 
     if (profileError || !profile || profile.role !== 'admin') {
       throw new Error('Accesso negato. Solo gli amministratori possono preregistrare utenti.')
     }
 
-    // Check if email already exists
+    // Check if email already exists (including deleted profiles)
     const { data: existingProfile, error: checkError } = await supabaseAdmin
       .from('profiles')
-      .select('id')
+      .select('id, status, auth_id')
       .eq('email', email)
       .single()
 
@@ -116,24 +131,49 @@ export async function preregisterUser(email: string, role: 'operator' | 'admin' 
       throw new Error('Errore durante la verifica dell\'email')
     }
 
+    let newProfile;
     if (existingProfile) {
-      throw new Error('Email già registrata')
-    }
+      // Se il profilo esiste ma è cancellato, ripristinalo
+      if (existingProfile.status === 'deleted') {
+        const { data: restoredProfile, error: restoreError } = await supabaseAdmin
+          .from('profiles')
+          .update({ 
+            role, 
+            status: 'reset-password',
+            auth_id: null // Reset auth_id per permettere nuova registrazione
+          })
+          .eq('id', existingProfile.id)
+          .select()
+          .single()
 
-    // Insert new profile
-    const { data: newProfile, error: insertError } = await supabaseAdmin
-      .from('profiles')
-      .insert([{ 
-        email, 
-        role, 
-        status: 'reset-password' 
-      }])
-      .select()
-      .single()
+        if (restoreError) {
+          console.error('Error restoring profile:', restoreError)
+          throw new Error('Errore durante il ripristino del profilo')
+        }
 
-    if (insertError) {
-      console.error('Error inserting profile:', insertError)
-      throw new Error('Errore durante la registrazione del profilo')
+        newProfile = restoredProfile;
+      } else {
+        // Se il profilo esiste e non è cancellato, errore
+        throw new Error('Email già registrata')
+      }
+    } else {
+      // Insert new profile
+      const { data: insertedProfile, error: insertError } = await supabaseAdmin
+        .from('profiles')
+        .insert([{ 
+          email, 
+          role, 
+          status: 'reset-password' 
+        }])
+        .select()
+        .single()
+
+      if (insertError) {
+        console.error('Error inserting profile:', insertError)
+        throw new Error('Errore durante la registrazione del profilo')
+      }
+
+      newProfile = insertedProfile;
     }
 
     // Revalidate the preregister page
@@ -167,17 +207,18 @@ export async function getPreregisteredUsers() {
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role')
-      .eq('id', user.id)
+      .eq('auth_id', user.id)
       .single()
 
     if (profileError || !profile || profile.role !== 'admin') {
       throw new Error('Accesso negato. Solo gli amministratori possono visualizzare gli utenti.')
     }
 
-    // Get all profiles using admin client to bypass RLS
+    // Get all profiles except deleted ones using admin client to bypass RLS
     const { data: profiles, error: fetchError } = await supabaseAdmin
       .from('profiles')
       .select('*')
+      .neq('status', 'deleted')
       .order('created_at', { ascending: false })
 
     if (fetchError) {

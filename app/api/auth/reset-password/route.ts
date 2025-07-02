@@ -26,6 +26,7 @@ export async function POST(request: Request) {
       .single();
 
     if (profileError || !profile) {
+      console.error('Profile not found or error:', profileError);
       return NextResponse.json(
         { error: 'Email non trovata nel sistema' },
         { status: 400 }
@@ -51,22 +52,28 @@ export async function POST(request: Request) {
     }
 
     const existingUser = users.find(u => u.email === email);
+    let authUserId = null;
 
     if (existingUser) {
       // Utente esiste, aggiorna la password
+      
       const { error: updateError } = await supabase.auth.admin.updateUserById(
         existingUser.id,
         { password: password }
       );
 
       if (updateError) {
+        console.error('Error updating user password:', updateError);
         return NextResponse.json(
           { error: `Errore nell'aggiornamento della password: ${updateError.message}` },
           { status: 400 }
         );
       }
+      
+      authUserId = existingUser.id;      
     } else {
       // Utente non esiste, crea nuovo account
+      
       const { data: { user }, error: createError } = await supabase.auth.admin.createUser({
         email: email,
         password: password,
@@ -75,6 +82,7 @@ export async function POST(request: Request) {
       });
 
       if (createError) {
+        console.error('Error creating auth user:', createError);
         return NextResponse.json(
           { error: `Errore nella creazione dell'account: ${createError.message}` },
           { status: 400 }
@@ -82,22 +90,48 @@ export async function POST(request: Request) {
       }
 
       if (!user) {
+        console.error('No user returned from auth creation');
         return NextResponse.json(
           { error: 'Errore durante la creazione dell\'account' },
           { status: 500 }
         );
       }
+      
+      authUserId = user.id;
     }
 
-    // Aggiorna lo stato del profilo a 'activated'
-    const { error: updateProfileError } = await supabase
-      .from('profiles')
-      .update({ status: 'activated' })
-      .eq('email', email);
+    // Aggiorna lo stato del profilo a 'activated' e imposta auth_id
+    let updateError = null;
+    
+    try {
+      // Prova prima con auth_id
+      const { error: authIdError } = await supabase
+        .from('profiles')
+        .update({ 
+          status: 'activated', 
+          auth_id: authUserId 
+        })
+        .eq('id', profile.id);
+      
+      updateError = authIdError;
+      
+    } catch (error) {
+      
+      // Se fallisce, prova solo con status
+      const { error: statusError } = await supabase
+        .from('profiles')
+        .update({ 
+          status: 'activated'
+        })
+        .eq('id', profile.id);
+      
+      updateError = statusError;
+    }
 
-    if (updateProfileError) {
+    if (updateError) {
+      console.error('Error updating profile:', updateError);
       return NextResponse.json(
-        { error: `Errore nell'attivazione del profilo: ${updateProfileError.message}` },
+        { error: `Errore nell'attivazione del profilo: ${updateError.message}` },
         { status: 500 }
       );
     }

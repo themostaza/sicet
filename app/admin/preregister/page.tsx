@@ -28,7 +28,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { preregisterUser, getPreregisteredUsers } from '@/app/actions/actions-user';
 
 type Role       = 'operator' | 'admin' | 'referrer';
-type Status     = 'registered' | 'activated' | 'reset-password';
+type Status     = 'registered' | 'activated' | 'reset-password' | 'deleted';
 type ProfileRow = { id: string; email: string; role: Role; status: Status; created_at: string };
 
 type PreRegisterFormValues = {
@@ -209,7 +209,8 @@ export default function PreRegisterPage() {
                       <TableCell className="capitalize">
                         {profile.status === 'registered' ? 'Pre-registrato' :
                          profile.status === 'activated' ? 'Attivato' : 
-                         profile.status === 'reset-password' ? 'Reset Password' : profile.status}
+                         profile.status === 'reset-password' ? 'Reset Password' :
+                         profile.status === 'deleted' ? 'Cancellato' : profile.status}
                       </TableCell>
                       <TableCell>
                         {new Date(profile.created_at).toLocaleDateString()}

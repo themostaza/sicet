@@ -6,12 +6,13 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export interface Database {
+export type Database = {
   public: {
     Tables: {
       devices: {
         Row: {
           created_at: string | null
+          deleted: boolean
           description: string | null
           id: string
           location: string | null
@@ -20,10 +21,10 @@ export interface Database {
           qrcode_url: string | null
           tags: string[] | null
           type: string | null
-          deleted: boolean
         }
         Insert: {
           created_at?: string | null
+          deleted?: boolean
           description?: string | null
           id: string
           location?: string | null
@@ -32,10 +33,10 @@ export interface Database {
           qrcode_url?: string | null
           tags?: string[] | null
           type?: string | null
-          deleted?: boolean
         }
         Update: {
           created_at?: string | null
+          deleted?: boolean
           description?: string | null
           id?: string
           location?: string | null
@@ -44,74 +45,195 @@ export interface Database {
           qrcode_url?: string | null
           tags?: string[] | null
           type?: string | null
-          deleted?: boolean
         }
         Relationships: []
+      }
+      kpi_alert_logs: {
+        Row: {
+          alert_id: string
+          email_sent: boolean
+          email_sent_at: string | null
+          error_message: string | null
+          id: string
+          triggered_at: string
+          triggered_value: Json
+        }
+        Insert: {
+          alert_id: string
+          email_sent?: boolean
+          email_sent_at?: string | null
+          error_message?: string | null
+          id?: string
+          triggered_at?: string
+          triggered_value: Json
+        }
+        Update: {
+          alert_id?: string
+          email_sent?: boolean
+          email_sent_at?: string | null
+          error_message?: string | null
+          id?: string
+          triggered_at?: string
+          triggered_value?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kpi_alert_logs_alert_id_fkey"
+            columns: ["alert_id"]
+            isOneToOne: false
+            referencedRelation: "kpi_alerts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kpi_alerts: {
+        Row: {
+          conditions: Json
+          created_at: string
+          email: string
+          id: string
+          is_active: boolean
+          kpi_id: string
+          todolist_id: string
+          updated_at: string
+        }
+        Insert: {
+          conditions: Json
+          created_at?: string
+          email: string
+          id?: string
+          is_active?: boolean
+          kpi_id: string
+          todolist_id: string
+          updated_at?: string
+        }
+        Update: {
+          conditions?: Json
+          created_at?: string
+          email?: string
+          id?: string
+          is_active?: boolean
+          kpi_id?: string
+          todolist_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kpi_alerts_kpi_id_fkey"
+            columns: ["kpi_id"]
+            isOneToOne: false
+            referencedRelation: "kpis"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kpi_alerts_todolist_id_fkey"
+            columns: ["todolist_id"]
+            isOneToOne: false
+            referencedRelation: "todolist"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       kpis: {
         Row: {
           created_at: string | null
+          deleted: boolean
           description: string | null
           id: string
           name: string
-          value: Json | null
-          deleted: boolean
+          value: Json
         }
         Insert: {
           created_at?: string | null
+          deleted?: boolean
           description?: string | null
           id: string
           name: string
-          value?: Json | null
-          deleted?: boolean
+          value: Json
         }
         Update: {
           created_at?: string | null
+          deleted?: boolean
           description?: string | null
           id?: string
           name?: string
-          value?: Json | null
-          deleted?: boolean
+          value?: Json
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          auth_id: string | null
+          created_at: string
+          email: string
+          id: string
+          role: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          auth_id?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          role: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          auth_id?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          role?: string
+          status?: string
+          updated_at?: string
         }
         Relationships: []
       }
       tasks: {
         Row: {
+          alert_checked: boolean | null
+          completed_by_user_id: string | null
+          created_at: string | null
+          created_by_user_id: string | null
           id: string
-          todolist_id: string
           kpi_id: string
           status: string
+          todolist_id: string
+          updated_at: string
           value: Json | null
-          created_at: string | null
-          alert_checked: boolean
-          updated_at: string | null
         }
         Insert: {
-          id?: string
-          todolist_id: string
-          kpi_id: string
-          status?: string
-          value?: Json | null
+          alert_checked?: boolean | null
+          completed_by_user_id?: string | null
           created_at?: string | null
-          alert_checked?: boolean
-          updated_at?: string | null
+          created_by_user_id?: string | null
+          id: string
+          kpi_id: string
+          status: string
+          todolist_id: string
+          updated_at?: string
+          value?: Json | null
         }
         Update: {
+          alert_checked?: boolean | null
+          completed_by_user_id?: string | null
+          created_at?: string | null
+          created_by_user_id?: string | null
           id?: string
-          todolist_id?: string
           kpi_id?: string
           status?: string
+          todolist_id?: string
+          updated_at?: string
           value?: Json | null
-          created_at?: string | null
-          alert_checked?: boolean
-          updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "tasks_todolist_id_fkey"
-            columns: ["todolist_id"]
+            foreignKeyName: "fk_kpi"
+            columns: ["kpi_id"]
             isOneToOne: false
-            referencedRelation: "todolist"
+            referencedRelation: "kpis"
             referencedColumns: ["id"]
           },
           {
@@ -120,192 +242,52 @@ export interface Database {
             isOneToOne: false
             referencedRelation: "kpis"
             referencedColumns: ["id"]
-          }
-        ]
-      }
-      kpi_alerts: {
-        Row: {
-          id: string
-          kpi_id: string
-          todolist_id: string
-          is_active: boolean
-          email: string
-          conditions: Json
-          created_at: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          id?: string
-          kpi_id: string
-          todolist_id: string
-          is_active?: boolean
-          email: string
-          conditions: Json
-          created_at?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          id?: string
-          kpi_id?: string
-          todolist_id?: string
-          is_active?: boolean
-          email?: string
-          conditions?: Json
-          created_at?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "kpi_alerts_kpi_id_fkey"
-            columns: ["kpi_id"]
-            referencedRelation: "kpis"
-            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "kpi_alerts_todolist_id_fkey"
+            foreignKeyName: "tasks_todolist_id_fkey"
             columns: ["todolist_id"]
+            isOneToOne: false
             referencedRelation: "todolist"
             referencedColumns: ["id"]
-          }
+          },
         ]
-      }
-      kpi_alert_logs: {
-        Row: {
-          id: string
-          alert_id: string
-          triggered_value: Json
-          triggered_at: string
-          email_sent: boolean
-          email_sent_at: string | null
-          error_message: string | null
-        }
-        Insert: {
-          id?: string
-          alert_id: string
-          triggered_value: Json
-          triggered_at?: string
-          email_sent?: boolean
-          email_sent_at?: string | null
-          error_message?: string | null
-        }
-        Update: {
-          id?: string
-          alert_id?: string
-          triggered_value?: Json
-          triggered_at?: string
-          email_sent?: boolean
-          email_sent_at?: string | null
-          error_message?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "kpi_alert_logs_alert_id_fkey"
-            columns: ["alert_id"]
-            referencedRelation: "kpi_alerts"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-      user_activities: {
-        Row: {
-          id: string
-          user_id: string
-          action_type: Database['public']['Enums']['user_action_type']
-          entity_type: Database['public']['Enums']['entity_type']
-          entity_id: string
-          metadata: Json
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          action_type: Database['public']['Enums']['user_action_type']
-          entity_type: Database['public']['Enums']['entity_type']
-          entity_id: string
-          metadata?: Json
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          action_type?: Database['public']['Enums']['user_action_type']
-          entity_type?: Database['public']['Enums']['entity_type']
-          entity_id?: string
-          metadata?: Json
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "user_activities_user_id_fkey"
-            columns: ["user_id"]
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-      profiles: {
-        Row: {
-          id: string
-          email: string
-          role: 'operator' | 'admin' | 'referrer'
-          status: 'registered' | 'activated' | 'reset-password'
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          email: string
-          role: 'operator' | 'admin' | 'referrer'
-          status?: 'registered' | 'activated' | 'reset-password'
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          email?: string
-          role?: 'operator' | 'admin' | 'referrer'
-          status?: 'registered' | 'activated' | 'reset-password'
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
       }
       todolist: {
         Row: {
-          id: string
-          device_id: string
-          scheduled_execution: string
-          status: "pending" | "in_progress" | "completed"
           completion_date: string | null
-          created_at: string
-          updated_at: string
-          time_slot_type: "standard" | "custom"
-          time_slot_start: number | null
+          created_at: string | null
+          device_id: string
+          id: string
+          scheduled_execution: string
+          status: string
           time_slot_end: number | null
+          time_slot_start: number | null
+          time_slot_type: string
+          updated_at: string | null
         }
         Insert: {
-          id?: string
-          device_id: string
-          scheduled_execution: string
-          status?: "pending" | "in_progress" | "completed"
           completion_date?: string | null
-          created_at?: string
-          updated_at?: string
-          time_slot_type?: "standard" | "custom"
-          time_slot_start?: number | null
+          created_at?: string | null
+          device_id: string
+          id?: string
+          scheduled_execution: string
+          status?: string
           time_slot_end?: number | null
+          time_slot_start?: number | null
+          time_slot_type?: string
+          updated_at?: string | null
         }
         Update: {
-          id?: string
-          device_id?: string
-          scheduled_execution?: string
-          status?: "pending" | "in_progress" | "completed"
           completion_date?: string | null
-          created_at?: string
-          updated_at?: string
-          time_slot_type?: "standard" | "custom"
-          time_slot_start?: number | null
+          created_at?: string | null
+          device_id?: string
+          id?: string
+          scheduled_execution?: string
+          status?: string
           time_slot_end?: number | null
+          time_slot_start?: number | null
+          time_slot_type?: string
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -314,82 +296,118 @@ export interface Database {
             isOneToOne: false
             referencedRelation: "devices"
             referencedColumns: ["id"]
-          }
+          },
         ]
       }
       todolist_alert: {
         Row: {
-          id: string
-          todolist_id: string
-          email: string
           created_at: string
+          email: string
+          id: string
+          is_active: boolean
+          todolist_id: string
           updated_at: string
         }
         Insert: {
-          id?: string
-          todolist_id: string
-          email: string
           created_at?: string
+          email: string
+          id?: string
+          is_active?: boolean
+          todolist_id: string
           updated_at?: string
         }
         Update: {
-          id?: string
-          todolist_id?: string
-          email?: string
           created_at?: string
+          email?: string
+          id?: string
+          is_active?: boolean
+          todolist_id?: string
           updated_at?: string
         }
         Relationships: [
           {
             foreignKeyName: "todolist_alert_todolist_id_fkey"
             columns: ["todolist_id"]
+            isOneToOne: false
             referencedRelation: "todolist"
             referencedColumns: ["id"]
-          }
+          },
         ]
       }
       todolist_alert_logs: {
         Row: {
-          id: string
-          todolist_id: string
           alert_id: string
-          email: string
-          sent_at: string
-          error_message: string | null
           created_at: string
+          email: string
+          error_message: string | null
+          id: string
+          sent_at: string
+          todolist_id: string
         }
         Insert: {
-          id?: string
-          todolist_id: string
           alert_id: string
-          email: string
-          sent_at?: string
-          error_message?: string | null
           created_at?: string
+          email: string
+          error_message?: string | null
+          id?: string
+          sent_at?: string
+          todolist_id: string
         }
         Update: {
-          id?: string
-          todolist_id?: string
           alert_id?: string
-          email?: string
-          sent_at?: string
-          error_message?: string | null
           created_at?: string
+          email?: string
+          error_message?: string | null
+          id?: string
+          sent_at?: string
+          todolist_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "todolist_alert_logs_todolist_id_fkey"
-            columns: ["todolist_id"]
-            referencedRelation: "todolist"
+            foreignKeyName: "todolist_alert_logs_alert_id_fkey"
+            columns: ["alert_id"]
+            isOneToOne: false
+            referencedRelation: "todolist_alert"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "todolist_alert_logs_alert_id_fkey"
-            columns: ["alert_id"]
-            referencedRelation: "todolist_alert"
+            foreignKeyName: "todolist_alert_logs_todolist_id_fkey"
+            columns: ["todolist_id"]
+            isOneToOne: false
+            referencedRelation: "todolist"
             referencedColumns: ["id"]
-          }
+          },
         ]
+      }
+      user_activities: {
+        Row: {
+          action_type: Database["public"]["Enums"]["user_action_type"]
+          created_at: string
+          entity_id: string
+          entity_type: Database["public"]["Enums"]["entity_type"]
+          id: string
+          metadata: Json | null
+          user_id: string
+        }
+        Insert: {
+          action_type: Database["public"]["Enums"]["user_action_type"]
+          created_at?: string
+          entity_id: string
+          entity_type: Database["public"]["Enums"]["entity_type"]
+          id?: string
+          metadata?: Json | null
+          user_id: string
+        }
+        Update: {
+          action_type?: Database["public"]["Enums"]["user_action_type"]
+          created_at?: string
+          entity_id?: string
+          entity_type?: Database["public"]["Enums"]["entity_type"]
+          id?: string
+          metadata?: Json | null
+          user_id?: string
+        }
+        Relationships: []
       }
     }
     Views: {
@@ -399,8 +417,8 @@ export interface Database {
       log_user_activity: {
         Args: {
           p_user_id: string
-          p_action_type: Database['public']['Enums']['user_action_type']
-          p_entity_type: Database['public']['Enums']['entity_type']
+          p_action_type: Database["public"]["Enums"]["user_action_type"]
+          p_entity_type: Database["public"]["Enums"]["entity_type"]
           p_entity_id: string
           p_metadata?: Json
         }
@@ -408,10 +426,19 @@ export interface Database {
       }
     }
     Enums: {
-      user_action_type: 'create_device' | 'create_kpi' | 'create_todolist' | 'complete_task' | 'complete_todolist' | 
-                       'update_device' | 'update_kpi' | 'update_todolist' | 
-                       'delete_device' | 'delete_kpi' | 'delete_todolist'
-      entity_type: 'device' | 'kpi' | 'todolist' | 'task'
+      entity_type: "device" | "kpi" | "todolist" | "task"
+      user_action_type:
+        | "create_device"
+        | "create_kpi"
+        | "create_todolist"
+        | "complete_task"
+        | "complete_todolist"
+        | "update_device"
+        | "update_kpi"
+        | "update_todolist"
+        | "delete_device"
+        | "delete_kpi"
+        | "delete_todolist"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -526,6 +553,21 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      entity_type: ["device", "kpi", "todolist", "task"],
+      user_action_type: [
+        "create_device",
+        "create_kpi",
+        "create_todolist",
+        "complete_task",
+        "complete_todolist",
+        "update_device",
+        "update_kpi",
+        "update_todolist",
+        "delete_device",
+        "delete_kpi",
+        "delete_todolist",
+      ],
+    },
   },
 } as const
