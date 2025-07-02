@@ -199,12 +199,13 @@ export function DateSelectionSheet() {
                   onValueChange={handleTimeSlotChange}
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Seleziona fascia oraria">
-                      {isCustomTimeSlot(selectedTimeSlot) 
-                        ? `Personalizzato (${selectedTimeSlot.startHour.toString().padStart(2, '0')}:00-${selectedTimeSlot.endHour.toString().padStart(2, '0')}:00)`
-                        : undefined
-                      }
-                    </SelectValue>
+                    <SelectValue 
+                      placeholder={
+                        isCustomTimeSlot(selectedTimeSlot) 
+                          ? `Personalizzato (${selectedTimeSlot.startHour.toString().padStart(2, '0')}:00-${selectedTimeSlot.endHour.toString().padStart(2, '0')}:00)`
+                          : "Seleziona fascia oraria"
+                      } 
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="mattina">{getTimeSlotLabel("mattina")}</SelectItem>

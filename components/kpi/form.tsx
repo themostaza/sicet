@@ -288,7 +288,7 @@ export default function KpiForm({ kpi, mode, action, disabled }: Props) {
                       disabled={disabled}
                     >
                       <SelectTrigger>
-                        <SelectValue />
+                        <SelectValue placeholder="Seleziona tipo" />
                       </SelectTrigger>
                       <SelectContent>
                         {fieldTypes.map((type) => (

@@ -212,7 +212,7 @@ export function MultiDatePicker({ selectedEntries = [], onEntriesChange, classNa
                               onValueChange={(value) => handleTimeSlotChange(index, value as TimeSlot)}
                             >
                               <SelectTrigger className="h-10">
-                                <SelectValue />
+                                <SelectValue placeholder="Seleziona fascia oraria" />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="mattina">Mattina (fino alle 14:00)</SelectItem>
