@@ -860,7 +860,6 @@ export async function getTodolistsWithPagination(params: {
 
     if (filter === "today") {
       query = query
-        .eq("status", "pending")
         .gte("scheduled_execution", `${today}T00:00:00`)
         .lt("scheduled_execution", `${today}T23:59:59`)
     } else if (filter === "overdue") {
@@ -987,4 +986,32 @@ export async function getTodolistsWithPagination(params: {
       "UNEXPECTED_ERROR"
     )
   }
+}
+
+// Ottieni la mail dell'utente che ha completato una todolist
+export async function getTodolistCompletionUserEmail(todolistId: string): Promise<string | null> {
+  const supabase = await getSupabaseClient();
+  // Cerca l'attività di completamento
+  const { data: activity, error: activityError } = await supabase
+    .from('user_activities')
+    .select('user_id')
+    .eq('entity_id', todolistId)
+    .eq('action_type', 'complete_todolist')
+    .maybeSingle();
+  if (activityError) {
+    console.error('Errore nel recupero attività di completamento:', activityError);
+    return null;
+  }
+  if (!activity?.user_id) return null;
+  // Recupera la mail dal profilo
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('email')
+    .eq('id', activity.user_id)
+    .maybeSingle();
+  if (profileError) {
+    console.error('Errore nel recupero profilo utente:', profileError);
+    return null;
+  }
+  return profile?.email ?? null;
 }

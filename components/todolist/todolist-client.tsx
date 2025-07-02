@@ -58,7 +58,9 @@ interface Props {
     time_slot_end: number | null
     created_at: string | null
     updated_at: string | null
+    completion_date?: string | null
   } | null
+  completionUserEmail?: string | null
 }
 
 // Define types for KPI field
@@ -243,6 +245,7 @@ export default function TodolistClient({
   initialKpis = [],
   deviceInfo: initialDeviceInfo = null,
   todolistData,
+  completionUserEmail,
 }: Props) {
   const router = useRouter()
   const supabase = createClientSupabaseClient()
@@ -799,6 +802,16 @@ export default function TodolistClient({
     todolistData.time_slot_end
   ));
 
+  // Calcolo stato todolist
+  let stato: "completata" | "futuro" | "scaduta" | "in_corso" = "in_corso";
+  if (todolistData?.completion_date || todolistData?.status === "completed") {
+    stato = "completata";
+  } else if (todolistData?.scheduled_execution && isTodolistExpired(todolistData.scheduled_execution, todolistData.time_slot_type, todolistData.time_slot_end)) {
+    stato = "scaduta";
+  } else if (todolistData?.scheduled_execution && new Date(todolistData.scheduled_execution) > new Date()) {
+    stato = "futuro";
+  }
+
   /* ---------------- JSX ----------------------- */
   return (
     <>
@@ -829,7 +842,23 @@ export default function TodolistClient({
               )}
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-col items-end gap-2 min-w-[120px]">
+              <div className="flex items-center gap-2">
+                <Badge variant={
+                  stato === "completata"
+                    ? "default"
+                    : stato === "scaduta"
+                    ? "destructive"
+                    : stato === "futuro"
+                    ? "secondary"
+                    : "outline"
+                }>
+                  {stato.charAt(0).toUpperCase() + stato.slice(1)}
+                </Badge>
+                {stato === "completata" && completionUserEmail && (
+                  <span className="text-xs text-muted-foreground">Completata da: {completionUserEmail}</span>
+                )}
+              </div>
               {tasks.some(task => task.status !== "completed") && (
                 <TooltipProvider>
                   <Tooltip>

@@ -460,7 +460,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
         )}
       </CardHeader>
       <CardContent>
-        <div className="flex flex-wrap gap-2 mb-4">
+        <div className="flex flex-wrap gap-2 mb-4 items-center">
           {!isOperator && (
             <Button
               variant={activeFilter === "all" ? "default" : "outline"}
@@ -479,8 +479,9 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
           >
             Oggi <Badge className="ml-2" variant={activeFilter === "today" ? "outline" : "secondary"}>{counts.today}</Badge>
           </Button>
+          {/* Gruppo: Scadute, Future, Completate */}
           {!isOperator && (
-            <>
+            <div className="flex gap-2 px-2 py-1 rounded-md border border-muted bg-muted/50 ml-2">
               <Button
                 variant={activeFilter === "overdue" ? "default" : "outline"}
                 onClick={() => setActiveFilter("overdue")}
@@ -497,20 +498,20 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
               >
                 Future <Badge className="ml-2" variant={activeFilter === "future" ? "outline" : "secondary"}>{counts.future}</Badge>
               </Button>
-            </>
+              <Button
+                variant={activeFilter === "completed" ? "default" : "outline"}
+                onClick={() => setActiveFilter("completed")}
+                size="sm"
+                className={activeFilter === "completed" ? "bg-green-500 hover:bg-green-600" : ""}
+              >
+                Completate <Badge className="ml-2" variant={activeFilter === "completed" ? "outline" : "secondary"}>{counts.completed}</Badge>
+              </Button>
+            </div>
           )}
-          <Button
-            variant={activeFilter === "completed" ? "default" : "outline"}
-            onClick={() => setActiveFilter("completed")}
-            size="sm"
-            className={activeFilter === "completed" ? "bg-green-500 hover:bg-green-600" : ""}
-          >
-            Completate <Badge className="ml-2" variant={activeFilter === "completed" ? "outline" : "secondary"}>{counts.completed}</Badge>
-          </Button>
         </div>
 
         {isAdmin && (
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex items-center gap-4 mb-4">
             <Dialog open={isFilterModalOpen} onOpenChange={setIsFilterModalOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" className="flex items-center gap-2">
@@ -523,6 +524,12 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                   )}
                 </Button>
               </DialogTrigger>
+              {/* MAPPA CONTEGGI COLORATA */}
+              <div className="flex items-center gap-2 ml-2">
+                <Badge className="bg-green-500 text-white" variant="default">Completate: {counts.completed}</Badge>
+                <Badge className="bg-red-500 text-white" variant="default">Scadute: {counts.overdue}</Badge>
+                <Badge className="bg-yellow-500 text-black" variant="default">Da fare: {counts.today}</Badge>
+              </div>
               <DialogContent className="max-w-md">
                 <DialogHeader>
                   <DialogTitle>Filtri</DialogTitle>
