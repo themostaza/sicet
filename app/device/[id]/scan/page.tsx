@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { getCurrentTimeSlot } from "@/lib/validation/todolist-schemas"
+import { getCurrentTimeSlot, customTimeSlotToString, minutesToTime } from "@/lib/validation/todolist-schemas"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2, MapPin, Info } from "lucide-react"
 import { use } from "react"
@@ -10,6 +10,26 @@ import { getTodolistsForDeviceToday } from "@/app/actions/actions-todolist"
 import { getDevice } from "@/app/actions/actions-device"
 import { TodolistSelector } from "./todolist-selector"
 import { Badge } from "@/components/ui/badge"
+
+// Helper function to get time slot string for URL
+const getTimeSlotString = (todolist: any): string => {
+  if (todolist.time_slot_type === "custom" && todolist.time_slot_start !== null && todolist.time_slot_end !== null) {
+    // For custom time slots, create the custom time slot object and convert to string
+    const startTime = minutesToTime(todolist.time_slot_start)
+    const endTime = minutesToTime(todolist.time_slot_end)
+    const customSlot = {
+      type: "custom" as const,
+      startHour: startTime.hour,
+      startMinute: startTime.minute,
+      endHour: endTime.hour,
+      endMinute: endTime.minute
+    }
+    return customTimeSlotToString(customSlot)
+  } else {
+    // For standard time slots, use the existing function
+    return getCurrentTimeSlot(new Date(todolist.scheduled_execution))
+  }
+}
 
 export default function DeviceScanPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
@@ -34,8 +54,8 @@ export default function DeviceScanPage({ params }: { params: Promise<{ id: strin
         
         // Se c'è una sola todolist, vai direttamente a quella
         if (todolistsData && todolistsData.length === 1) {
-          const timeSlot = getCurrentTimeSlot(new Date(todolistsData[0].scheduled_execution))
-          router.push(`/todolist/view/${todolistsData[0].id}/${id}/${today}/${timeSlot}`)
+          const timeSlotString = getTimeSlotString(todolistsData[0])
+          router.push(`/todolist/view/${todolistsData[0].id}/${id}/${today}/${timeSlotString}`)
           return
         }
       } catch (error) {

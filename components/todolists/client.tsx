@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
-import { TimeSlot, TimeSlotValue, CustomTimeSlot, isCustomTimeSlot, isTodolistExpired } from "@/lib/validation/todolist-schemas"
+import { TimeSlot, TimeSlotValue, CustomTimeSlot, isCustomTimeSlot, isTodolistExpired, customTimeSlotToString } from "@/lib/validation/todolist-schemas"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -64,6 +64,14 @@ const timeSlotOrder: Record<TimeSlot, number> = {
 }
 
 const ITEMS_PER_PAGE = 20
+
+// Helper function to convert TimeSlotValue to string for URL
+const timeSlotToUrlString = (timeSlot: TimeSlotValue): string => {
+  if (isCustomTimeSlot(timeSlot)) {
+    return customTimeSlotToString(timeSlot)
+  }
+  return timeSlot as string
+}
 
 export default function TodolistListClient({ todolistsByFilter, counts, initialFilter, userRole, devices, allTags }: Props) {
   const router = useRouter()
@@ -258,12 +266,13 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
   }
 
   const handleRowClick = (todolist: TodolistItem) => {
+    const timeSlotString = timeSlotToUrlString(todolist.time_slot)
     if (isOperator) {
       if (activeFilter === 'today' || activeFilter === 'completed') {
-        router.push(`/todolist/view/${todolist.id}/${todolist.device_id}/${todolist.date}/${todolist.time_slot}`)
+        router.push(`/todolist/view/${todolist.id}/${todolist.device_id}/${todolist.date}/${timeSlotString}`)
       }
     } else {
-      router.push(`/todolist/view/${todolist.id}/${todolist.device_id}/${todolist.date}/${todolist.time_slot}`)
+      router.push(`/todolist/view/${todolist.id}/${todolist.device_id}/${todolist.date}/${timeSlotString}`)
     }
   }
 

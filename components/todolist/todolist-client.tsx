@@ -21,7 +21,7 @@ import { Check, AlertCircle, Info, Save, Loader2, Upload, X, Eye, Calendar as Ca
 import { useRouter } from "next/navigation"
 import { createClientSupabaseClient } from "@/lib/supabase-client"
 import Image from "next/image"
-import { isTodolistExpired } from "@/lib/validation/todolist-schemas"
+import { isTodolistExpired, isCustomTimeSlotString, parseCustomTimeSlotString } from "@/lib/validation/todolist-schemas"
 
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -799,6 +799,29 @@ export default function TodolistClient({
     todolistData.time_slot_end
   ));
 
+  // Funzione helper per formattare l'orario (anche custom)
+  function formatTimeSlotLabel(timeSlot: string) {
+    // Standard
+    const slotLabels: Record<string, string> = {
+      mattina: "Mattina (6-12)",
+      pomeriggio: "Pomeriggio (12-18)",
+      sera: "Sera (18-22)",
+      notte: "Notte (22-6)",
+      giornata: "Giornata (6-20)"
+    }
+    if (slotLabels[timeSlot]) return slotLabels[timeSlot]
+    // Custom
+    if (isCustomTimeSlotString(timeSlot)) {
+      const custom = parseCustomTimeSlotString(timeSlot)
+      if (custom) {
+        const start = `${custom.startHour.toString().padStart(2, '0')}:${(custom.startMinute||0).toString().padStart(2, '0')}`
+        const end = `${custom.endHour.toString().padStart(2, '0')}:${(custom.endMinute||0).toString().padStart(2, '0')}`
+        return `Personalizzato (${start}-${end})`
+      }
+    }
+    return timeSlot
+  }
+
   /* ---------------- JSX ----------------------- */
   return (
     <>
@@ -807,25 +830,16 @@ export default function TodolistClient({
           <div className="flex flex-col sm:flex-row justify-between gap-2">
             <div>
               <CardTitle>Todolist</CardTitle>
-              {deviceInfo ? (
-                <>
-                  <p className="text-gray-600">
-                    {deviceInfo.name} – {deviceInfo.location}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {date} – {labelForSlot(timeSlot)}
-                  </p>
-                  {isExpired && (
-                    <p className="text-sm text-red-600 font-medium mt-1">
-                      ⚠️ Todolist scaduta
-                    </p>
-                  )}
-                </>
-              ) : (
-                <>
-                  <Skeleton className="h-4 w-32 mt-1" />
-                  <Skeleton className="h-3 w-24 mt-1" />
-                </>
+              <p className="text-gray-600 font-medium">
+                {deviceId} – {deviceInfo && typeof deviceInfo === 'object' && 'name' in deviceInfo && deviceInfo.name ? deviceInfo.name : "Dispositivo sconosciuto"}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {date} – {formatTimeSlotLabel(timeSlot)}
+              </p>
+              {isExpired && (
+                <p className="text-sm text-red-600 font-medium mt-1">
+                  ⚠️ Todolist scaduta
+                </p>
               )}
             </div>
 

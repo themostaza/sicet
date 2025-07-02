@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { format } from "date-fns"
 import { it } from "date-fns/locale"
 import { useRouter } from "next/navigation"
-import { getTimeSlotFromDateTime } from "@/lib/validation/todolist-schemas"
+import { getTimeSlotFromDateTime, customTimeSlotToString, minutesToTime } from "@/lib/validation/todolist-schemas"
 import { Badge } from "@/components/ui/badge"
 
 type Todolist = {
@@ -15,6 +15,7 @@ type Todolist = {
   status: "pending" | "in_progress" | "completed"
   created_at: string
   time_slot_type: "standard" | "custom"
+  time_slot_start: number | null
   time_slot_end: number | null
 }
 
@@ -34,6 +35,47 @@ const statusLabels = {
   pending: "In attesa",
   in_progress: "In corso",
   completed: "Completata"
+}
+
+// Helper function to get time slot string for URL
+const getTimeSlotString = (todolist: Todolist): string => {
+  if (todolist.time_slot_type === "custom" && todolist.time_slot_start !== null && todolist.time_slot_end !== null) {
+    // For custom time slots, create the custom time slot object and convert to string
+    const startTime = minutesToTime(todolist.time_slot_start)
+    const endTime = minutesToTime(todolist.time_slot_end)
+    const customSlot = {
+      type: "custom" as const,
+      startHour: startTime.hour,
+      startMinute: startTime.minute,
+      endHour: endTime.hour,
+      endMinute: endTime.minute
+    }
+    return customTimeSlotToString(customSlot)
+  } else {
+    // For standard time slots, use the existing function
+    return getTimeSlotFromDateTime(todolist.scheduled_execution)
+  }
+}
+
+// Helper function to format time slot for display
+const formatTimeSlotDisplay = (todolist: Todolist): string => {
+  if (todolist.time_slot_type === "custom" && todolist.time_slot_start !== null && todolist.time_slot_end !== null) {
+    const startTime = minutesToTime(todolist.time_slot_start)
+    const endTime = minutesToTime(todolist.time_slot_end)
+    const startStr = `${startTime.hour.toString().padStart(2, '0')}:${startTime.minute.toString().padStart(2, '0')}`
+    const endStr = `${endTime.hour.toString().padStart(2, '0')}:${endTime.minute.toString().padStart(2, '0')}`
+    return `Personalizzato (${startStr}-${endStr})`
+  } else {
+    const timeSlot = getTimeSlotFromDateTime(todolist.scheduled_execution)
+    const timeSlotNames: Record<string, string> = {
+      mattina: "Mattina",
+      pomeriggio: "Pomeriggio",
+      sera: "Sera",
+      notte: "Notte",
+      giornata: "Giornata"
+    }
+    return timeSlotNames[timeSlot] || timeSlot
+  }
 }
 
 export function TodolistSelector({ todolists, deviceId, today }: TodolistSelectorProps) {
@@ -64,7 +106,8 @@ export function TodolistSelector({ todolists, deviceId, today }: TodolistSelecto
       </CardHeader>
       <CardContent className="space-y-4">
         {sortedTodolists.map((todolist) => {
-          const timeSlot = getTimeSlotFromDateTime(todolist.scheduled_execution)
+          const timeSlotString = getTimeSlotString(todolist)
+          const timeSlotDisplay = formatTimeSlotDisplay(todolist)
           const formattedTime = format(new Date(todolist.scheduled_execution), "HH:mm", { locale: it })
           
           return (
@@ -72,10 +115,10 @@ export function TodolistSelector({ todolists, deviceId, today }: TodolistSelecto
               key={todolist.id}
               variant="outline"
               className="w-full justify-between"
-              onClick={() => router.push(`/todolist/view/${todolist.id}/${deviceId}/${today}/${timeSlot}`)}
+              onClick={() => router.push(`/todolist/view/${todolist.id}/${deviceId}/${today}/${timeSlotString}`)}
             >
               <div className="flex items-center gap-2">
-                <span className="capitalize">{timeSlot}</span>
+                <span className="capitalize">{timeSlotDisplay}</span>
                 <span className="text-muted-foreground">({formattedTime})</span>
               </div>
               <Badge className={statusColors[todolist.status]}>
