@@ -72,6 +72,8 @@ export function DateSelectionSheet() {
     setEmail,
     alertEnabled,
     setAlertEnabled,
+    setDateEntries,
+    setSelectedDates,
   } = useTodolist()
 
   /**
@@ -127,14 +129,15 @@ export function DateSelectionSheet() {
 
   const handleReset = () => {
     // Reset all date-related states
-    setStartDate(new Date())
-    setIntervalDays(1)
+    setStartDate(null)
+    setIntervalDays(7)
     setMonthsToRepeat(1)
     setDefaultTimeSlot("mattina")
     setTempSelectedDate(new Date())
     setSelectedTimeSlot("mattina")
-    // Clear all date entries
-    dateEntries.forEach((_, index) => removeDateEntry(index))
+    // Clear all date entries at once
+    setDateEntries([])
+    setSelectedDates([])
   }
 
   return (
@@ -153,7 +156,7 @@ export function DateSelectionSheet() {
               size="sm" 
               onClick={handleReset}
               className="h-8"
-              disabled={dateEntries.length === 0 && intervalDays === 1 && monthsToRepeat === 1}
+              disabled={dateEntries.length === 0 && intervalDays === 7 && monthsToRepeat === 1}
             >
               <X className="h-4 w-4 mr-1" /> Reset
             </Button>
@@ -275,7 +278,7 @@ export function DateSelectionSheet() {
                           setIsCalendarOpen(false); // Close popover when a date is selected
                         }
                       }}
-                      defaultMonth={tempSelectedDate}
+                      defaultMonth={tempSelectedDate || new Date()}
                       disabled={{ before: startOfToday() }}
                       initialFocus
                       locale={it}

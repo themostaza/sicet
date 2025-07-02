@@ -510,14 +510,7 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
     })
   }, [startDate, intervalDays, monthsToRepeat, defaultTimeSlot, updateDateEntry, toast])
 
-  // Make sure startDate is initialized
-  useEffect(() => {
-    if (!startDate) {
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      setStartDate(today)
-    }
-  }, [startDate, setStartDate])
+
 
   // Add a new function specifically for updating an existing date entry
   const updateExistingDateEntry = useCallback((index: number, newDate: Date, newTimeSlot: TimeSlotValue) => {
