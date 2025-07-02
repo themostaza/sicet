@@ -48,13 +48,8 @@ export function TodolistSelector({ todolists, deviceId, today }: TodolistSelecto
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Nessuna todolist disponibile oggi</CardTitle>
+          <CardTitle>Nessuna todolist da eseguire</CardTitle>
         </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Non ci sono todolist non completate e non scadute per oggi.
-          </p>
-        </CardContent>
       </Card>
     )
   }
