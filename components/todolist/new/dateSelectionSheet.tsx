@@ -72,6 +72,7 @@ export function DateSelectionSheet() {
     setEmail,
     alertEnabled,
     setAlertEnabled,
+    setDateEntries,
   } = useTodolist()
 
   /**
@@ -83,6 +84,9 @@ export function DateSelectionSheet() {
   )
   const [tempSelectedDate, setTempSelectedDate] = useState<Date | undefined>(new Date())
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+
+  // Stato locale per il toggle 'Ripeti'
+  const [repeatEnabled, setRepeatEnabled] = useState(!!startDate)
 
   /**
    * HANDLERS
@@ -127,7 +131,7 @@ export function DateSelectionSheet() {
 
   const handleReset = () => {
     // Reset all date-related states
-    setStartDate(new Date())
+    setStartDate(null)
     setIntervalDays(1)
     setMonthsToRepeat(1)
     setDefaultTimeSlot("mattina")
@@ -137,185 +141,199 @@ export function DateSelectionSheet() {
     dateEntries.forEach((_, index) => removeDateEntry(index))
   }
 
+  // Sincronizza startDate con repeatEnabled
+  const handleRepeatToggle = (v: boolean) => {
+    setRepeatEnabled(v)
+    if (!v) {
+      setStartDate(null)
+    } else {
+      setStartDate(new Date())
+    }
+  }
+
   return (
     <Sheet open={isDateSheetOpen} onOpenChange={setIsDateSheetOpen}>
       <SheetContent className="w-full sm:max-w-3xl overflow-y-auto">
         <SheetHeader className="mb-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <SheetTitle>Seleziona date e orari</SheetTitle>
-              <SheetDescription>
-                Seleziona le date e le fasce orarie per cui creare le todolist
-              </SheetDescription>
-            </div>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleReset}
-              className="h-8"
-              disabled={dateEntries.length === 0 && intervalDays === 1 && monthsToRepeat === 1}
-            >
-              <X className="h-4 w-4 mr-1" /> Reset
-            </Button>
-          </div>
+          <SheetTitle>Seleziona date e orari</SheetTitle>
+          <SheetDescription>
+            Seleziona le date e le fasce orarie per cui creare le todolist
+          </SheetDescription>
         </SheetHeader>
 
-        <Card className="border-none shadow-none">
-          <CardContent className="p-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-              {/* -------- Email e Alert -------- */}
-              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                <div>
-                  <Label htmlFor="email" className="mb-2 block">
-                    Email per notifiche
-                  </Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="Inserisci email per le notifiche"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </div>
-                <div className="flex items-end">
-                  <div className="flex items-center space-x-2">
-                    <Label htmlFor="alertEnabled" className="mb-0">Abilita notifiche</Label>
-                    <Switch
-                      id="alertEnabled"
-                      checked={alertEnabled}
-                      onCheckedChange={setAlertEnabled}
-                    />
-                  </div>
-                </div>
-              </div>
+        {/* Blocco notifiche: prende tutta la larghezza */}
+        <div className="w-full mb-4 p-4 border rounded-md bg-muted flex flex-col items-start">
+          <div className="flex items-center space-x-2 mb-2">
+            <Label htmlFor="alertEnabled" className="mb-0">Abilita notifiche</Label>
+            <Switch
+              id="alertEnabled"
+              checked={alertEnabled}
+              onCheckedChange={setAlertEnabled}
+            />
+          </div>
+          {alertEnabled && (
+            <div className="w-full">
+              <Input
+                id="email"
+                type="email"
+                placeholder="Inserisci email per le notifiche"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+          )}
+        </div>
 
-              {/* -------- Fascia oraria -------- */}
-              <div>
-                <Label htmlFor="timeSlot" className="mb-2 block">
-                  Fascia oraria
-                </Label>
-                <Select 
-                  value={isCustomTimeSlot(selectedTimeSlot) ? "custom" : selectedTimeSlot} 
-                  onValueChange={handleTimeSlotChange}
+        {/* Riga con tasto reset */}
+        <div className="flex justify-end mb-4">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleReset}
+            className="h-8"
+            disabled={dateEntries.length === 0 && intervalDays === 1 && monthsToRepeat === 1}
+          >
+            <X className="h-4 w-4 mr-1" /> Reset dati
+          </Button>
+        </div>
+
+        {/* Riga con fascia oraria e selezione data */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          {/* Fascia oraria */}
+          <div>
+            <Label htmlFor="timeSlot" className="mb-2 block">
+              Fascia oraria
+            </Label>
+            <Select 
+              value={isCustomTimeSlot(selectedTimeSlot) ? "custom" : selectedTimeSlot} 
+              onValueChange={handleTimeSlotChange}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Seleziona fascia oraria" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mattina">{getTimeSlotLabel("mattina")}</SelectItem>
+                <SelectItem value="pomeriggio">{getTimeSlotLabel("pomeriggio")}</SelectItem>
+                <SelectItem value="notte">{getTimeSlotLabel("notte")}</SelectItem>
+                <SelectItem value="giornata">{getTimeSlotLabel("giornata")}</SelectItem>
+                <SelectItem value="custom">{getTimeSlotLabel("custom")}</SelectItem>
+              </SelectContent>
+            </Select>
+            {isCustomTimeSlot(selectedTimeSlot) && (
+              <div className="mt-2">
+                <CustomTimeSlotPicker
+                  value={selectedTimeSlot}
+                  onChange={handleCustomTimeSlotChange}
+                />
+              </div>
+            )}
+          </div>
+          {/* Selezione data */}
+          <div>
+            <Label className="mb-2 block">Seleziona data</Label>
+            <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !tempSelectedDate && "text-muted-foreground"
+                  )}
                 >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Seleziona fascia oraria">
-                      {isCustomTimeSlot(selectedTimeSlot) 
-                        ? `Personalizzato (${selectedTimeSlot.startHour.toString().padStart(2, '0')}:00-${selectedTimeSlot.endHour.toString().padStart(2, '0')}:00)`
-                        : undefined
-                      }
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="mattina">{getTimeSlotLabel("mattina")}</SelectItem>
-                    <SelectItem value="pomeriggio">{getTimeSlotLabel("pomeriggio")}</SelectItem>
-                    <SelectItem value="notte">{getTimeSlotLabel("notte")}</SelectItem>
-                    <SelectItem value="giornata">{getTimeSlotLabel("giornata")}</SelectItem>
-                    <SelectItem value="custom">{getTimeSlotLabel("custom")}</SelectItem>
-                  </SelectContent>
-                </Select>
-                {isCustomTimeSlot(selectedTimeSlot) && (
-                  <div className="mt-2">
-                    <CustomTimeSlotPicker
-                      value={selectedTimeSlot}
-                      onChange={handleCustomTimeSlotChange}
-                    />
-                  </div>
-                )}
-              </div>
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {tempSelectedDate ? (
+                    format(tempSelectedDate, "EEEE d MMMM", { locale: it })
+                  ) : (
+                    <span>Seleziona una data</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
 
-              {/* -------- Intervallo giorni -------- */}
-              <div>
-                <Label htmlFor="intervalDays" className="mb-2 block">
-                  Intervallo (giorni)
-                </Label>
+              {/*
+                pointer-events-auto è ESSENZIALE quando Popover
+                vive in un portal (Sheet, Dialog, ecc.).
+              */}
+              <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
+                <Calendar
+                  mode="single"
+                  selected={tempSelectedDate}
+                  onSelect={(d) => {
+                    if (d) {
+                      setTempSelectedDate(d);
+                      setIsCalendarOpen(false); // Close popover when a date is selected
+                    }
+                  }}
+                  defaultMonth={tempSelectedDate}
+                  disabled={{ before: startOfToday() }}
+                  initialFocus
+                  locale={it}
+                  className="pointer-events-auto" /* garantisce interazione */
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
+
+        {/* Toggle ripeti e campi intervallo */}
+        <div className="mb-4 flex flex-col md:flex-row md:items-center md:space-x-4">
+          <div className="flex items-center space-x-2 mb-2 md:mb-0">
+            <Label htmlFor="repeatToggle" className="mb-0">Ripeti</Label>
+            <Switch
+              id="repeatToggle"
+              checked={repeatEnabled}
+              onCheckedChange={handleRepeatToggle}
+            />
+          </div>
+          {repeatEnabled && (
+            <>
+              <div className="flex items-center space-x-2 mb-2 md:mb-0">
+                <Label htmlFor="intervalDays" className="mb-0">Intervallo giorni</Label>
                 <Input
                   id="intervalDays"
                   type="number"
                   min={1}
-                  max={31}
                   value={intervalDays}
-                  onChange={(e) => setIntervalDays(parseInt(e.target.value))}
+                  onChange={e => setIntervalDays(Number(e.target.value))}
+                  className="w-24"
                 />
               </div>
-
-              {/* -------- Date Picker -------- */}
-              <div>
-                <Label className="mb-2 block">Seleziona data</Label>
-                <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !tempSelectedDate && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {tempSelectedDate ? (
-                        format(tempSelectedDate, "EEEE d MMMM", { locale: it })
-                      ) : (
-                        <span>Seleziona una data</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-
-                  {/*
-                    pointer-events-auto è ESSENZIALE quando Popover
-                    vive in un portal (Sheet, Dialog, ecc.).
-                  */}
-                  <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={tempSelectedDate}
-                      onSelect={(d) => {
-                        if (d) {
-                          setTempSelectedDate(d);
-                          setIsCalendarOpen(false); // Close popover when a date is selected
-                        }
-                      }}
-                      defaultMonth={tempSelectedDate}
-                      disabled={{ before: startOfToday() }}
-                      initialFocus
-                      locale={it}
-                      className="pointer-events-auto" /* garantisce interazione */
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-
-              {/* -------- Mesi da ripetere -------- */}
-              <div>
-                <Label htmlFor="months" className="mb-2 block">
-                  Mesi da ripetere
-                </Label>
+              <div className="flex items-center space-x-2">
+                <Label htmlFor="monthsToRepeat" className="mb-0">Mesi</Label>
                 <Input
-                  id="months"
+                  id="monthsToRepeat"
                   type="number"
                   min={1}
-                  max={12}
                   value={monthsToRepeat}
-                  onChange={(e) => setMonthsToRepeat(parseInt(e.target.value))}
+                  onChange={e => setMonthsToRepeat(Number(e.target.value))}
+                  className="w-16"
                 />
               </div>
-            </div>
+            </>
+          )}
+        </div>
 
-            {/* -------- ACTION BUTTONS -------- */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-              <Button type="button" onClick={handleAddDate} disabled={!tempSelectedDate} className="flex items-center w-full">
-                <Plus className="h-4 w-4 mr-1" /> Aggiungi data
-              </Button>
-
-              <Button type="button" onClick={handleApplyInterval} disabled={!tempSelectedDate || intervalDays < 1} className="w-full">
-                Applica intervallo
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Pulsanti azione: aggiungi data o applica intervallo */}
+        <div className="flex justify-end mb-4">
+          {repeatEnabled ? (
+            <Button onClick={handleApplyInterval}>Applica intervallo</Button>
+          ) : (
+            <Button onClick={handleAddDate}>Aggiungi data</Button>
+          )}
+        </div>
 
         {/* -------- DATE LIST -------- */}
         <div className="mt-6">
-          <h3 className="text-sm font-medium mb-2">Date selezionate ({dateEntries.length})</h3>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-medium">Date selezionate ({dateEntries.length})</h3>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setDateEntries([])}
+              disabled={dateEntries.length === 0}
+            >
+              Elimina tutte
+            </Button>
+          </div>
           <div className="border rounded-md p-4">
             <table className="w-full">
               <thead>

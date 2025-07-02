@@ -44,6 +44,9 @@ export default function ExportPage() {
   // Track date changes separately to avoid reloads on selection changes
   const [dateChanged, setDateChanged] = useState(false)
   
+  // Stato per la selezione globale
+  const [selectAll, setSelectAll] = useState(false)
+  
   // Load devices
   useEffect(() => {
     const loadDevices = async () => {
@@ -224,6 +227,41 @@ export default function ExportPage() {
     return Object.values(deviceKpis).flat()
   }, [deviceKpis])
   
+  // Funzione per selezionare/deselezionare tutti i dispositivi e KPI
+  const handleToggleSelectAll = useCallback(() => {
+    if (selectAll) {
+      // Deseleziona tutto
+      setSelectedDevices([])
+      setDeviceKpis({})
+      setSelectAll(false)
+    } else {
+      // Seleziona tutti i dispositivi e tutti i KPI disponibili
+      const allDeviceIds = devices.map(d => d.value)
+      setSelectedDevices(allDeviceIds)
+      // Per ogni device, seleziona tutti i KPI disponibili
+      const newDeviceKpis: Record<string, string[]> = {}
+      allDeviceIds.forEach(deviceId => {
+        const kpis = deviceKpiOptions[deviceId]?.map(k => k.value) || []
+        newDeviceKpis[deviceId] = kpis
+      })
+      setDeviceKpis(newDeviceKpis)
+      setSelectAll(true)
+    }
+  }, [selectAll, devices, deviceKpiOptions])
+
+  // Effetto per aggiornare lo stato della checkbox globale
+  useEffect(() => {
+    // Tutti i dispositivi selezionati e tutti i KPI selezionati per ogni dispositivo
+    const allDeviceIds = devices.map(d => d.value)
+    const allDevicesSelected = allDeviceIds.length > 0 && allDeviceIds.every(id => selectedDevices.includes(id))
+    const allKpisSelected = allDeviceIds.every(deviceId => {
+      const availableKpis = deviceKpiOptions[deviceId] || []
+      const selectedKpis = deviceKpis[deviceId] || []
+      return availableKpis.length === selectedKpis.length && availableKpis.length > 0
+    })
+    setSelectAll(allDevicesSelected && allKpisSelected)
+  }, [devices, selectedDevices, deviceKpiOptions, deviceKpis])
+  
   // Handle export
   const handleExport = async () => {
     if (isExporting) return
@@ -267,13 +305,12 @@ export default function ExportPage() {
   
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-4">Esporta dati todolist</h1>
       
-      <Card>
+      <Card className="w-full border-0">
         <CardHeader className="pb-4">
           <CardTitle>Esportazione CSV</CardTitle>
           <CardDescription>
-            Seleziona l'intervallo di date e filtra per dispositivi e KPI
+            Seleziona l'intervallo di date e filtra per Punti di controllo e Controlli
           </CardDescription>
         </CardHeader>
         
@@ -353,7 +390,14 @@ export default function ExportPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-8"></TableHead>
+                        <TableHead className="w-8">
+                          {/* Checkbox globale */}
+                          <Checkbox
+                            id="select-all-devices"
+                            checked={selectAll}
+                            onCheckedChange={handleToggleSelectAll}
+                          />
+                        </TableHead>
                         <TableHead>Nome Punto di controllo</TableHead>
                       </TableRow>
                     </TableHeader>
