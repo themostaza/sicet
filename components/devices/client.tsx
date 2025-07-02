@@ -121,9 +121,39 @@ export default function DeviceList({ initialDevices }: Props) {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Punti di Controllo</h1>
-        <Button className="bg-black hover:bg-gray-800" onClick={() => router.push("/device/new")}>        
-          <Plus className="mr-2 h-4 w-4" /> Nuovo Punto di Controllo
-        </Button>
+        <div className="flex gap-2">
+          <Button className="bg-black hover:bg-gray-800" onClick={() => router.push("/device/new")}>        
+            <Plus className="mr-2 h-4 w-4" /> Nuovo Punto di Controllo
+          </Button>
+          <Button
+            variant="outline"
+            className="border-gray-400"
+            onClick={async () => {
+              const res = await fetch("/api/device/qrcodes-pdf")
+              if (!res.ok) {
+                alert("Errore durante la generazione del PDF")
+                return
+              }
+              const blob = await res.blob()
+              const url = window.URL.createObjectURL(blob)
+              const a = document.createElement("a")
+              a.href = url
+              // Prova a recuperare il nome file dal header
+              const disposition = res.headers.get("content-disposition")
+              let filename = "qrcodes-dispositivi.pdf"
+              if (disposition && disposition.includes("filename=")) {
+                filename = disposition.split("filename=")[1].replaceAll('"', '')
+              }
+              a.download = filename
+              document.body.appendChild(a)
+              a.click()
+              a.remove()
+              window.URL.revokeObjectURL(url)
+            }}
+          >
+            <QrCode className="mr-2 h-4 w-4" /> Scarica tutti i QRcode
+          </Button>
+        </div>
       </div>
 
       <div className="relative">
