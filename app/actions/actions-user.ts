@@ -53,7 +53,7 @@ export async function deleteUser(email: string) {
     }
 
     // Se esiste un utente auth, cancellalo
-    if (profileToDelete.auth_id) {
+    if (profileToDelete && 'auth_id' in profileToDelete && profileToDelete.auth_id) {
       const { error: deleteAuthError } = await supabaseAdmin.auth.admin.deleteUser(profileToDelete.auth_id)
       if (deleteAuthError) {
         console.error('Error deleting auth user:', deleteAuthError)
@@ -61,11 +61,10 @@ export async function deleteUser(email: string) {
       }
     }
 
-    // Aggiorna il profilo: imposta auth_id a null e status a 'deleted'
+    // Aggiorna il profilo: imposta status a 'deleted'
     const { data: updatedProfile, error: updateError } = await supabaseAdmin
       .from('profiles')
       .update({ 
-        auth_id: null, 
         status: 'deleted' 
       })
       .eq('id', profileToDelete.id)
@@ -123,7 +122,7 @@ export async function preregisterUser(email: string, role: 'operator' | 'admin' 
     // Check if email already exists (including deleted profiles)
     const { data: existingProfile, error: checkError } = await supabaseAdmin
       .from('profiles')
-      .select('id, status, auth_id')
+      .select('id, status')
       .eq('email', email)
       .single()
 
@@ -139,8 +138,7 @@ export async function preregisterUser(email: string, role: 'operator' | 'admin' 
           .from('profiles')
           .update({ 
             role, 
-            status: 'reset-password',
-            auth_id: null // Reset auth_id per permettere nuova registrazione
+            status: 'reset-password'
           })
           .eq('id', existingProfile.id)
           .select()

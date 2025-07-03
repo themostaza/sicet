@@ -275,7 +275,8 @@ export interface Database {
           id: string
           email: string
           role: 'operator' | 'admin' | 'referrer'
-          status: 'registered' | 'activated' | 'reset-password'
+          status: 'registered' | 'activated' | 'reset-password' | 'deleted'
+          auth_id: string | null
           created_at: string
           updated_at: string
         }
@@ -283,7 +284,8 @@ export interface Database {
           id?: string
           email: string
           role: 'operator' | 'admin' | 'referrer'
-          status?: 'registered' | 'activated' | 'reset-password'
+          status?: 'registered' | 'activated' | 'reset-password' | 'deleted'
+          auth_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -291,11 +293,19 @@ export interface Database {
           id?: string
           email?: string
           role?: 'operator' | 'admin' | 'referrer'
-          status?: 'registered' | 'activated' | 'reset-password'
+          status?: 'registered' | 'activated' | 'reset-password' | 'deleted'
+          auth_id?: string | null
           created_at?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_auth_id_fkey"
+            columns: ["auth_id"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       todolist: {
         Row: {
