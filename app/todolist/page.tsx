@@ -51,6 +51,12 @@ export default async function TodolistPage() {
       .gte("scheduled_execution", `${today}T00:00:00`)
       .lt("scheduled_execution", `${today}T23:59:59`)
 
+    const { count: todayTotal } = await supabase
+      .from("todolist")
+      .select("*", { count: "exact", head: true })
+      .gte("scheduled_execution", `${today}T00:00:00`)
+      .lt("scheduled_execution", `${today}T23:59:59`)
+
     const { count: overdueCount } = await supabase
       .from("todolist")
       .select("*", { count: "exact", head: true })
@@ -71,6 +77,7 @@ export default async function TodolistPage() {
     const counts = {
       all: allCount || 0,
       today: todayCount || 0,
+      todayTotal: todayTotal || 0,
       overdue: overdueCount || 0,
       future: futureCount || 0,
       completed: completedCount || 0,
