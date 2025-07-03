@@ -47,7 +47,34 @@ export interface Database {
           deleted?: boolean
         }
         Relationships: []
-      }
+      },
+      export_templates: {
+        Row: {
+          created_at: string
+          email_autosend: string | null
+          field_mapping: Json | null
+          file_url: string | null
+          id: string
+          template_name: string | null
+        }
+        Insert: {
+          created_at?: string
+          email_autosend?: string | null
+          field_mapping?: Json | null
+          file_url?: string | null
+          id?: string
+          template_name?: string | null
+        }
+        Update: {
+          created_at?: string
+          email_autosend?: string | null
+          field_mapping?: Json | null
+          file_url?: string | null
+          id?: string
+          template_name?: string | null
+        }
+        Relationships: []
+      },
       kpis: {
         Row: {
           created_at: string | null
