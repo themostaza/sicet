@@ -183,7 +183,7 @@ export default function Sidebar() {
                   <LayoutGrid className="h-4 w-4" />
                 </AvatarFallback>
               </Avatar>
-              <h1 className="text-lg font-semibold">Sistema di gestione</h1>
+              <h1 className="text-lg font-semibold">Controlli</h1>
             </div>
             {isMobile && (
               <Button variant="ghost" size="icon" onClick={toggleSidebar}>
@@ -217,7 +217,7 @@ export default function Sidebar() {
                 <LayoutGrid className="h-4 w-4" />
               </AvatarFallback>
             </Avatar>
-            <h1 className="text-lg font-semibold">Sistema di gestione</h1>
+            <h1 className="text-lg font-semibold">Controlli</h1>
           </div>
           {isMobile && (
             <Button variant="ghost" size="icon" onClick={toggleSidebar}>

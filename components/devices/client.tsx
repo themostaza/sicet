@@ -338,7 +338,7 @@ export default function DeviceList({ initialDevices }: Props) {
                           }}
                         >
                           <Button variant="destructive" size="sm">
-                            <Trash2 className="w-4 h-4 mr-2" /> Elimina
+                            Disattiva
                           </Button>
                         </DeviceDeleteDialog>
                       )}

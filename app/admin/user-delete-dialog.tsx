@@ -41,9 +41,9 @@ export function UserDeleteDialog({ userId, userEmail, onDelete }: UserDeleteDial
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Sei sicuro di voler eliminare questo utente?</AlertDialogTitle>
+          <AlertDialogTitle>Sei sicuro di voler disattivare questo utente?</AlertDialogTitle>
           <AlertDialogDescription>
-            Questa azione non può essere annullata. L'utente {userEmail} verrà eliminato permanentemente.
+            Questa azione non può essere annullata. L'utente {userEmail} verrà disattivato.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -53,7 +53,7 @@ export function UserDeleteDialog({ userId, userEmail, onDelete }: UserDeleteDial
             disabled={isPending}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
-            {isPending ? 'Eliminazione...' : 'Elimina'}
+            {isPending ? 'Disattivazione...' : 'Disattiva'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

@@ -198,7 +198,7 @@ export default function PreRegisterPage() {
                     <TableHead className="w-[30%]">Email</TableHead>
                     <TableHead className="w-[20%]">Ruolo</TableHead>
                     <TableHead className="w-[20%]">Stato</TableHead>
-                    <TableHead className="w-[20%]">Data Pre-registrazione</TableHead>
+                    <TableHead className="w-[20%]">Data</TableHead>
                     <TableHead className="w-[10%] text-right">Azioni</TableHead>
                   </TableRow>
                 </TableHeader>

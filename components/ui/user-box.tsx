@@ -134,6 +134,7 @@ export function UserBox() {
           size="icon"
           onClick={handleLogout}
           title="Logout"
+          className="md:hover:bg-red-50 md:hover:text-red-600 transition-colors"
         >
           <LogOut className="h-4 w-4" />
         </Button>

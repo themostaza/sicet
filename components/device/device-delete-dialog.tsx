@@ -28,15 +28,18 @@ export function DeviceDeleteDialog({ onDelete, disabled, children }: DeviceDelet
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Elimina dispositivo?</AlertDialogTitle>
+          <AlertDialogTitle>Disattiva dispositivo?</AlertDialogTitle>
           <AlertDialogDescription>
-            Sei sicuro di voler eliminare questo dispositivo? Questa azione non può essere annullata.
+            Sei sicuro di voler disattivare questo dispositivo? Questa azione non può essere annullata.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isPending}>Annulla</AlertDialogCancel>
-          <AlertDialogAction onClick={handleDelete} disabled={isPending || disabled}>
-            {isPending ? "Eliminazione..." : "Elimina"}
+          <AlertDialogAction 
+          onClick={handleDelete} 
+          disabled={isPending || disabled} 
+          className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            {isPending ? "Disattivazione..." : "Disattiva"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
