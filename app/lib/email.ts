@@ -1,7 +1,7 @@
 import { Resend } from 'resend';
 import type { AlertCondition } from '../actions/actions-alerts';
 
-const resend = new Resend(process.env.RESEND_API_KEY || 're_Bdmu5oBt_8Wd5LKQDP95Dco7952yV87AT');
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 type TriggeredCondition = {
   condition: AlertCondition;
