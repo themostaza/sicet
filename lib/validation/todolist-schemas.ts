@@ -59,11 +59,11 @@ export const TIME_SLOT_TOLERANCE = 3
 
 // Costanti per gli intervalli orari degli slot temporali
 export const TIME_SLOT_INTERVALS = {
-  mattina: { start: 6, end: 11 },
-  pomeriggio: { start: 12, end: 17 },
+  mattina: { start: 6, end: 14 },
+  pomeriggio: { start: 14, end: 22 },
   sera: { start: 18, end: 21 },
-  notte: { start: 22, end: 5 },
-  giornata: { start: 6, end: 17 },
+  notte: { start: 22, end: 6 },
+  giornata: { start: 7, end: 17 },
 } as const
 
 // Type per gli slot temporali
