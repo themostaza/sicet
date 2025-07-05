@@ -27,20 +27,18 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth <= 768)
-      if (window.innerWidth <= 768) {
+      const mobile = window.innerWidth <= 768
+      setIsMobile(mobile)
+      if (mobile) {
         setIsOpen(false)
-      } else {
-        setIsOpen(true)
       }
     }
-
     checkMobile()
     window.addEventListener("resize", checkMobile)
     return () => window.removeEventListener("resize", checkMobile)
   }, [])
 
-  const toggleSidebar = () => setIsOpen(!isOpen)
+  const toggleSidebar = () => setIsOpen((prev) => !prev)
 
   return (
     <SidebarContext.Provider value={{ isOpen, isMobile, toggleSidebar, setIsOpen }}>

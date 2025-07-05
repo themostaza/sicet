@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
-import { LayoutGrid, Layers, ClipboardList, FileText, Menu, BellRing, AlertCircle, Users, BarChart2, Database } from "lucide-react"
+import { LayoutGrid, Layers, ClipboardList, FileText, Menu, BellRing, AlertCircle, Users, BarChart2, Database, Table, ChevronsLeft, ChevronsRight } from "lucide-react"
 import NavLinkWithLoading from "./ui/NavLinkWithLoading"
 import { Button } from "./ui/button"
 import {
@@ -51,6 +51,11 @@ const menuItemsByRole: Record<Role, Array<{
       href: "/todolist",
       icon: <ClipboardList size={20} />,
       label: "Todolist"
+    },
+    {
+      href: "matrix",
+      icon: <Table size={20} />,
+      label: "Matrice Todolist"
     },
     {
       href: "/export",
@@ -173,18 +178,29 @@ export default function Sidebar() {
         <SidebarHeader>
           <div className="flex items-center justify-between px-4">
             <div className="flex items-center gap-2">
-              <Avatar className="h-8 w-8 rounded-sm">
-                <AvatarImage
-                  src="/logo.webp"
-                  alt="Sicet Logo"
-                  className="rounded-sm"
-                />
-                <AvatarFallback className="rounded-sm bg-muted">
-                  <LayoutGrid className="h-4 w-4" />
-                </AvatarFallback>
-              </Avatar>
-              <h1 className="text-lg font-semibold">Controlli</h1>
+              {/* Mostra il logo solo se sidebar aperta su desktop o su mobile */}
+              {(!isMobile && isOpen) && (
+                <Avatar className="h-8 w-8 rounded-sm">
+                  <AvatarImage
+                    src="/logo.webp"
+                    alt="Sicet Logo"
+                    className="rounded-sm"
+                  />
+                  <AvatarFallback className="rounded-sm bg-muted">
+                    <LayoutGrid className="h-4 w-4" />
+                  </AvatarFallback>
+                </Avatar>
+              )}
+              {/* Mostra il titolo solo se sidebar aperta su desktop o su mobile */}
+              {(!isMobile && isOpen) && <h1 className="text-lg font-semibold">Controlli</h1>}
             </div>
+            {/* Bottone toggle solo su desktop, cambia icona a seconda dello stato */}
+            {!isMobile && (
+              <Button variant="ghost" size="icon" onClick={toggleSidebar} title={isOpen ? 'Collassa' : 'Espandi'}>
+                {isOpen ? <ChevronsLeft className="h-5 w-5" /> : <ChevronsRight className="h-5 w-5" />}
+              </Button>
+            )}
+            {/* Bottone mobile come prima, resta Menu */}
             {isMobile && (
               <Button variant="ghost" size="icon" onClick={toggleSidebar}>
                 <Menu className="h-5 w-5" />
@@ -207,18 +223,29 @@ export default function Sidebar() {
       <SidebarHeader>
         <div className="flex items-center justify-between px-4">
           <div className="flex items-center gap-2">
-            <Avatar className="h-8 w-8 rounded-sm">
-              <AvatarImage
-                src="/logo.webp"
-                alt="Sicet Logo"
-                className="rounded-sm"
-              />
-              <AvatarFallback className="rounded-sm bg-muted">
-                <LayoutGrid className="h-4 w-4" />
-              </AvatarFallback>
-            </Avatar>
-            <h1 className="text-lg font-semibold">Controlli</h1>
+            {/* Mostra il logo solo se sidebar aperta su desktop o su mobile */}
+            {(!isMobile && isOpen) && (
+              <Avatar className="h-8 w-8 rounded-sm">
+                <AvatarImage
+                  src="/logo.webp"
+                  alt="Sicet Logo"
+                  className="rounded-sm"
+                />
+                <AvatarFallback className="rounded-sm bg-muted">
+                  <LayoutGrid className="h-4 w-4" />
+                </AvatarFallback>
+              </Avatar>
+            )}
+            {/* Mostra il titolo solo se sidebar aperta su desktop o su mobile */}
+            {(!isMobile && isOpen) && <h1 className="text-lg font-semibold">Controlli</h1>}
           </div>
+          {/* Bottone toggle solo su desktop, cambia icona a seconda dello stato */}
+          {!isMobile && (
+            <Button variant="ghost" size="icon" onClick={toggleSidebar} title={isOpen ? 'Collassa' : 'Espandi'}>
+              {isOpen ? <ChevronsLeft className="h-5 w-5" /> : <ChevronsRight className="h-5 w-5" />}
+            </Button>
+          )}
+          {/* Bottone mobile come prima, resta Menu */}
           {isMobile && (
             <Button variant="ghost" size="icon" onClick={toggleSidebar}>
               <Menu className="h-5 w-5" />
@@ -226,16 +253,17 @@ export default function Sidebar() {
           )}
         </div>
       </SidebarHeader>
-
       <SidebarContent>
-        <UserBox />
+        {/* UserBox solo se sidebar aperta su desktop o su mobile */}
+        {(!isMobile && isOpen) && <UserBox />}
         {!loading && (
           <SidebarMenu>
             {menuItems.map((item) => (
               <SidebarMenuItem key={item.href}>
                 <NavLinkWithLoading href={item.href}>
                   {item.icon}
-                  <span>{item.label}</span>
+                  {/* Mostra label solo se sidebar aperta su desktop o su mobile */}
+                  {(!isMobile && isOpen) && <span>{item.label}</span>}
                 </NavLinkWithLoading>
               </SidebarMenuItem>
             ))}

@@ -17,26 +17,16 @@ import { getDevices } from "@/app/actions/actions-device"
 import { toast } from "@/components/ui/use-toast"
 import { getKpisByDevice } from "@/app/actions/actions-export"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import ImportExportTab from "@/components/ImportExportTab"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import ExportCsvTab from "@/components/ExportCsvTab"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import MatriceTodolist from "@/components/MatriceTodolist"
 
 export default function ExportPage() {
-  const [tab, setTab] = useState("importexport")
+  const [showMatriceDialog, setShowMatriceDialog] = useState(false)
+  
   return (
-    <div>
-      <Tabs value={tab} onValueChange={setTab} className="w-full">
-        <TabsList className="mb-6">
-          <TabsTrigger value="importexport">Import / Export</TabsTrigger>
-          <TabsTrigger value="csv">Esportazione CSV</TabsTrigger>
-        </TabsList>
-        <TabsContent value="importexport">
-          <ImportExportTab />
-        </TabsContent>
-        <TabsContent value="csv">
-          <ExportCsvTab />
-        </TabsContent>
-      </Tabs>
+    <div className="space-y-6">
+      <ExportCsvTab />
     </div>
   )
 }
