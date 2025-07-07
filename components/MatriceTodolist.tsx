@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -9,18 +9,42 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Plus, CalendarIcon, X, Columns, Rows } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Plus, CalendarIcon, X, Settings, Loader2 } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
+import { toast } from "@/components/ui/use-toast"
 
-interface Column {
+interface Control {
   id: string
-  title: string
+  name: string
 }
 
-interface TodolistRow {
-  id: number
-  name: string
+interface Task {
+  id: string
+  kpi_id: string
+  kpi_name: string
+  status: string
+  value: Array<{id: string, value: any}> | null
+}
+
+interface TodolistData {
+  id: string
+  device_id: string
+  device_name: string
+  scheduled_execution: string
+  status: string
+  time_slot_type: string
+  time_slot_start: number | null
+  time_slot_end: number | null
+  isExpired: boolean
+  tasks: Task[]
+}
+
+interface TodolistControlVisibility {
+  [todolistId: string]: {
+    [controlId: string]: boolean
+  }
 }
 
 export default function MatriceTodolist() {
@@ -31,170 +55,275 @@ export default function MatriceTodolist() {
     return sevenDaysAgo
   })
   const [dateTo, setDateTo] = useState<Date>(() => new Date())
-  const [showAddColumnDialog, setShowAddColumnDialog] = useState(false)
-  const [showManageColumnsDialog, setShowManageColumnsDialog] = useState(false)
-  const [showManageRowsDialog, setShowManageRowsDialog] = useState(false)
-  const [newColumnTitle, setNewColumnTitle] = useState("")
+  const [showManageDialog, setShowManageDialog] = useState(false)
   const [showFromCalendar, setShowFromCalendar] = useState(false)
   const [showToCalendar, setShowToCalendar] = useState(false)
   
-  // Stato per gestire la visibilità delle righe
-  const [visibleRows, setVisibleRows] = useState<Set<number>>(new Set())
+  // Stato per i dati del database
+  const [todolists, setTodolists] = useState<TodolistData[]>([])
+  const [allControls, setAllControls] = useState<Control[]>([])
+  const [isLoading, setIsLoading] = useState(false)
   
-  // Stato per gestire la visibilità delle colonne
-  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set())
-
-  // Esempio dati righe (questi arriveranno dal DB)
-  const allRows: TodolistRow[] = [
-    { id: 1, name: "Esempio Todolist 1" },
-    { id: 2, name: "Esempio Todolist 2" },
-    { id: 3, name: "Esempio Todolist 3" },
-    { id: 4, name: "Esempio Todolist 4" },
-    { id: 5, name: "Esempio Todolist 5" },
-    { id: 6, name: "Esempio Todolist 6" },
-    { id: 7, name: "Esempio Todolist 7" },
-    { id: 8, name: "Esempio Todolist 8" },
-    { id: 9, name: "Esempio Todolist 9" },
-    { id: 10, name: "Esempio Todolist 10" },
-    { id: 11, name: "Esempio Todolist 11" },
-    { id: 12, name: "Esempio Todolist 12" },
-    { id: 13, name: "Esempio Todolist 13" },
-    { id: 14, name: "Esempio Todolist 14" },
-    { id: 15, name: "Esempio Todolist 15" },
-  ]
-
-  // Esempio dati colonne (questi arriveranno dal DB)
-  const allColumns: Column[] = [
-    { id: "temp", title: "Temperatura" },
-    { id: "press", title: "Pressione" },
-    { id: "umid", title: "Umidità" },
-    { id: "volt", title: "Voltaggio" },
-    { id: "corr", title: "Corrente" },
-    { id: "ph", title: "pH" },
-    { id: "cond", title: "Conducibilità" },
-    { id: "turb", title: "Torbidità" },
-    { id: "oss", title: "Ossigeno Disciolto" },
-    { id: "clor", title: "Cloro Residuo" },
-    { id: "dur", title: "Durezza" },
-    { id: "alc", title: "Alcalinità" },
-  ]
-
-  // Inizializza tutte le righe come visibili al primo render
-  React.useEffect(() => {
-    if (visibleRows.size === 0) {
-      setVisibleRows(new Set(allRows.map(row => row.id)))
-    }
-  }, [allRows])
-
-  // Inizializza tutte le colonne come visibili al primo render
-  React.useEffect(() => {
-    if (visibleColumns.size === 0) {
-      setVisibleColumns(new Set(allColumns.map(col => col.id)))
-    }
-  }, [allColumns])
-
-  // Filtra le righe visibili
-  const visibleRowsData = allRows.filter(row => visibleRows.has(row.id))
+  // Stato per gestire la visibilità delle todolist
+  const [visibleTodolists, setVisibleTodolists] = useState<Set<string>>(new Set())
   
-  // Filtra le colonne visibili
-  const visibleColumnsData = allColumns.filter(col => visibleColumns.has(col.id))
+  // Stato per gestire la visibilità dei controlli per ogni todolist
+  const [controlVisibility, setControlVisibility] = useState<TodolistControlVisibility>({})
+  
+  // Stato per gestire l'hover sulla tabella
+  const [hoveredRow, setHoveredRow] = useState<string | null>(null)
+  const [hoveredColumn, setHoveredColumn] = useState<string | null>(null)
+  const [hoveredRowHeader, setHoveredRowHeader] = useState<string | null>(null)
+  const [hoveredColHeader, setHoveredColHeader] = useState<string | null>(null)
 
-  const openAddColumnDialog = () => {
-    setShowAddColumnDialog(true)
-    setNewColumnTitle("")
-  }
-
-  const openManageColumnsDialog = () => {
-    setShowManageColumnsDialog(true)
-  }
-
-  const openManageRowsDialog = () => {
-    setShowManageRowsDialog(true)
-  }
-
-  const addColumn = () => {
-    if (newColumnTitle.trim()) {
-      const newColumn: Column = {
-        id: Date.now().toString(),
-        title: newColumnTitle.trim()
+  // Funzione per caricare i dati dal database
+  const loadData = async () => {
+    setIsLoading(true)
+    try {
+      const params = new URLSearchParams({
+        dateFrom: format(dateFrom, 'yyyy-MM-dd'),
+        dateTo: format(dateTo, 'yyyy-MM-dd')
+      })
+      
+      const response = await fetch(`/api/matrix/todolist?${params}`)
+      if (!response.ok) {
+        throw new Error('Failed to fetch data')
       }
-      // Aggiungi alla lista delle colonne e rendila visibile
-      allColumns.push(newColumn)
-      const newVisibleColumns = new Set(visibleColumns)
-      newVisibleColumns.add(newColumn.id)
-      setVisibleColumns(newVisibleColumns)
-      setShowAddColumnDialog(false)
-      setNewColumnTitle("")
+      
+      const data = await response.json()
+      setTodolists(data.todolists)
+      setAllControls(data.controls)
+      
+      // Inizializza tutte le todolist come visibili
+      setVisibleTodolists(new Set(data.todolists.map((t: TodolistData) => t.id)))
+      
+      // Inizializza tutti i controlli come visibili
+      const initialVisibility: TodolistControlVisibility = {}
+      data.todolists.forEach((todolist: TodolistData) => {
+        initialVisibility[todolist.id] = {}
+        // Inizializza tutti i campi JSONB trovati in questa todolist
+        data.controls.forEach((control: Control) => {
+          // Verifica se questa todolist ha questo campo JSONB (considerando anche task non completati)
+          const hasField = todolist.tasks.some((task: Task) => {
+            // Se il task è completato, controlla nel valore JSONB
+            if (task.value && Array.isArray(task.value)) {
+              return task.value.some(item => item.id === control.id)
+            }
+            // Se il task non è completato ma la todolist è scaduta, mostra comunque i controlli
+            // (assumiamo che tutti i KPI potrebbero avere tutti i campi)
+            return todolist.isExpired
+          })
+          initialVisibility[todolist.id][control.id] = hasField
+        })
+      })
+      setControlVisibility(initialVisibility)
+      
+    } catch (error) {
+      console.error('Error loading data:', error)
+      toast({
+        title: "Errore",
+        description: "Impossibile caricare i dati. Riprova più tardi.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const removeColumn = (columnId: string) => {
-    const newVisibleColumns = new Set(visibleColumns)
-    newVisibleColumns.delete(columnId)
-    setVisibleColumns(newVisibleColumns)
+  // Carica i dati quando cambiano le date
+  useEffect(() => {
+    loadData()
+  }, [dateFrom, dateTo])
+
+  // Filtra le todolist visibili
+  const visibleTodolistsData = todolists.filter(todolist => visibleTodolists.has(todolist.id))
+  
+  // Ottieni tutti i controlli visibili (unici) dalle todolist visibili
+  const getVisibleControls = (): Control[] => {
+    const visibleControlsMap = new Map<string, Control>()
+    
+    // Cerca in tutti i controlli disponibili e verifica se sono visibili
+    allControls.forEach(control => {
+      let isVisible = false
+      visibleTodolistsData.forEach(todolist => {
+        if (controlVisibility[todolist.id]?.[control.id]) {
+          isVisible = true
+        }
+      })
+      
+      if (isVisible) {
+        visibleControlsMap.set(control.id, control)
+      }
+    })
+    
+    return Array.from(visibleControlsMap.values())
   }
 
-  // Nasconde una singola colonna
-  const hideColumn = (columnId: string) => {
-    const newVisibleColumns = new Set(visibleColumns)
-    newVisibleColumns.delete(columnId)
-    setVisibleColumns(newVisibleColumns)
+  const openManageDialog = () => {
+    setShowManageDialog(true)
   }
 
-  // Gestisce la selezione/deselezione di una colonna dal dialog
-  const toggleColumnVisibility = (columnId: string) => {
-    const newVisibleColumns = new Set(visibleColumns)
-    if (newVisibleColumns.has(columnId)) {
-      newVisibleColumns.delete(columnId)
+  // Gestisce la selezione/deselezione di una todolist
+  const toggleTodolistVisibility = (todolistId: string) => {
+    const newVisibleTodolists = new Set(visibleTodolists)
+    if (newVisibleTodolists.has(todolistId)) {
+      newVisibleTodolists.delete(todolistId)
     } else {
-      newVisibleColumns.add(columnId)
+      newVisibleTodolists.add(todolistId)
     }
-    setVisibleColumns(newVisibleColumns)
+    setVisibleTodolists(newVisibleTodolists)
   }
 
-  // Seleziona/deseleziona tutte le colonne
-  const toggleAllColumns = () => {
-    if (visibleColumns.size === allColumns.length) {
-      // Se tutte sono selezionate, deseleziona tutte
-      setVisibleColumns(new Set())
+  // Gestisce la selezione/deselezione di un controllo per una todolist
+  const toggleControlVisibility = (todolistId: string, controlId: string) => {
+    const newControlVisibility = { ...controlVisibility }
+    const newValue = !newControlVisibility[todolistId]?.[controlId]
+    
+    // Trova tutte le todolist che hanno questo campo JSONB
+    const todolistsWithControl = todolists.filter(todolist => 
+      todolist.tasks.some(task => 
+        task.value && Array.isArray(task.value) && 
+        task.value.some(item => item.id === controlId)
+      )
+    )
+    
+    // Applica la modifica a tutte le todolist che hanno questo controllo
+    todolistsWithControl.forEach(todolist => {
+      if (!newControlVisibility[todolist.id]) {
+        newControlVisibility[todolist.id] = {}
+      }
+      newControlVisibility[todolist.id][controlId] = newValue
+    })
+    
+    setControlVisibility(newControlVisibility)
+  }
+
+  // Seleziona/deseleziona tutte le todolist
+  const toggleAllTodolists = () => {
+    if (visibleTodolists.size === todolists.length) {
+      setVisibleTodolists(new Set())
     } else {
-      // Altrimenti seleziona tutte
-      setVisibleColumns(new Set(allColumns.map(col => col.id)))
+      setVisibleTodolists(new Set(todolists.map(todolist => todolist.id)))
     }
   }
 
-  // Nasconde una singola riga
-  const hideRow = (rowId: number) => {
-    const newVisibleRows = new Set(visibleRows)
-    newVisibleRows.delete(rowId)
-    setVisibleRows(newVisibleRows)
+  // Seleziona/deseleziona tutti i controlli per una todolist
+  const toggleAllControlsForTodolist = (todolistId: string) => {
+    const todolist = todolists.find(t => t.id === todolistId)
+    if (!todolist) return
+    
+    const newControlVisibility = { ...controlVisibility }
+    
+    // Ottieni tutti i campi JSONB che questa todolist ha
+    const todolistFields = allControls.filter(control => 
+      todolist.tasks.some(task => {
+        // Se il task è completato, controlla nel valore JSONB
+        if (task.value && Array.isArray(task.value)) {
+          return task.value.some(item => item.id === control.id)
+        }
+        // Se il task non è completato ma la todolist è scaduta, mostra comunque i controlli
+        return todolist.isExpired
+      })
+    )
+    
+    const allSelected = todolistFields.every(field => 
+      newControlVisibility[todolistId]?.[field.id]
+    )
+    
+    todolistFields.forEach(field => {
+      // Trova tutte le todolist che hanno questo campo JSONB
+      const todolistsWithField = todolists.filter(t => 
+        t.tasks.some(task => 
+          task.value && Array.isArray(task.value) && 
+          task.value.some(item => item.id === field.id)
+        )
+      )
+      
+      // Applica la modifica a tutte le todolist che hanno questo campo
+      todolistsWithField.forEach(t => {
+        if (!newControlVisibility[t.id]) {
+          newControlVisibility[t.id] = {}
+        }
+        newControlVisibility[t.id][field.id] = !allSelected
+      })
+    })
+    
+    setControlVisibility(newControlVisibility)
   }
 
-  // Gestisce la selezione/deselezione di una riga dal dialog
-  const toggleRowVisibility = (rowId: number) => {
-    const newVisibleRows = new Set(visibleRows)
-    if (newVisibleRows.has(rowId)) {
-      newVisibleRows.delete(rowId)
-    } else {
-      newVisibleRows.add(rowId)
-    }
-    setVisibleRows(newVisibleRows)
+  // Gestione hover tabella
+  const handleCellMouseEnter = (rowId: string, columnId: string) => {
+    setHoveredRow(rowId)
+    setHoveredColumn(columnId)
   }
 
-  // Seleziona/deseleziona tutte le righe
-  const toggleAllRows = () => {
-    if (visibleRows.size === allRows.length) {
-      // Se tutte sono selezionate, deseleziona tutte
-      setVisibleRows(new Set())
-    } else {
-      // Altrimenti seleziona tutte
-      setVisibleRows(new Set(allRows.map(row => row.id)))
+  const handleCellMouseLeave = () => {
+    setHoveredRow(null)
+    setHoveredColumn(null)
+  }
+
+  // Verifica se una todolist ha almeno un controllo visibile
+  const todolistHasVisibleControls = (todolistId: string): boolean => {
+    const todolist = todolists.find(t => t.id === todolistId)
+    if (!todolist) return false
+    
+    // Verifica se ha almeno un campo JSONB visibile
+    return allControls.some(control => {
+      // Controlla se questa todolist ha questo campo JSONB
+      const hasField = todolist.tasks.some(task => {
+        // Se il task è completato, controlla nel valore JSONB
+        if (task.value && Array.isArray(task.value)) {
+          return task.value.some(item => item.id === control.id)
+        }
+        // Se il task non è completato ma la todolist è scaduta, mostra comunque i controlli
+        return todolist.isExpired
+      })
+      return hasField && controlVisibility[todolistId]?.[control.id]
+    })
+  }
+
+    // Ottieni il valore di un controllo per una todolist
+  const getControlValue = (todolist: TodolistData, controlId: string): string => {
+    // Cerca in tutti i tasks della todolist per trovare il campo JSONB
+    for (const task of todolist.tasks) {
+      if (task.status === 'completed' && task.value && Array.isArray(task.value)) {
+        const jsonbField = task.value.find(item => item.id === controlId)
+        if (jsonbField) {
+          // Gestisci diversi tipi di valori
+          if (typeof jsonbField.value === 'boolean') {
+            return jsonbField.value ? 'Sì' : 'No'
+          }
+          if (typeof jsonbField.value === 'number') {
+            return jsonbField.value.toString()
+          }
+          if (typeof jsonbField.value === 'string') {
+            return jsonbField.value
+          }
+          return jsonbField.value?.toString() || '-'
+        }
+      }
     }
+    
+    // Se non trova il campo ma la todolist è scaduta, mostra che non è stato completato
+    if (todolist.isExpired) {
+      return 'Non completato'
+    }
+    
+    // Se non trova il campo, restituisci -
+    return '-'
+  }
+
+  // Formatta la data della todolist
+  const formatTodolistDate = (todolist: TodolistData): string => {
+    const date = new Date(todolist.scheduled_execution)
+    const formattedDate = format(date, 'dd/MM/yyyy')
+    const formattedTime = format(date, 'HH:mm')
+    return `${formattedDate} ${formattedTime}`
   }
 
   return (
     <div className="w-full">
-      {/* Filtri date e pulsanti gestione sopra la tabella */}
+      {/* Filtri date e pulsante gestione sopra la tabella */}
       <div className="flex gap-2 mb-4 items-center">
         <Popover open={showFromCalendar} onOpenChange={setShowFromCalendar}>
           <PopoverTrigger asChild>
@@ -252,207 +381,296 @@ export default function MatriceTodolist() {
             />
           </PopoverContent>
         </Popover>
-                 {/* Pulsante gestione colonne */}
-         <Button
-           variant="outline"
-           size="icon"
-           className="w-fit h-8 px-2 text-gray-500 gap-2"
-           onClick={openManageColumnsDialog}
-           aria-label="Gestisci colonne"
-         >
-           <Columns className="h-4 w-4" />
-           Gestisci Controlli (colonne)
-         </Button>
-        {/* Pulsante gestione righe */}
+        {/* Pulsante gestione unificato */}
         <Button
           variant="outline"
           size="icon"
           className="w-fit h-8 px-2 text-gray-500 gap-2"
-          onClick={openManageRowsDialog}
-          aria-label="Gestisci righe"
+          onClick={openManageDialog}
+          aria-label="Gestione Todolist e Controlli"
         >
-          <Rows className="h-4 w-4" />
-          Gestisci Todolist (righe)
+          <Settings className="h-4 w-4" />
+          Gestione Todolist e Controlli
+        </Button>
+        {/* Pulsante ricarica */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={loadData}
+          disabled={isLoading}
+          className="gap-2"
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Caricamento...
+            </>
+          ) : (
+            "Ricarica"
+          )}
         </Button>
       </div>
-      
-      <div className="overflow-x-auto overflow-y-auto">
-        <Table className="w-auto border-separate border-spacing-0">
-          <TableHeader>
-            <TableRow>
-              {/* Colonna intestazione righe */}
-              <TableHead className="min-w-[160px] max-w-[160px] w-[160px] border-r border-b border-gray-200">Todolist</TableHead>
-              {/* Colonne dinamiche */}
-              {visibleColumnsData.map((column) => (
-                <TableHead key={column.id} className="min-w-[120px] max-w-[200px] w-fit border-r border-b border-gray-200">
-                  <div className="flex items-center justify-between gap-1 py-2">
-                    <span className="text-sm break-words leading-tight w-[160px]">{column.title}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => hideColumn(column.id)}
-                      className="h-5 w-5 p-0 hover:bg-red-100 flex-shrink-0 mt-0"
-                      title="Nascondi colonna"
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {visibleRowsData.map((row) => (
-              <TableRow key={row.id}>
-                {/* Prima cella: nome todolist con pulsante X */}
-                <TableCell className="font-medium min-w-[160px] max-w-[160px] w-[160px] border-r border-b border-gray-200">
-                  <div className="flex items-center justify-between gap-1 py-1">
-                    <div className="break-words text-sm text-gray-500 leading-tight w-[120px]">{row.name}</div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => hideRow(row.id)}
-                      className="h-5 w-5 p-0 hover:bg-red-100 flex-shrink-0"
-                      title="Nascondi riga"
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </TableCell>
-                {/* Celle dinamiche */}
-                {visibleColumnsData.map((column) => (
-                  <TableCell key={column.id} className="min-w-[120px] max-w-[200px] w-fit p-0 border-r border-b border-gray-200">
-                    <div className="min-h-[32px] flex items-center justify-start">
-                      <span className="p-1">Ciao</span>
-                    </div>
-                  </TableCell>
-                ))}
+
+      {/* Contenuto tabella */}
+      {isLoading ? (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <span className="ml-2">Caricamento dati...</span>
+        </div>
+      ) : todolists.length === 0 ? (
+        <div className="flex items-center justify-center h-64 text-gray-500">
+          <p>Nessuna todolist trovata nel periodo selezionato</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto overflow-y-auto">
+          <Table className="w-auto border-separate border-spacing-0">
+            <TableHeader>
+              <TableRow>
+                {/* Colonna intestazione righe */}
+                <TableHead className={cn(
+                  "min-w-[250px] max-w-[250px] w-[250px] border-r border-b border-gray-200 transition-colors",
+                  hoveredColumn === "name" && "bg-blue-50"
+                )}>Todolist</TableHead>
+                                 {/* Colonne dinamiche */}
+                 {getVisibleControls().map((control) => (
+                   <TableHead 
+                     key={control.id} 
+                     className={cn(
+                       "min-w-[120px] max-w-[200px] w-fit border-r border-b border-gray-200 transition-colors relative",
+                       hoveredColumn === control.id && "bg-blue-50"
+                     )}
+                     onMouseEnter={() => setHoveredColHeader(control.id)}
+                     onMouseLeave={() => setHoveredColHeader(null)}
+                   >
+                     <div className="flex items-center justify-center gap-1 py-2 relative">
+                       <span className="text-sm break-words leading-tight text-center">{control.name}</span>
+                       {hoveredColHeader === control.id && (
+                         <button
+                           onClick={() => {
+                             // Nascondi questo campo JSONB per tutte le todolist che lo hanno
+                             const todolistsWithField = todolists.filter(t => 
+                               t.tasks.some(task => 
+                                 task.value && Array.isArray(task.value) && 
+                                 task.value.some(item => item.id === control.id)
+                               )
+                             )
+                             const newControlVisibility = { ...controlVisibility }
+                             todolistsWithField.forEach(todolist => {
+                               if (!newControlVisibility[todolist.id]) {
+                                 newControlVisibility[todolist.id] = {}
+                               }
+                               newControlVisibility[todolist.id][control.id] = false
+                             })
+                             setControlVisibility(newControlVisibility)
+                           }}
+                           className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-gray-500 text-white flex items-center justify-center text-xs hover:bg-red-600 transition-colors"
+                         >
+                           ×
+                         </button>
+                       )}
+                     </div>
+                   </TableHead>
+                 ))}
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+            </TableHeader>
+            <TableBody>
+              {visibleTodolistsData.filter(todolist => todolistHasVisibleControls(todolist.id)).map((todolist) => (
+                                 <TableRow key={todolist.id} className={cn(
+                   "transition-colors",
+                   hoveredRow === todolist.id && "bg-blue-50",
+                   todolist.isExpired && "bg-red-50"
+                 )}>
+                                     {/* Prima cella: nome todolist */}
+                   <TableCell 
+                     className={cn(
+                       "font-medium min-w-[250px] max-w-[250px] w-[250px] border-r border-b border-gray-200 transition-colors relative",
+                       hoveredRow === todolist.id && "bg-blue-50"
+                     )}
+                     onMouseEnter={() => {
+                       handleCellMouseEnter(todolist.id, "name")
+                       setHoveredRowHeader(todolist.id)
+                     }}
+                     onMouseLeave={() => {
+                       handleCellMouseLeave()
+                       setHoveredRowHeader(null)
+                     }}
+                   >
+                     <div className="py-1 relative">
+                       {/* Data piccola sopra */}
+                       <div className="text-xs text-gray-500 leading-tight">
+                         {formatTodolistDate(todolist)}
+                       </div>
+                       {/* Nome device evidente */}
+                       <div className="break-words text-sm font-medium text-gray-800 leading-tight">
+                         {todolist.device_name}
+                       </div>
+                       {/* Stato sotto solo quando scaduta */}
+                       {todolist.isExpired && (
+                         <div className="text-xs text-red-600 font-medium leading-tight">
+                           Scaduta
+                         </div>
+                       )}
+                       {/* X per nascondere la riga */}
+                       {hoveredRowHeader === todolist.id && (
+                         <button
+                           onClick={() => toggleTodolistVisibility(todolist.id)}
+                           className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-gray-500 text-white flex items-center justify-center text-xs hover:bg-red-600 transition-colors"
+                         >
+                           ×
+                         </button>
+                       )}
+                     </div>
+                   </TableCell>
+                  {/* Celle dinamiche */}
+                  {getVisibleControls().map((control) => (
+                    <TableCell 
+                      key={control.id} 
+                      className={cn(
+                        "min-w-[120px] max-w-[200px] w-fit p-0 border-r border-b border-gray-200 transition-colors cursor-pointer",
+                        (hoveredRow === todolist.id || hoveredColumn === control.id) && "bg-blue-50",
+                        (hoveredRow === todolist.id && hoveredColumn === control.id) && "bg-blue-100"
+                      )}
+                      onMouseEnter={() => handleCellMouseEnter(todolist.id, control.id)}
+                      onMouseLeave={handleCellMouseLeave}
+                    >
+                      <div className="min-h-[32px] flex items-center justify-center">
+                        <span className="p-1 text-sm text-gray-700 font-medium">
+                          {getControlValue(todolist, control.id)}
+                        </span>
+                      </div>
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
       
-      {/* Dialog per aggiungere colonna */}
-      <Dialog open={showAddColumnDialog} onOpenChange={setShowAddColumnDialog}>
-        <DialogContent className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[1000]">
+      {/* Dialog unificato per gestire todolist e controlli */}
+      <Dialog open={showManageDialog} onOpenChange={setShowManageDialog}>
+        <DialogContent className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[1000] max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Aggiungi Colonna</DialogTitle>
+            <DialogTitle>Gestione Todolist e Controlli</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="columnTitle">Titolo Colonna</Label>
-              <Input
-                id="columnTitle"
-                value={newColumnTitle}
-                onChange={(e) => setNewColumnTitle(e.target.value)}
-                placeholder="Inserisci il titolo della colonna"
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    addColumn()
-                  }
-                }}
-              />
+          <div className="space-y-6">
+            {/* Gestione Todolist */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium">Todolist</h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={toggleAllTodolists}
+                >
+                  {visibleTodolists.size === todolists.length ? 'Deseleziona tutto' : 'Seleziona tutto'}
+                </Button>
+              </div>
+              
+              <div className="space-y-4">
+                {todolists.map((todolist) => (
+                  <div key={todolist.id} className="border rounded-lg p-4 space-y-3">
+                    {/* Checkbox per la todolist */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`todolist-${todolist.id}`}
+                          checked={visibleTodolists.has(todolist.id)}
+                          onCheckedChange={() => toggleTodolistVisibility(todolist.id)}
+                        />
+                                                 <Label
+                           htmlFor={`todolist-${todolist.id}`}
+                           className="text-sm font-medium cursor-pointer flex-1"
+                         >
+                           <div className="text-xs text-gray-500">
+                             {formatTodolistDate(todolist)}
+                           </div>
+                           <div className="font-medium text-gray-800">
+                             {todolist.device_name}
+                           </div>
+                           {todolist.isExpired && (
+                             <div className="text-xs text-red-600 font-medium">
+                               Scaduta
+                             </div>
+                           )}
+                         </Label>
+                      </div>
+                                               <Button
+                           variant="outline"
+                           size="sm"
+                           onClick={() => toggleAllControlsForTodolist(todolist.id)}
+                           disabled={!visibleTodolists.has(todolist.id)}
+                         >
+                           {allControls.filter(control => 
+                             todolist.tasks.some(task => {
+                               // Se il task è completato, controlla nel valore JSONB
+                               if (task.value && Array.isArray(task.value)) {
+                                 return task.value.some(item => item.id === control.id)
+                               }
+                               // Se il task non è completato ma la todolist è scaduta, mostra comunque i controlli
+                               return todolist.isExpired
+                             })
+                           ).every(control => controlVisibility[todolist.id]?.[control.id]) 
+                             ? 'Deseleziona controlli' 
+                             : 'Seleziona controlli'}
+                         </Button>
+                    </div>
+                    
+                    {/* Controlli della todolist */}
+                    {visibleTodolists.has(todolist.id) && (
+                                             <div className="ml-6 space-y-2">
+                         <div className="grid grid-cols-2 gap-2">
+                           {allControls.filter(control => 
+                             // Mostra solo i campi JSONB che questa todolist ha
+                             todolist.tasks.some(task => {
+                               // Se il task è completato, controlla nel valore JSONB
+                               if (task.value && Array.isArray(task.value)) {
+                                 return task.value.some(item => item.id === control.id)
+                               }
+                               // Se il task non è completato ma la todolist è scaduta, mostra comunque i controlli
+                               return todolist.isExpired
+                             })
+                           ).map((control) => {
+                             // Verifica se il controllo è condiviso
+                             const isShared = todolists.filter(t => 
+                               t.tasks.some(task => 
+                                 task.value && Array.isArray(task.value) && 
+                                 task.value.some(item => item.id === control.id)
+                               )
+                             ).length > 1
+                             
+                             return (
+                               <div key={control.id} className="flex items-center space-x-2">
+                                 <Checkbox
+                                   id={`control-${todolist.id}-${control.id}`}
+                                   checked={controlVisibility[todolist.id]?.[control.id] || false}
+                                   onCheckedChange={() => toggleControlVisibility(todolist.id, control.id)}
+                                 />
+                                 <Label
+                                   htmlFor={`control-${todolist.id}-${control.id}`}
+                                   className={cn(
+                                     "text-sm cursor-pointer flex-1",
+                                     isShared && "text-blue-600 font-medium"
+                                   )}
+                                 >
+                                   {control.name}
+                                   {isShared && (
+                                     <span className="ml-1 text-xs text-blue-500">(condiviso)</span>
+                                   )}
+                                 </Label>
+                               </div>
+                             )
+                           })}
+                         </div>
+                       </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowAddColumnDialog(false)}>
-                Annulla
-              </Button>
-              <Button onClick={addColumn} disabled={!newColumnTitle.trim()}>
-                Aggiungi
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog per gestire la visibilità delle colonne */}
-      <Dialog open={showManageColumnsDialog} onOpenChange={setShowManageColumnsDialog}>
-        <DialogContent className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[1000] max-w-md">
-          <DialogHeader>
-            <DialogTitle>Gestisci Controlli</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Seleziona i controlli da visualizzare:</span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={toggleAllColumns}
-              >
-                {visibleColumns.size === allColumns.length ? 'Deseleziona tutto' : 'Seleziona tutto'}
-              </Button>
-            </div>
-            <div className="max-h-60 overflow-y-auto space-y-2">
-              {allColumns.map((column) => (
-                <div key={column.id} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`column-${column.id}`}
-                    checked={visibleColumns.has(column.id)}
-                    onCheckedChange={() => toggleColumnVisibility(column.id)}
-                  />
-                  <Label
-                    htmlFor={`column-${column.id}`}
-                    className="text-sm cursor-pointer flex-1"
-                  >
-                    {column.title}
-                  </Label>
-                </div>
-              ))}
-            </div>
-            <div className="flex items-center justify-between pt-4 border-t">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={openAddColumnDialog}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Aggiungi Controllo
-              </Button>
-              <Button variant="outline" onClick={() => setShowManageColumnsDialog(false)}>
-                Chiudi
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog per gestire la visibilità delle righe */}
-      <Dialog open={showManageRowsDialog} onOpenChange={setShowManageRowsDialog}>
-        <DialogContent className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[1000] max-w-md">
-          <DialogHeader>
-            <DialogTitle>Gestisci Todolist</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Seleziona le todolist da visualizzare:</span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={toggleAllRows}
-              >
-                {visibleRows.size === allRows.length ? 'Deseleziona tutto' : 'Seleziona tutto'}
-              </Button>
-            </div>
-            <div className="max-h-60 overflow-y-auto space-y-2">
-              {allRows.map((row) => (
-                <div key={row.id} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`row-${row.id}`}
-                    checked={visibleRows.has(row.id)}
-                    onCheckedChange={() => toggleRowVisibility(row.id)}
-                  />
-                  <Label
-                    htmlFor={`row-${row.id}`}
-                    className="text-sm cursor-pointer flex-1"
-                  >
-                    {row.name}
-                  </Label>
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowManageRowsDialog(false)}>
+            
+            <div className="flex justify-end gap-2 pt-4 border-t">
+              <Button variant="outline" onClick={() => setShowManageDialog(false)}>
                 Chiudi
               </Button>
             </div>
