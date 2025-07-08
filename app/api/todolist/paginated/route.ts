@@ -11,6 +11,8 @@ export async function GET(request: NextRequest) {
     const selectedDate = searchParams.get("selectedDate") || undefined
     const selectedDevice = searchParams.get("selectedDevice") || undefined
     const selectedTags = searchParams.get("selectedTags") ? searchParams.get("selectedTags")!.split(",") : undefined
+    const sortColumn = searchParams.get("sortColumn") || undefined
+    const sortDirection = searchParams.get("sortDirection") || undefined
 
     if (!filter) {
       return NextResponse.json(
@@ -25,7 +27,9 @@ export async function GET(request: NextRequest) {
       limit,
       selectedDate,
       selectedDevice,
-      selectedTags
+      selectedTags,
+      sortColumn,
+      sortDirection
     })
 
     return NextResponse.json(result)

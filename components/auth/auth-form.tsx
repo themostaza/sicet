@@ -9,6 +9,7 @@ import { createClientSupabaseClient } from '@/lib/supabase';
 import { useFormValidation } from '@/hooks/use-form-validation';
 import { validationRules, ValidationRule } from '@/lib/validation';
 import { FormField } from '@/components/form/form-field';
+import { Eye, EyeOff } from 'lucide-react';
 
 const supabase = createClientSupabaseClient();
 
@@ -206,6 +207,9 @@ export default function AuthForm({
   const defaultSubmitText = mode === 'register' ? 'Registrati' : 'Completa Registrazione';
   const defaultLoadingText = mode === 'register' ? 'Registrazione in corso...' : 'Completamento registrazione...';
 
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   return (
     <div className="container max-w-md mx-auto py-12">
       <Card>
@@ -231,7 +235,7 @@ export default function AuthForm({
               id="password"
               name="password"
               label="Password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               value={values.password}
               onChange={(value) => {
                 handleChange('password', value);
@@ -244,19 +248,41 @@ export default function AuthForm({
               error={touched.password ? errors.password : null}
               placeholder={mode === 'register' ? 'Inserisci password' : 'Imposta la tua password'}
               required
+              endAdornment={
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-label={showPassword ? 'Nascondi password' : 'Mostra password'}
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="focus:outline-none"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              }
             />
 
             <FormField
               id="confirmPassword"
               name="confirmPassword"
               label="Conferma Password"
-              type="password"
+              type={showConfirmPassword ? "text" : "password"}
               value={values.confirmPassword}
               onChange={(value) => handleChange('confirmPassword', value)}
               onBlur={() => handleBlur('confirmPassword')}
               error={touched.confirmPassword ? errors.confirmPassword : null}
               placeholder={mode === 'register' ? 'Conferma password' : 'Conferma la tua password'}
               required
+              endAdornment={
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-label={showConfirmPassword ? 'Nascondi password' : 'Mostra password'}
+                  onClick={() => setShowConfirmPassword((v) => !v)}
+                  className="focus:outline-none"
+                >
+                  {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              }
             />
 
             <Button type="submit" className="w-full" disabled={isSubmitting}>

@@ -281,10 +281,10 @@ export function getCurrentTimeSlot(date: Date): TimeSlot {
 export function getTimeSlotFromDateTime(dateTimeStr: string): TimeSlot {
   const date = new Date(dateTimeStr)
   const hours = date.getHours()
-  if (hours >= 6 && hours < 12) return "mattina"
-  if (hours >= 12 && hours < 18) return "pomeriggio"
-  if (hours >= 18 && hours < 22) return "sera"
-  if (hours >= 6 && hours < 17) return "giornata"
+  if (hours >= 6 && hours < 14) return "mattina"
+  if (hours >= 14 && hours < 22) return "pomeriggio"
+  //if (hours >= 18 && hours < 22) return "sera"
+  if (hours >= 7 && hours < 17) return "giornata"
   return "notte"
 }
 

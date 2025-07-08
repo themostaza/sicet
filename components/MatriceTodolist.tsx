@@ -39,12 +39,29 @@ interface TodolistData {
   time_slot_end: number | null
   isExpired: boolean
   tasks: Task[]
+  completion_date?: string
 }
 
 interface TodolistControlVisibility {
   [todolistId: string]: {
     [controlId: string]: boolean
   }
+}
+
+// Helper per formattare date in UTC
+function formatUTC(dateString: string, formatStr: string) {
+  const date = new Date(dateString)
+  const pad = (n: number) => n.toString().padStart(2, '0')
+  if (formatStr === "dd/MM/yyyy HH:mm") {
+    return `${pad(date.getUTCDate())}/${pad(date.getUTCMonth() + 1)}/${date.getUTCFullYear()} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`
+  }
+  if (formatStr === "dd/MM/yyyy") {
+    return `${pad(date.getUTCDate())}/${pad(date.getUTCMonth() + 1)}/${date.getUTCFullYear()}`
+  }
+  if (formatStr === "HH:mm") {
+    return `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`
+  }
+  return date.toISOString()
 }
 
 export default function MatriceTodolist() {
@@ -315,9 +332,9 @@ export default function MatriceTodolist() {
 
   // Formatta la data della todolist
   const formatTodolistDate = (todolist: TodolistData): string => {
-    const date = new Date(todolist.scheduled_execution)
-    const formattedDate = format(date, 'dd/MM/yyyy')
-    const formattedTime = format(date, 'HH:mm')
+    const date = todolist.scheduled_execution
+    const formattedDate = formatUTC(date, 'dd/MM/yyyy')
+    const formattedTime = formatUTC(date, 'HH:mm')
     return `${formattedDate} ${formattedTime}`
   }
 
@@ -504,6 +521,12 @@ export default function MatriceTodolist() {
                        <div className="break-words text-sm font-medium text-gray-800 leading-tight">
                          {todolist.device_name}
                        </div>
+                       {/* Data e ora di completamento se completata */}
+                       {todolist.status === "completed" && todolist.completion_date && (
+                         <div className="text-xs text-green-600 font-medium leading-tight">
+                           Completata il {formatUTC(todolist.completion_date, "dd/MM/yyyy HH:mm")}
+                         </div>
+                       )}
                        {/* Stato sotto solo quando scaduta */}
                        {todolist.isExpired && (
                          <div className="text-xs text-red-600 font-medium leading-tight">

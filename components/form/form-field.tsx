@@ -29,6 +29,7 @@ interface FormFieldProps {
   pattern?: string // Add pattern for validation
   step?: number | string // Add step for number inputs
   dataType?: "integer" | "decimal" | "text" | "date" | "email" // Specific data type for validation
+  endAdornment?: React.ReactNode // Nuova prop opzionale per icona/bottone a destra
 }
 
 // Validate input based on data type
@@ -96,6 +97,7 @@ export function FormField({
   pattern,
   step,
   dataType,
+  endAdornment,
 }: FormFieldProps) {
   const hasError = !!error
   const errorId = `${id}-error`
@@ -201,15 +203,23 @@ export function FormField({
         )
 
       case "password":
+      case "text":
         return (
-          <Input
-            {...commonProps}
-            type="password"
-            value={value || ""}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
-            className={`${hasError ? "border-red-500" : ""} ${className}`}
-          />
+          <div className="relative">
+            <Input
+              {...commonProps}
+              type={type}
+              value={value || ""}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder={placeholder}
+              className={`${hasError ? "border-red-500" : ""} ${className} pr-10`}
+            />
+            {endAdornment && (
+              <span className="absolute inset-y-0 right-2 flex items-center cursor-pointer">
+                {endAdornment}
+              </span>
+            )}
+          </div>
         )
 
       default:

@@ -830,9 +830,11 @@ export async function getTodolistsWithPagination(params: {
   selectedDate?: string
   selectedDevice?: string
   selectedTags?: string[]
+  sortColumn?: string
+  sortDirection?: string
 }) {
   try {
-    const { filter, offset, limit, selectedDate, selectedDevice, selectedTags } = params
+    const { filter, offset, limit, selectedDate, selectedDevice, selectedTags, sortColumn, sortDirection } = params
     const supabase = await createServerSupabaseClient()
     
     let query = supabase
@@ -890,9 +892,35 @@ export async function getTodolistsWithPagination(params: {
     }
 
     // Apply pagination and ordering
-    const { data, count, error } = await query
-      .order("scheduled_execution", { ascending: false })
-      .range(offset, offset + limit - 1)
+    // Valid columns for ordering
+    const validSortColumns = [
+      "scheduled_execution",
+      "created_at",
+      "status",
+      "count",
+      "device_name",
+      "time_slot"
+    ]
+    let orderCol = "scheduled_execution"
+    let orderAsc = false
+    if (sortColumn && validSortColumns.includes(sortColumn)) {
+      orderCol = sortColumn
+      if (typeof sortDirection === "string" && sortDirection.toLowerCase() === "asc") {
+        orderAsc = true
+      }
+    }
+    // For device_name and count, we need to sort after fetching (not supported nativamente da supabase su join/aggregati)
+    let data, count, error
+    if (orderCol === "device_name" || orderCol === "count") {
+      // Fallback: order by scheduled_execution, sort after fetch
+      ({ data, count, error } = await query
+        .order("scheduled_execution", { ascending: false })
+        .range(offset, offset + limit - 1))
+    } else {
+      ({ data, count, error } = await query
+        .order(orderCol, { ascending: orderAsc })
+        .range(offset, offset + limit - 1))
+    }
 
     if (error) {
       console.error("Error fetching todolists with pagination:", error)
@@ -974,11 +1002,29 @@ export async function getTodolistsWithPagination(params: {
         selectedTags.some(selectedTag => todolist.device_tags.includes(selectedTag))
       )
     }
-
-    const hasMore = count !== null ? offset + limit < count : filteredTodolists.length === limit
+    // Applico ordinamento lato server per device_name e count (non supportato da supabase)
+    let finalTodolists = filteredTodolists
+    if (orderCol === "device_name") {
+      finalTodolists = [...filteredTodolists].sort((a, b) => {
+        if (orderAsc) {
+          return a.device_name.localeCompare(b.device_name)
+        } else {
+          return b.device_name.localeCompare(a.device_name)
+        }
+      })
+    } else if (orderCol === "count") {
+      finalTodolists = [...filteredTodolists].sort((a, b) => {
+        if (orderAsc) {
+          return a.count - b.count
+        } else {
+          return b.count - a.count
+        }
+      })
+    }
+    const hasMore = count !== null ? offset + limit < count : finalTodolists.length === limit
 
     return {
-      todolists: filteredTodolists,
+      todolists: finalTodolists,
       hasMore,
       totalCount: count || 0
     }

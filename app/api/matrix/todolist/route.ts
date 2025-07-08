@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
         time_slot_type,
         time_slot_start,
         time_slot_end,
+        completion_date,
         devices!inner(name)
       `)
       .gte("scheduled_execution", `${dateFrom}T00:00:00`)
@@ -136,6 +137,7 @@ export async function GET(request: NextRequest) {
       time_slot_type: todolist.time_slot_type,
       time_slot_start: todolist.time_slot_start,
       time_slot_end: todolist.time_slot_end,
+      completion_date: todolist.completion_date,
       isExpired: todolist.status !== "completed" && isTodolistExpired(
         todolist.scheduled_execution,
         todolist.time_slot_type as "standard" | "custom",

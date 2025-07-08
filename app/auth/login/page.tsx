@@ -11,6 +11,7 @@ import { useFormValidation } from '@/hooks/use-form-validation';
 import { validationRules } from '@/lib/validation';
 import { FormField } from '@/components/form/form-field';
 import Link from 'next/link';
+import { Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,6 +21,7 @@ export default function LoginPage() {
   );
 
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const validationSchema = {
     email: [
@@ -107,12 +109,23 @@ export default function LoginPage() {
               id="password"
               name="password"
               label="Password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               value={values.password}
               onChange={(value) => handleChange('password', value)}
               onBlur={() => handleBlur('password')}
               error={touched.password ? errors.password : null}
               placeholder="Inserisci la tua password"
+              endAdornment={
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-label={showPassword ? 'Nascondi password' : 'Mostra password'}
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="focus:outline-none"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              }
             />
 
             {loginError && (

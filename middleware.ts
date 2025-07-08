@@ -8,9 +8,9 @@ type Role = 'admin' | 'operator' | 'referrer'
 const rolePermissions = {
   admin: ['*'], // Admin can access everything
   operator: [
-    '/devices', 
-    '/device/*', 
-    '/device/*/scan',  // Allow access to scan route
+    // '/devices', 
+    // '/device/*', 
+    // '/device/*/scan',  // Allow access to scan route
     '/todolist',  // Allow access to todolist list page
     '/todolist/view/*/*/*/*'  // Allow access to todolist view with todolist ID
   ],

@@ -134,7 +134,9 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
         limit: ITEMS_PER_PAGE.toString(),
         ...(selectedDate && { selectedDate: format(selectedDate, 'yyyy-MM-dd') }),
         ...(selectedDevice !== "all" && { selectedDevice }),
-        ...(selectedTags.length > 0 && { selectedTags: selectedTags.join(',') })
+        ...(selectedTags.length > 0 && { selectedTags: selectedTags.join(',') }),
+        sortColumn: sortColumn === "date" ? "scheduled_execution" : sortColumn,
+        sortDirection
       })
 
       const response = await fetch(`/api/todolist/paginated?${params}`)
@@ -169,7 +171,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
     } finally {
       setIsLoading(false)
     }
-  }, [activeFilter, selectedDate, selectedDevice, currentOffset, isLoading, selectedTags])
+  }, [activeFilter, selectedDate, selectedDevice, currentOffset, isLoading, selectedTags, sortColumn, sortDirection])
 
   // Reset and fetch when filters change
   useEffect(() => {
@@ -178,7 +180,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
     setHasMore(true)
     setSelectedItems(new Set()) // Clear selected items when filters change
     fetchTodolists(true)
-  }, [activeFilter, selectedDate, selectedDevice, selectedTags])
+  }, [activeFilter, selectedDate, selectedDevice, selectedTags, sortColumn, sortDirection])
 
   // Intersection observer for infinite scroll
   useEffect(() => {
@@ -206,58 +208,8 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
     }
   }, [hasMore, isLoading, fetchTodolists])
 
-  const sorted = useMemo(() => {
-    return [...todolists].sort((a, b) => {
-      let aValue = a[sortColumn as keyof TodolistItem]
-      let bValue = b[sortColumn as keyof TodolistItem]
-      if (sortColumn === "date" || sortColumn === "scheduled_execution") {
-        aValue = a.scheduled_execution
-        bValue = b.scheduled_execution
-        if (aValue && bValue) {
-          const aDate = new Date(aValue as string).getTime()
-          const bDate = new Date(bValue as string).getTime()
-          return sortDirection === "asc" ? aDate - bDate : bDate - aDate
-        }
-        return 0
-      }
-      if (sortColumn === "created_at") {
-        aValue = a.created_at
-        bValue = b.created_at
-        if (aValue && bValue && aValue !== "N/A" && bValue !== "N/A") {
-          const aDate = new Date(aValue as string).getTime()
-          const bDate = new Date(bValue as string).getTime()
-          return sortDirection === "asc" ? aDate - bDate : bDate - aDate
-        }
-        if (aValue === "N/A" && bValue !== "N/A") return 1
-        if (aValue !== "N/A" && bValue === "N/A") return -1
-        return 0
-      }
-      if (sortColumn === "count") {
-        return sortDirection === "asc"
-          ? (a.count as number) - (b.count as number)
-          : (b.count as number) - (a.count as number)
-      }
-      if (sortColumn === "status") {
-        return sortDirection === "asc"
-          ? String(a.status).localeCompare(String(b.status))
-          : String(b.status).localeCompare(String(a.status))
-      }
-      if (sortColumn === "device_name") {
-        return sortDirection === "asc"
-          ? String(a.device_name).localeCompare(String(b.device_name))
-          : String(b.device_name).localeCompare(String(a.device_name))
-      }
-      if (sortColumn === "time_slot") {
-        return sortDirection === "asc"
-          ? String(a.time_slot).localeCompare(String(b.time_slot))
-          : String(b.time_slot).localeCompare(String(a.time_slot))
-      }
-      return 0
-    })
-  }, [todolists, sortColumn, sortDirection])
-
   const handleSort = (col: string) => {
-    if (sortColumn === col) {
+    if (sortColumn === col || (col === "date" && sortColumn === "scheduled_execution")) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc")
     } else {
       setSortColumn(col)
@@ -309,7 +261,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedItems(new Set(sorted.map(item => item.id)))
+      setSelectedItems(new Set(todolists.map(item => item.id)))
     } else {
       setSelectedItems(new Set())
     }
@@ -564,7 +516,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                             {selectedDate ? format(selectedDate, "PPP", { locale: it }) : "Seleziona data"}
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
+                        <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
                           <CalendarComponent
                             mode="single"
                             selected={selectedDate}
@@ -695,7 +647,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                 {isAdmin && (
                   <TableHead className="w-[50px]">
                     <UICheckbox
-                      checked={sorted.length > 0 && selectedItems.size === sorted.length}
+                      checked={todolists.length > 0 && selectedItems.size === todolists.length}
                       onCheckedChange={handleSelectAll}
                       aria-label="Seleziona tutte"
                     />
@@ -704,45 +656,40 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                 <TableHead onClick={() => handleSort("device_name")}
                   className="cursor-pointer select-none">
                   Dispositivo
-                  {sortColumn === "device_name" && (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />)}
                 </TableHead>
                 <TableHead onClick={() => handleSort("date")}
                   className="cursor-pointer select-none">
                   Data
-                  {sortColumn === "date" && (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />)}
+                  {sortColumn === "date" || sortColumn === "scheduled_execution" ? (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />) : null}
                 </TableHead>
                 <TableHead onClick={() => handleSort("time_slot")}
                   className="cursor-pointer select-none">
                   Fascia
-                  {sortColumn === "time_slot" && (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />)}
                 </TableHead>
                 <TableHead onClick={() => handleSort("status")}
                   className="cursor-pointer select-none">
                   Stato
-                  {sortColumn === "status" && (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />)}
                 </TableHead>
                 <TableHead onClick={() => handleSort("count")}
                   className="cursor-pointer select-none">
                   Task
-                  {sortColumn === "count" && (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />)}
                 </TableHead>
                 <TableHead onClick={() => handleSort("created_at")}
                   className="cursor-pointer select-none">
                   Creato
-                  {sortColumn === "created_at" && (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />)}
                 </TableHead>
                 <TableHead className="w-[100px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sorted.length === 0 && !isLoading ? (
+              {todolists.length === 0 && !isLoading ? (
                 <TableRow>
                   <TableCell colSpan={isAdmin ? 8 : 7} className="text-center text-muted-foreground py-8">
                     Nessuna todolist trovata.
                   </TableCell>
                 </TableRow>
               ) : (
-                sorted.map((item) => {
+                todolists.map((item: TodolistItem) => {
                   const isExpired = item.status !== "completed" && isTodolistExpired(
                     item.scheduled_execution, 
                     item.time_slot_type, 
@@ -771,7 +718,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                           <div className="font-medium">{item.device_name}</div>
                           {item.device_tags && item.device_tags.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-1">
-                              {item.device_tags.map((tag) => (
+                              {item.device_tags.map((tag: string) => (
                                 <span key={tag} className="inline-block bg-gray-100 rounded-full px-2 py-0.5 text-xs text-gray-800">
                                   {tag}
                                 </span>
