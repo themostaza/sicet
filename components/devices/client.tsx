@@ -6,13 +6,9 @@ import { Input } from "@/components/ui/input"
 import { QrCode, Edit, Plus, MapPin, Info, Trash2, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { QRCodeModal } from "@/components/qr-code-modal"
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
+import { format } from "date-fns"
+import { it } from "date-fns/locale"
 import type { Device } from "@/lib/validation/device-schemas"
 import { getDevices, getDevicesByTags } from "@/app/actions/actions-device"
 import { DeviceDeleteDialog } from "@/components/device/device-delete-dialog"
@@ -290,73 +286,66 @@ export default function DeviceList({ initialDevices, allTags }: Props) {
           )}
         </div>
       ) : (
-        <div className="bg-white rounded-lg border">
-          <Accordion type="single" collapsible className="w-full">
-            {list.map((d) => (
-              <AccordionItem key={d.id} value={d.id} className="border-b">
-                <AccordionTrigger className="px-4 py-3 hover:bg-gray-50 group">
-                  <div className="flex flex-1 items-center justify-between pr-4">
-                    <div className="text-left">
-                      <h3 className="text-base font-medium">{d.name}</h3>
-                      <p className="text-sm text-gray-500 mt-1">{d.id}</p>
-                    </div>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent className="px-4 pb-4 pt-2">
-                  <div className="space-y-4">
-                    <div className="space-y-1">
-                      <div className="text-sm text-muted-foreground">Descrizione</div>
-                      <div className="text-sm">{d.description || "Nessuna descrizione disponibile"}</div>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="text-sm text-muted-foreground">Posizione</div>
-                      <div className="text-sm flex items-center">
-                        <MapPin className="w-4 h-4 mr-2 text-gray-500" />
-                        {d.location}
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="text-sm text-muted-foreground">Tag</div>
+        <div className="space-y-3">
+          {list.map((d) => (
+            <div
+              key={d.id}
+              className="flex flex-col space-y-3 p-4 rounded-lg border hover:bg-gray-50 bg-white"
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="font-medium text-base">{d.name}</div>
+                    {d.tags && d.tags.length > 0 && (
                       <div className="flex flex-wrap gap-1">
-                        {d.tags && d.tags.length > 0 ? (
-                          d.tags.map((tag) => (
-                            <span key={tag} className="inline-block bg-gray-100 rounded-full px-2 py-0.5 text-xs text-gray-800">{tag}</span>
-                          ))
-                        ) : (
-                          <span className="text-sm">Nessun tag disponibile</span>
-                        )}
+                        {d.tags.map(tag => (
+                          <Badge key={tag} variant="secondary" className="text-xs">
+                            {tag}
+                          </Badge>
+                        ))}
                       </div>
-                    </div>
-                    <div className="flex space-x-3 pt-2">
-                      <Button
-                        className="bg-black hover:bg-gray-800"
-                        size="sm"
-                        onClick={() => router.push(`/device/${d.id}/edit`)}
-                      >
-                        <Edit className="w-4 h-4 mr-2" /> Modifica
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => openQr(d)}>
-                        <QrCode className="w-4 h-4 mr-2" /> QR Code
-                      </Button>
-                      {role === "admin" && (
-                        <DeviceDeleteDialog
-                          onDelete={async () => {
-                            await fetch(`/api/device/delete?id=${d.id}`, { method: "POST" })
-                            setDevices((prev) => prev.filter((dev) => dev.id !== d.id))
-                            setFilteredDevices((prev) => prev.filter((dev) => dev.id !== d.id))
-                          }}
-                        >
-                          <Button variant="destructive" size="sm">
-                            Disattiva
-                          </Button>
-                        </DeviceDeleteDialog>
-                      )}
-                    </div>
+                    )}
                   </div>
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
+                  <div className="text-sm text-gray-500 mt-1">{d.id}</div>
+                  {d.location && (
+                    <div className="text-xs text-gray-400 mt-1 flex items-center">
+                      <MapPin className="w-3 h-3 mr-1" />
+                      {d.location}
+                    </div>
+                  )}
+                  <div className="text-xs text-gray-400 mt-1">
+                    Creato: {d.created_at ? format(new Date(d.created_at), "dd/MM/yyyy HH:mm", { locale: it }) : "N/A"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push(`/device/${d.id}/edit`)}
+                >
+                  <Edit className="w-4 h-4 mr-2" /> Modifica
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => openQr(d)}>
+                  <QrCode className="w-4 h-4 mr-2" /> QR Code
+                </Button>
+                {role === "admin" && (
+                  <DeviceDeleteDialog
+                    onDelete={async () => {
+                      await fetch(`/api/device/delete?id=${d.id}`, { method: "POST" })
+                      setDevices((prev) => prev.filter((dev) => dev.id !== d.id))
+                      setFilteredDevices((prev) => prev.filter((dev) => dev.id !== d.id))
+                    }}
+                  >
+                    <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
+                      Disattiva
+                    </Button>
+                  </DeviceDeleteDialog>
+                )}
+              </div>
+            </div>
+          ))}
           {hasMore && selectedTags.length === 0 && (
             <div ref={loaderRef} className="py-4 text-center text-gray-400">
               {loading ? "Caricamento altri device..." : "Scorri per caricare altri"}
