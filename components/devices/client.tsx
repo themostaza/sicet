@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge"
 import type { Device } from "@/lib/validation/device-schemas"
 import { getDevices, getDevicesByTags } from "@/app/actions/actions-device"
 import { DeviceDeleteDialog } from "@/components/device/device-delete-dialog"
+import { QRCodeFilterDialog } from "@/components/qr-code-filter-dialog"
 import { createBrowserClient } from "@supabase/ssr"
 
 interface Props {
@@ -29,6 +30,7 @@ export default function DeviceList({ initialDevices, allTags }: Props) {
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const deferred = useDeferredValue(search)
   const [qr, setQr] = useState<{ open: boolean; device?: Device }>({ open: false })
+  const [qrFilterDialog, setQrFilterDialog] = useState(false)
   const [devices, setDevices] = useState<Device[]>(initialDevices)
   const [filteredDevices, setFilteredDevices] = useState<Device[]>([])
   const [hasMore, setHasMore] = useState(true)
@@ -145,30 +147,9 @@ export default function DeviceList({ initialDevices, allTags }: Props) {
             <Button
               variant="outline"
               className="border-gray-400"
-              onClick={async () => {
-                const res = await fetch("/api/device/qrcodes-pdf")
-                if (!res.ok) {
-                  alert("Errore durante la generazione del PDF")
-                  return
-                }
-                const blob = await res.blob()
-                const url = window.URL.createObjectURL(blob)
-                const a = document.createElement("a")
-                a.href = url
-                // Prova a recuperare il nome file dal header
-                const disposition = res.headers.get("content-disposition")
-                let filename = "qrcodes-dispositivi.pdf"
-                if (disposition && disposition.includes("filename=")) {
-                  filename = disposition.split("filename=")[1].replaceAll('"', '')
-                }
-                a.download = filename
-                document.body.appendChild(a)
-                a.click()
-                a.remove()
-                window.URL.revokeObjectURL(url)
-              }}
+              onClick={() => setQrFilterDialog(true)}
             >
-              <QrCode className="mr-2 h-4 w-4" /> Scarica tutti i QRcode
+              <QrCode className="mr-2 h-4 w-4" /> Scarica QRcode
             </Button>
           </div>
         )}
@@ -390,6 +371,15 @@ export default function DeviceList({ initialDevices, allTags }: Props) {
           onClose={() => setQr({ open: false })}
           deviceId={qr.device.id}
           deviceName={qr.device.name}
+        />
+      )}
+
+      {qrFilterDialog && (
+        <QRCodeFilterDialog
+          isOpen={qrFilterDialog}
+          onClose={() => setQrFilterDialog(false)}
+          allTags={allTags}
+          initialDevices={devices}
         />
       )}
     </div>

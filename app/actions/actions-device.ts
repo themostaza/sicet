@@ -40,6 +40,7 @@ const toDevice = (row: DevicesRow): Device => ({
   model: row.model ?? undefined,
   type: row.type ?? undefined,
   qrcodeUrl: row.qrcode_url ?? undefined,
+  created_at: row.created_at,
 });
 
 const toInsertRow = (d: z.infer<typeof DeviceInsertSchema>): DevicesInsertRow => ({

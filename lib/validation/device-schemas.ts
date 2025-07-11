@@ -14,6 +14,7 @@ export const DeviceSchema = DeviceFormSchema.extend({
   model: z.string().max(60, { message: "Il modello non può superare i 60 caratteri" }).nullish(),
   type: z.string().max(40, { message: "Il tipo non può superare i 40 caratteri" }).nullish(),
   qrcodeUrl: z.string().url({ message: "URL QR Code non valido" }).nullish(),
+  created_at: z.string().nullable(),
 });
 
 export type Device = z.infer<typeof DeviceSchema>;
@@ -30,5 +31,5 @@ export const DeviceUpdateSchema = DeviceSchema.partial().extend({
 
 export const ListParamsSchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
+  limit: z.coerce.number().int().min(1).max(1000).default(20),
 }); 
