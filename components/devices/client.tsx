@@ -14,51 +14,44 @@ import {
 } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import type { Device } from "@/lib/validation/device-schemas"
-import { getDevices } from "@/app/actions/actions-device"
+import { getDevices, getDevicesByTags } from "@/app/actions/actions-device"
 import { DeviceDeleteDialog } from "@/components/device/device-delete-dialog"
 import { createBrowserClient } from "@supabase/ssr"
 
 interface Props {
   initialDevices: Device[]
+  allTags: string[]
 }
 
-export default function DeviceList({ initialDevices }: Props) {
+export default function DeviceList({ initialDevices, allTags }: Props) {
   const router = useRouter()
   const [search, setSearch] = useState("")
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const deferred = useDeferredValue(search)
   const [qr, setQr] = useState<{ open: boolean; device?: Device }>({ open: false })
   const [devices, setDevices] = useState<Device[]>(initialDevices)
+  const [filteredDevices, setFilteredDevices] = useState<Device[]>([])
   const [hasMore, setHasMore] = useState(true)
   const [loading, setLoading] = useState(false)
+  const [tagLoading, setTagLoading] = useState(false)
   const loaderRef = useRef<HTMLDivElement | null>(null)
   const [role, setRole] = useState<string | null>(null)
 
-  // Extract all unique tags from devices
-  const allTags = useMemo(() => {
-    const tagSet = new Set<string>()
-    devices.forEach(device => {
-      device.tags?.forEach(tag => tagSet.add(tag))
-    })
-    return Array.from(tagSet).sort()
-  }, [devices])
+  // Decide which devices to use based on whether tags are selected
+  const currentDevices = selectedTags.length > 0 ? filteredDevices : devices
 
   const list = useMemo(() => {
     const term = deferred.toLowerCase()
-    return devices.filter((d) => {
-      // Text search filter
+    return currentDevices.filter((d) => {
+      // Text search filter only (tag filtering is handled by server when tags are selected)
       const matchesSearch = 
         d.name.toLowerCase().includes(term) ||
         (d.location ?? "").toLowerCase().includes(term) ||
         d.tags?.some((t) => t.toLowerCase().includes(term))
       
-      // Tag filter - show devices that have ANY of the selected tags
-      const matchesTags = selectedTags.length === 0 || 
-        selectedTags.some(selectedTag => d.tags?.includes(selectedTag))
-      
-      return matchesSearch && matchesTags
+      return matchesSearch
     })
-  }, [devices, deferred, selectedTags])
+  }, [currentDevices, deferred])
 
   const toggleTag = (tag: string) => {
     setSelectedTags(prev => 
@@ -74,6 +67,29 @@ export default function DeviceList({ initialDevices }: Props) {
 
   const openQr = (device: Device) => setQr({ open: true, device })
 
+  // Effect to handle tag filtering
+  useEffect(() => {
+    const filterByTags = async () => {
+      if (selectedTags.length === 0) {
+        setFilteredDevices([])
+        return
+      }
+
+      setTagLoading(true)
+      try {
+        const filtered = await getDevicesByTags(selectedTags)
+        setFilteredDevices(filtered)
+      } catch (error) {
+        console.error('Error filtering devices by tags:', error)
+        setFilteredDevices([])
+      } finally {
+        setTagLoading(false)
+      }
+    }
+
+    filterByTags()
+  }, [selectedTags])
+
   const loadMore = async () => {
     if (loading || !hasMore) return
     setLoading(true)
@@ -88,7 +104,7 @@ export default function DeviceList({ initialDevices }: Props) {
   }
 
   useEffect(() => {
-    if (!loaderRef.current) return
+    if (!loaderRef.current || selectedTags.length > 0) return
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasMore && !loading) {
@@ -99,7 +115,7 @@ export default function DeviceList({ initialDevices }: Props) {
     )
     observer.observe(loaderRef.current)
     return () => observer.disconnect()
-  }, [loaderRef.current, hasMore, loading])
+  }, [loaderRef.current, hasMore, loading, selectedTags.length])
 
   useEffect(() => {
     const supabase = createBrowserClient(
@@ -225,7 +241,18 @@ export default function DeviceList({ initialDevices }: Props) {
       {(search || selectedTags.length > 0) && (
         <div className="flex items-center justify-between text-sm text-gray-600 bg-gray-50 px-4 py-2 rounded-lg">
           <div>
-            Mostrando {list.length} di {devices.length} dispositivi
+            {tagLoading ? (
+              <span>Caricamento dispositivi per tag...</span>
+            ) : (
+              <>
+                Mostrando {list.length} di {currentDevices.length} dispositivi
+                {selectedTags.length > 0 && (
+                  <span className="ml-2 text-xs text-green-600">
+                    (tutti i dispositivi con questi tag)
+                  </span>
+                )}
+              </>
+            )}
             {(search || selectedTags.length > 0) && (
               <span className="ml-2">
                 {search && <span className="inline-block bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs mr-2">Ricerca: "{search}"</span>}
@@ -335,6 +362,7 @@ export default function DeviceList({ initialDevices }: Props) {
                           onDelete={async () => {
                             await fetch(`/api/device/delete?id=${d.id}`, { method: "POST" })
                             setDevices((prev) => prev.filter((dev) => dev.id !== d.id))
+                            setFilteredDevices((prev) => prev.filter((dev) => dev.id !== d.id))
                           }}
                         >
                           <Button variant="destructive" size="sm">
@@ -348,7 +376,7 @@ export default function DeviceList({ initialDevices }: Props) {
               </AccordionItem>
             ))}
           </Accordion>
-          {hasMore && (
+          {hasMore && selectedTags.length === 0 && (
             <div ref={loaderRef} className="py-4 text-center text-gray-400">
               {loading ? "Caricamento altri device..." : "Scorri per caricare altri"}
             </div>

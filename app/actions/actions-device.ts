@@ -219,3 +219,38 @@ export async function deleteDevice(id: string): Promise<void> {
 
   revalidatePath("/device");
 }
+
+export async function getDeviceTags(): Promise<string[]> {
+  const { data, error } = await (await supabase())
+    .from("devices")
+    .select("tags")
+    .eq("deleted", false)
+    .not("tags", "is", null);
+
+  if (error) handlePostgrestError(error);
+
+  // Estrai tutti i tag unici
+  const allTags = new Set<string>();
+  data?.forEach(device => {
+    device.tags?.forEach(tag => allTags.add(tag));
+  });
+  
+  return Array.from(allTags).sort();
+}
+
+export async function getDevicesByTags(tags: string[]): Promise<Device[]> {
+  if (tags.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await (await supabase())
+    .from("devices")
+    .select("*")
+    .eq("deleted", false)
+    .overlaps("tags", tags)
+    .order("created_at", { ascending: false });
+
+  if (error) handlePostgrestError(error);
+
+  return (data ?? []).map(toDevice);
+}
