@@ -14,7 +14,14 @@ const rolePermissions = {
     '/todolist',  // Allow access to todolist list page
     '/todolist/view/*/*/*/*'  // Allow access to todolist view with todolist ID
   ],
-  referrer: ['/summary'] // Referrer can only access summary page
+  referrer: [
+    '/devices',
+    '/device/*',
+    '/kpis', 
+    '/kpi/*',
+    '/todolist',
+    '/todolist/view/*/*/*/*'
+  ]
 } as const
 
 // Helper function to check if a path matches a pattern
@@ -96,7 +103,7 @@ export async function middleware(req: NextRequest) {
 
       // If user is authenticated and trying to access login/register, redirect based on role
       const redirectUrl = new URL(
-        profile?.role === 'referrer' ? '/summary' : '/devices',
+        profile?.role === 'referrer' ? '/devices' : '/devices',
         req.url
       )
       return NextResponse.redirect(redirectUrl)
@@ -136,7 +143,7 @@ export async function middleware(req: NextRequest) {
   if (!role || !hasAccess(role, path, referer ?? undefined)) {
     // Redirect based on role
     const redirectUrl = new URL(
-      role === 'referrer' ? '/summary' : '/devices',
+      role === 'referrer' ? '/devices' : '/devices',
       req.url
     )
     return NextResponse.redirect(redirectUrl)

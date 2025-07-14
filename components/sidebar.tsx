@@ -92,9 +92,19 @@ const menuItemsByRole: Record<Role, Array<{
   ],
   referrer: [
     {
-      href: "/summary",
-      icon: <LayoutGrid size={20} />,
-      label: "Statistiche"
+      href: "/devices",
+      icon: <Layers size={20} />,
+      label: "Punti di Controllo"
+    },
+    {
+      href: "/kpis",
+      icon: <FileText size={20} />,
+      label: "Controlli"
+    },
+    {
+      href: "/todolist",
+      icon: <ClipboardList size={20} />,
+      label: "Todolist"
     }
   ]
 }
