@@ -87,7 +87,7 @@ export default function DashboardPage() {
   const [deviceMetrics, setDeviceMetrics] = useState<{ totalDevices: number, activeDevices: number, disabledDevices: number, devices: any[], hasMore: boolean } | null>(null)
   const [deviceMetricsLoading, setDeviceMetricsLoading] = useState(true)
   const [deviceMetricsOffset, setDeviceMetricsOffset] = useState(0)
-  const DEVICE_METRICS_LIMIT = 10
+  const DEVICE_METRICS_LIMIT = 50
 
   // Funzione per fetchare le metriche todolist
   async function fetchTodolistMetrics(dateFromParam?: string, dateToParam?: string) {

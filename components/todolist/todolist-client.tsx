@@ -869,10 +869,26 @@ export default function TodolistClient({
                 }>
                   {stato.charAt(0).toUpperCase() + stato.slice(1)}
                 </Badge>
-                {stato === "completata" && completionUserEmail && (
-                  <span className="text-xs text-muted-foreground">Completata da: {completionUserEmail}</span>
-                )}
               </div>
+              {stato === "completata" && (todolistData?.completion_date || completionUserEmail) && (
+                <div className="text-xs text-muted-foreground text-right space-y-1">
+                  {todolistData?.completion_date && (
+                    <div>
+                      Completata il: {new Date(todolistData.completion_date).toLocaleDateString('it-IT', {
+                        day: '2-digit',
+                        month: '2-digit', 
+                        year: 'numeric'
+                      })} alle {new Date(todolistData.completion_date).toLocaleTimeString('it-IT', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </div>
+                  )}
+                  {completionUserEmail && (
+                    <div>Da: {completionUserEmail}</div>
+                  )}
+                </div>
+              )}
               {tasks.some(task => task.status !== "completed") && (
                 <TooltipProvider>
                   <Tooltip>

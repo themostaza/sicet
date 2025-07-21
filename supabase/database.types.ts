@@ -314,6 +314,7 @@ export interface Database {
           scheduled_execution: string
           status: "pending" | "in_progress" | "completed"
           completion_date: string | null
+          completed_by: string | null
           created_at: string
           updated_at: string
           time_slot_type: "standard" | "custom"
@@ -326,6 +327,7 @@ export interface Database {
           scheduled_execution: string
           status?: "pending" | "in_progress" | "completed"
           completion_date?: string | null
+          completed_by?: string | null
           created_at?: string
           updated_at?: string
           time_slot_type?: "standard" | "custom"
@@ -338,6 +340,7 @@ export interface Database {
           scheduled_execution?: string
           status?: "pending" | "in_progress" | "completed"
           completion_date?: string | null
+          completed_by?: string | null
           created_at?: string
           updated_at?: string
           time_slot_type?: "standard" | "custom"
