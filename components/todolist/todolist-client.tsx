@@ -874,14 +874,14 @@ export default function TodolistClient({
                 <div className="text-xs text-muted-foreground text-right space-y-1">
                   {todolistData?.completion_date && (
                     <div>
-                      Completata il: {new Date(todolistData.completion_date).toLocaleDateString('it-IT', {
-                        day: '2-digit',
-                        month: '2-digit', 
-                        year: 'numeric'
-                      })} alle {new Date(todolistData.completion_date).toLocaleTimeString('it-IT', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
+                      Completata il: {(() => {
+                        // Estrai data e ora direttamente dalla stringa timestamp
+                        const timestamp = todolistData.completion_date // es: "2024-12-15T12:52:30.123Z"
+                        const [datePart, timePart] = timestamp.split('T')
+                        const [year, month, day] = datePart.split('-')
+                        const [hour, minute] = timePart.split(':')
+                        return `${day}/${month}/${year} alle ${hour}:${minute}`
+                      })()}
                     </div>
                   )}
                   {completionUserEmail && (

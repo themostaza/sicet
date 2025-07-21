@@ -16,7 +16,7 @@ export async function GET(req: Request) {
   // Prendi tutti i profili, eventualmente filtra per ruolo
   let profileQuery = supabase
     .from('profiles')
-    .select('id, email, role');
+    .select('id, email, role, auth_id');
   if (role !== 'all') {
     profileQuery = profileQuery.eq('role', role as Role);
   }
@@ -26,24 +26,39 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: profileError.message }, { status: 500 });
   }
 
-  // Per ogni profilo, conta le todolist completate nell'intervallo
+  // Per ogni profilo, conta le todolist completate nell'intervallo usando la tabella todolist
   const results = [];
   for (const profile of profiles || []) {
+    // Salta profili senza auth_id (utenti non ancora attivati)
+    if (!profile.auth_id) {
+      results.push({
+        id: profile.id,
+        email: profile.email,
+        role: profile.role,
+        completed_todolists: 0,
+      });
+      continue;
+    }
+
     let query = supabase
-      .from('user_activities')
+      .from('todolist')
       .select('id', { count: 'exact', head: true })
-      .eq('user_id', profile.id)
-      .eq('action_type', 'complete_todolist');
-    if (from) query = query.gte('created_at', from);
+      .eq('completed_by', profile.auth_id)
+      .eq('status', 'completed');
+    
+    // Filtra per completion_date nell'intervallo specificato
+    if (from) query = query.gte('completion_date', from);
     if (to) {
       const toDate = new Date(to);
       toDate.setHours(23, 59, 59, 999);
-      query = query.lte('created_at', toDate.toISOString());
+      query = query.lte('completion_date', toDate.toISOString());
     }
+    
     const { count, error: countError } = await query;
     if (countError) {
       return NextResponse.json({ error: countError.message }, { status: 500 });
     }
+    
     results.push({
       id: profile.id,
       email: profile.email,
