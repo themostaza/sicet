@@ -5,15 +5,14 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Badge } from "@/components/ui/badge"
-import { Plus, CalendarIcon, X, Settings, Loader2 } from "lucide-react"
+import {  CalendarIcon,  Settings, Loader2, Download } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import { toast } from "@/components/ui/use-toast"
+// Dynamic import per Next.js compatibility
 
 interface Control {
   id: string
@@ -224,6 +223,27 @@ export default function MatriceTodolist() {
     }
   }
 
+  // Seleziona/deseleziona tutte le todolist scadute
+  const toggleAllExpiredTodolists = () => {
+    const expiredTodolists = todolists.filter(todolist => todolist.isExpired)
+    const expiredIds = expiredTodolists.map(todolist => todolist.id)
+    
+    // Controlla se tutte le todolist scadute sono già visibili
+    const allExpiredVisible = expiredIds.every(id => visibleTodolists.has(id))
+    
+    const newVisibleTodolists = new Set(visibleTodolists)
+    
+    if (allExpiredVisible) {
+      // Nascondi tutte le todolist scadute
+      expiredIds.forEach(id => newVisibleTodolists.delete(id))
+    } else {
+      // Mostra tutte le todolist scadute
+      expiredIds.forEach(id => newVisibleTodolists.add(id))
+    }
+    
+    setVisibleTodolists(newVisibleTodolists)
+  }
+
   // Seleziona/deseleziona tutti i controlli per una todolist
   const toggleAllControlsForTodolist = (todolistId: string) => {
     const todolist = todolists.find(t => t.id === todolistId)
@@ -338,6 +358,83 @@ export default function MatriceTodolist() {
     return `${formattedDate} ${formattedTime}`
   }
 
+  // Funzione per export Excel
+  const exportToExcel = async () => {
+    try {
+      // Filtra le todolist visibili che hanno controlli visibili
+      const dataToExport = visibleTodolistsData.filter(todolist => todolistHasVisibleControls(todolist.id))
+      const visibleControls = getVisibleControls()
+      
+      if (dataToExport.length === 0) {
+        toast({
+          title: "Nessun dato da esportare",
+          description: "Non ci sono todolist visibili con controlli da esportare.",
+          variant: "destructive"
+        })
+        return
+      }
+
+      // Import dinamico di XLSX per Next.js
+      const XLSX = await import('xlsx')
+
+      // Prepara i dati per Excel
+      const excelData = []
+      
+      // Intestazione
+      const header = ['Todolist', ...visibleControls.map(control => control.name)]
+      excelData.push(header)
+      
+      // Righe di dati
+      dataToExport.forEach(todolist => {
+        const row = [
+          `${formatTodolistDate(todolist)} - ${todolist.device_name}${todolist.isExpired ? ' (Scaduta)' : ''}${todolist.status === 'completed' && todolist.completion_date ? ` - Completata il ${formatUTC(todolist.completion_date, "dd/MM/yyyy HH:mm")}` : ''}`
+        ]
+        
+        // Aggiungi i valori dei controlli
+        visibleControls.forEach(control => {
+          row.push(getControlValue(todolist, control.id))
+        })
+        
+        excelData.push(row)
+      })
+      
+      // Crea il workbook
+      const wb = XLSX.utils.book_new()
+      const ws = XLSX.utils.aoa_to_sheet(excelData)
+      
+      // Imposta la larghezza delle colonne
+      const colWidths = [
+        { wch: 40 }, // Colonna todolist più larga
+        ...visibleControls.map(() => ({ wch: 15 })) // Colonne controlli
+      ]
+      ws['!cols'] = colWidths
+      
+      // Aggiungi il worksheet al workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Matrice Todolist')
+      
+      // Genera il nome del file con le date del filtro
+      const fromDate = format(dateFrom, 'dd-MM-yyyy')
+      const toDate = format(dateTo, 'dd-MM-yyyy')
+      const fileName = `matrice-todolist_${fromDate}_${toDate}.xlsx`
+      
+      // Scarica il file
+      XLSX.writeFile(wb, fileName)
+      
+      toast({
+        title: "Export completato",
+        description: `File Excel scaricato: ${fileName}`,
+      })
+      
+    } catch (error) {
+      console.error('Errore durante l\'export Excel:', error)
+      toast({
+        title: "Errore Export",
+        description: "Si è verificato un errore durante l'export del file Excel.",
+        variant: "destructive"
+      })
+    }
+  }
+
   return (
     <div className="w-full">
       {/* Filtri date e pulsante gestione sopra la tabella */}
@@ -425,6 +522,18 @@ export default function MatriceTodolist() {
           ) : (
             "Ricarica"
           )}
+        </Button>
+        
+        {/* Pulsante Export Excel */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={exportToExcel}
+          disabled={isLoading || visibleTodolistsData.filter(todolist => todolistHasVisibleControls(todolist.id)).length === 0}
+          className="gap-2 ml-auto"
+        >
+          <Download className="h-4 w-4" />
+          Export Excel
         </Button>
       </div>
 
@@ -581,13 +690,28 @@ export default function MatriceTodolist() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-medium">Todolist</h3>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={toggleAllTodolists}
-                >
-                  {visibleTodolists.size === todolists.length ? 'Deseleziona tutto' : 'Seleziona tutto'}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={toggleAllExpiredTodolists}
+                    disabled={todolists.filter(t => t.isExpired).length === 0}
+                  >
+                    {(() => {
+                      const expiredTodolists = todolists.filter(t => t.isExpired)
+                      const expiredIds = expiredTodolists.map(t => t.id)
+                      const allExpiredVisible = expiredIds.every(id => visibleTodolists.has(id))
+                      return allExpiredVisible ? 'Nascondi scadute' : 'Mostra scadute'
+                    })()}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={toggleAllTodolists}
+                  >
+                    {visibleTodolists.size === todolists.length ? 'Deseleziona tutto' : 'Seleziona tutto'}
+                  </Button>
+                </div>
               </div>
               
               <div className="space-y-4">

@@ -63,6 +63,7 @@
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.6",
+    "xlsx": "^0.18.5",
     "zod": "^3.24.1"
   },
   "devDependencies": {
@@ -70,6 +71,7 @@
     "@types/qrcode": "^1.5.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/xlsx": "^0.0.35",
     "postcss": "^8",
     "supabase": "^2.22.12",
     "tailwindcss": "^3.4.17",
