@@ -188,8 +188,8 @@ export default function Sidebar() {
         <SidebarHeader>
           <div className="flex items-center justify-between px-4">
             <div className="flex items-center gap-2">
-              {/* Mostra il logo solo se sidebar aperta su desktop o su mobile */}
-              {(!isMobile && isOpen) && (
+              {/* Mostra il logo se sidebar aperta su desktop o se è mobile (sempre aperta) */}
+              {((!isMobile && isOpen) || isMobile) && (
                 <Avatar className="h-8 w-8 rounded-sm">
                   <AvatarImage
                     src="/logo.webp"
@@ -201,8 +201,8 @@ export default function Sidebar() {
                   </AvatarFallback>
                 </Avatar>
               )}
-              {/* Mostra il titolo solo se sidebar aperta su desktop o su mobile */}
-              {(!isMobile && isOpen) && <h1 className="text-lg font-semibold">Controlli</h1>}
+              {/* Mostra il titolo se sidebar aperta su desktop o se è mobile (sempre aperta) */}
+              {((!isMobile && isOpen) || isMobile) && <h1 className="text-lg font-semibold">Controlli</h1>}
             </div>
             {/* Bottone toggle solo su desktop, cambia icona a seconda dello stato */}
             {!isMobile && (
@@ -233,8 +233,8 @@ export default function Sidebar() {
       <SidebarHeader>
         <div className="flex items-center justify-between px-4">
           <div className="flex items-center gap-2">
-            {/* Mostra il logo solo se sidebar aperta su desktop o su mobile */}
-            {(!isMobile && isOpen) && (
+            {/* Mostra il logo se sidebar aperta su desktop o se è mobile (sempre aperta) */}
+            {((!isMobile && isOpen) || isMobile) && (
               <Avatar className="h-8 w-8 rounded-sm">
                 <AvatarImage
                   src="/logo.webp"
@@ -246,8 +246,8 @@ export default function Sidebar() {
                 </AvatarFallback>
               </Avatar>
             )}
-            {/* Mostra il titolo solo se sidebar aperta su desktop o su mobile */}
-            {(!isMobile && isOpen) && <h1 className="text-lg font-semibold">Controlli</h1>}
+            {/* Mostra il titolo se sidebar aperta su desktop o se è mobile (sempre aperta) */}
+            {((!isMobile && isOpen) || isMobile) && <h1 className="text-lg font-semibold">Controlli</h1>}
           </div>
           {/* Bottone toggle solo su desktop, cambia icona a seconda dello stato */}
           {!isMobile && (
@@ -264,16 +264,16 @@ export default function Sidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        {/* UserBox solo se sidebar aperta su desktop o su mobile */}
-        {(!isMobile && isOpen) && <UserBox />}
-        {!loading && (
+          {/* UserBox se sidebar aperta su desktop o se è mobile (sempre aperta) */}
+          {((!isMobile && isOpen) || isMobile) && <UserBox />}
+          {!loading && (
           <SidebarMenu>
             {menuItems.map((item) => (
               <SidebarMenuItem key={item.href}>
                 <NavLinkWithLoading href={item.href}>
                   {item.icon}
-                  {/* Mostra label solo se sidebar aperta su desktop o su mobile */}
-                  {(!isMobile && isOpen) && <span>{item.label}</span>}
+                  {/* Mostra label se sidebar aperta su desktop o se è mobile (sempre aperta) */}
+                  {((!isMobile && isOpen) || isMobile) && <span>{item.label}</span>}
                 </NavLinkWithLoading>
               </SidebarMenuItem>
             ))}

@@ -84,7 +84,7 @@ export default function KpiList({ initialKpis }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <h1 className="text-2xl font-bold">Controlli</h1>
         {role !== 'operator' && (
           <Button className="bg-black hover:bg-gray-800" onClick={() => router.push("/kpi/new")}>        

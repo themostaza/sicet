@@ -133,10 +133,10 @@ export default function DeviceList({ initialDevices, allTags }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <h1 className="text-2xl font-bold">Punti di Controllo</h1>
         {role !== 'operator' && (
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <Button className="bg-black hover:bg-gray-800" onClick={() => router.push("/device/new")}>        
               <Plus className="mr-2 h-4 w-4" /> Nuovo Punto di Controllo
             </Button>
@@ -216,8 +216,8 @@ export default function DeviceList({ initialDevices, allTags }: Props) {
 
       {/* Filter Summary */}
       {(search || selectedTags.length > 0) && (
-        <div className="flex items-center justify-between text-sm text-gray-600 bg-gray-50 px-4 py-2 rounded-lg">
-          <div>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-sm text-gray-600 bg-gray-50 px-4 py-2 rounded-lg gap-2">
+          <div className="flex flex-wrap gap-2">
             {tagLoading ? (
               <span>Caricamento dispositivi per tag...</span>
             ) : (
@@ -248,7 +248,7 @@ export default function DeviceList({ initialDevices, allTags }: Props) {
               setSearch("")
               clearAllTags()
             }}
-            className="text-xs"
+            className="text-xs self-start sm:self-auto"
           >
             <X className="w-3 h-3 mr-1" />
             Cancella filtri

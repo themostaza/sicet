@@ -27,7 +27,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     const checkMobile = () => {
-      const mobile = window.innerWidth <= 768
+      const mobile = window.innerWidth <= 1024 // Changed from 768 to 1024 for better tablet support
       setIsMobile(mobile)
       if (mobile) {
         setIsOpen(false)
@@ -57,11 +57,11 @@ export function Sidebar({ children }: { children: React.ReactNode }) {
   if (isMobile) {
     return (
       <Sheet open={isOpen} onOpenChange={toggleSidebar}>
-        <SheetContent side="right" className="w-full p-0 sm:max-w-none">
-          <SheetHeader className="p-4 border-b">
-            <SheetTitle>Sistema di Gestione</SheetTitle>
+        <SheetContent side="left" className="w-[280px] p-0 sm:max-w-[280px] flex flex-col">
+          <SheetHeader className="p-4 border-b flex-shrink-0">
+            <SheetTitle className="text-left">Sistema di Gestione</SheetTitle>
           </SheetHeader>
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto min-h-0 sidebar-scroll">
             {children}
           </div>
         </SheetContent>
@@ -84,11 +84,11 @@ export function SidebarHeader({ className, ...props }: React.HTMLAttributes<HTML
 }
 
 export function SidebarContent({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex-1 overflow-auto py-4", className)} {...props} />
+  return <div className={cn("flex-1 overflow-y-auto py-4 min-h-0 sidebar-scroll", className)} {...props} />
 }
 
 export function SidebarMenu({ className, ...props }: React.HTMLAttributes<HTMLUListElement>) {
-  return <ul className={cn("space-y-1 px-2", className)} {...props} />
+  return <ul className={cn("space-y-1 px-2 pb-4", className)} {...props} />
 }
 
 export function SidebarMenuItem({ children }: { children: React.ReactNode }) {
@@ -112,7 +112,7 @@ export function SidebarMenuButton({ className, ...props }: React.ButtonHTMLAttri
     <button
       data-sidebar="menu-button"
       className={cn(
-        "flex items-center w-full p-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground",
+        "flex items-center w-full p-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground transition-colors",
         className
       )}
       {...props}
@@ -125,7 +125,7 @@ export function SidebarTrigger({ className, ...props }: React.ButtonHTMLAttribut
   return (
     <button
       data-sidebar="trigger"
-      className={cn("p-2 hover:bg-accent rounded-md", className)}
+      className={cn("p-2 hover:bg-accent rounded-md transition-colors", className)}
       onClick={toggleSidebar}
       {...props}
     />

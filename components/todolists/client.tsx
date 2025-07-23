@@ -441,7 +441,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
           </Button>
           {/* Gruppo: Scadute, Future, Completate */}
           {!isOperator && (
-            <div className="flex gap-2 px-2 py-1 rounded-md border border-muted bg-muted/50 ml-2">
+            <div className="flex flex-wrap gap-2 px-2 py-1 rounded-md border border-muted bg-muted/50">
               <Button
                 variant={activeFilter === "overdue" ? "default" : "outline"}
                 onClick={() => setActiveFilter("overdue")}
@@ -471,7 +471,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
         </div>
 
         {isAdmin && (
-          <div className="flex items-center gap-4 mb-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4">
             <Dialog open={isFilterModalOpen} onOpenChange={setIsFilterModalOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" className="flex items-center gap-2">
@@ -485,7 +485,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                 </Button>
               </DialogTrigger>
               {/* MAPPA CONTEGGI COLORATA */}
-              <div className="flex items-center gap-2 ml-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Badge className="bg-green-500 text-white" variant="default">Completate: {counts.completed}</Badge>
                 <Badge className="bg-red-500 text-white" variant="default">Scadute: {counts.overdue}</Badge>
                 <Badge className="bg-yellow-500 text-black" variant="default">Da fare: {counts.today}</Badge>
@@ -616,11 +616,11 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
 
         {/* Filter Summary */}
         {(selectedDate || selectedDevice !== "all" || selectedTags.length > 0) && (
-          <div className="flex items-center justify-between text-sm text-gray-600 bg-gray-50 px-4 py-2 rounded-lg mb-4">
-            <div>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-sm text-gray-600 bg-gray-50 px-4 py-2 rounded-lg mb-4 gap-2">
+            <div className="flex flex-wrap gap-2">
               Filtri applicati:
-                              {selectedDate && <span className="inline-block bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs mr-2 ml-2">Data: {format(selectedDate, "dd/MM/yyyy", { locale: it })}</span>}
-              {selectedDevice !== "all" && <span className="inline-block bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs mr-2">Dispositivo: {devices.find(d => d.id === selectedDevice)?.name}</span>}
+              {selectedDate && <span className="inline-block bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs">Data: {format(selectedDate, "dd/MM/yyyy", { locale: it })}</span>}
+              {selectedDevice !== "all" && <span className="inline-block bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs">Dispositivo: {devices.find(d => d.id === selectedDevice)?.name}</span>}
               {selectedTags.length > 0 && (
                 <span className="inline-block bg-purple-100 text-purple-800 px-2 py-0.5 rounded text-xs">
                   Tag: {selectedTags.join(", ")}
@@ -631,7 +631,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
               variant="ghost"
               size="sm"
               onClick={clearAllFilters}
-              className="text-xs"
+              className="text-xs self-start sm:self-auto"
             >
               <X className="w-3 h-3 mr-1" />
               Cancella filtri
@@ -639,7 +639,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
           </div>
         )}
 
-        <div className="rounded-md border">
+        <div className="rounded-md border overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -653,31 +653,31 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                   </TableHead>
                 )}
                 <TableHead onClick={() => handleSort("device_name")}
-                  className="cursor-pointer select-none">
+                  className="cursor-pointer select-none min-w-[120px]">
                   Dispositivo
                 </TableHead>
                 <TableHead onClick={() => handleSort("date")}
-                  className="cursor-pointer select-none">
+                  className="cursor-pointer select-none min-w-[100px]">
                   Data
                   {sortColumn === "date" || sortColumn === "scheduled_execution" ? (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />) : null}
                 </TableHead>
                 <TableHead onClick={() => handleSort("time_slot")}
-                  className="cursor-pointer select-none">
+                  className="cursor-pointer select-none min-w-[80px]">
                   Fascia
                 </TableHead>
                 <TableHead onClick={() => handleSort("status")}
-                  className="cursor-pointer select-none">
+                  className="cursor-pointer select-none min-w-[100px]">
                   Stato
                 </TableHead>
                 <TableHead onClick={() => handleSort("count")}
-                  className="cursor-pointer select-none">
+                  className="cursor-pointer select-none min-w-[60px]">
                   Task
                 </TableHead>
                 <TableHead onClick={() => handleSort("created_at")}
-                  className="cursor-pointer select-none">
+                  className="cursor-pointer select-none min-w-[100px]">
                   Creato
                 </TableHead>
-                <TableHead className="w-[100px]"></TableHead>
+                <TableHead className="w-[100px] min-w-[100px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

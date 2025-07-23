@@ -49,7 +49,7 @@ export default function MetricheTodolist({
   return (
     <Card className="bg-gradient-to-r from-slate-50 to-gray-50 border-slate-200">
       <CardHeader>
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between w-full">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between w-full gap-4">
           <div>
             <CardTitle className="flex items-center text-slate-700">
               <FileText className="h-6 w-6 mr-2" />
@@ -68,33 +68,37 @@ export default function MetricheTodolist({
               )}
             </CardDescription>
           </div>
-          <div className="flex flex-wrap items-end gap-2 mt-4 md:mt-0">
-            <div className="min-w-[140px]">
-              <Label htmlFor="dateFrom">Data Inizio</Label>
-              <Input
-                id="dateFrom"
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="mt-1"
-              />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="min-w-[140px]">
+                <Label htmlFor="dateFrom">Data Inizio</Label>
+                <Input
+                  id="dateFrom"
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div className="min-w-[140px]">
+                <Label htmlFor="dateTo">Data Fine</Label>
+                <Input
+                  id="dateTo"
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
             </div>
-            <div className="min-w-[140px]">
-              <Label htmlFor="dateTo">Data Fine</Label>
-              <Input
-                id="dateTo"
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="mt-1"
-              />
+            <div className="flex gap-2">
+              <Button onClick={applyFilters} disabled={isLoading} className="h-10 flex-1 sm:flex-none">
+                {isLoading ? "Caricamento..." : "Applica Filtri"}
+              </Button>
+              <Button variant="outline" onClick={resetFilters} className="h-10 flex-1 sm:flex-none">
+                Reset
+              </Button>
             </div>
-            <Button onClick={applyFilters} disabled={isLoading} className="h-10">
-              {isLoading ? "Caricamento..." : "Applica Filtri"}
-            </Button>
-            <Button variant="outline" onClick={resetFilters} className="h-10">
-              Reset
-            </Button>
           </div>
         </div>
       </CardHeader>
@@ -102,7 +106,7 @@ export default function MetricheTodolist({
         <div className="grid gap-6 lg:grid-cols-2">
           {/* KPI Cards */}
           <div className="space-y-4">
-            <div className="grid gap-4 grid-cols-2">
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-2">
               <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-blue-700 flex items-center">
@@ -111,7 +115,7 @@ export default function MetricheTodolist({
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-blue-700">
+                  <div className="text-2xl sm:text-3xl font-bold text-blue-700">
                     {isLoading ? "..." : (todolistMetrics?.total || 0)}
                   </div>
                   <div className="text-xs text-blue-600 mt-1">Todolist totali</div>
@@ -125,7 +129,7 @@ export default function MetricheTodolist({
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-green-700">
+                  <div className="text-2xl sm:text-3xl font-bold text-green-700">
                     {isLoading ? "..." : (todolistMetrics?.completed || 0)}
                   </div>
                   <div className="text-xs text-green-600 mt-1">
@@ -141,7 +145,7 @@ export default function MetricheTodolist({
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-yellow-700">
+                  <div className="text-2xl sm:text-3xl font-bold text-yellow-700">
                     {isLoading ? "..." : (todolistMetrics?.pending || 0)}
                   </div>
                   <div className="text-xs text-yellow-600 mt-1">In attesa di esecuzione</div>
@@ -155,7 +159,7 @@ export default function MetricheTodolist({
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-red-700">
+                  <div className="text-2xl sm:text-3xl font-bold text-red-700">
                     {isLoading ? "..." : (todolistMetrics?.overdue || 0)}
                   </div>
                   <div className="text-xs text-red-600 mt-1">Oltre la scadenza</div>
@@ -169,7 +173,7 @@ export default function MetricheTodolist({
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-teal-700">
+                  <div className="text-2xl sm:text-3xl font-bold text-teal-700">
                     {isLoading ? "..." : (
                       todolistMetrics?.total && todolistMetrics.total > 0
                         ? `${Math.round((todolistMetrics.completed / todolistMetrics.total) * 100)}%`
@@ -187,7 +191,7 @@ export default function MetricheTodolist({
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-orange-700">
+                  <div className="text-2xl sm:text-3xl font-bold text-orange-700">
                     {isLoading ? "..." : (
                       todolistMetrics?.total && todolistMetrics.total > 0
                         ? `${Math.round((todolistMetrics.overdue / todolistMetrics.total) * 100)}%`
@@ -209,7 +213,7 @@ export default function MetricheTodolist({
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="h-[280px]">
+                <div className="h-[250px] sm:h-[280px]">
                   {todolistMetrics && todolistMetrics.pieChartData.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
@@ -219,7 +223,7 @@ export default function MetricheTodolist({
                           cy="50%"
                           labelLine={false}
                           label={({ name, percentage }) => `${name}: ${percentage}%`}
-                          outerRadius={100}
+                          outerRadius={80}
                           fill="#8884d8"
                           dataKey="value"
                         >

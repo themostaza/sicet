@@ -4,6 +4,7 @@ import "./globals.css"
 import Sidebar from "@/components/sidebar"
 import { Toaster } from "@/components/ui/toaster"
 import { SidebarProvider } from "@/components/ui/sidebar"
+import MobileMenuTrigger from "@/components/mobile-menu-trigger"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -29,7 +30,8 @@ export default function RootLayout({
         <SidebarProvider>
           <div className="flex min-h-screen">
             <Sidebar />
-            <main className="flex-1 overflow-auto p-3">{children}</main>
+            <main className="flex-1 overflow-auto p-3 md:p-6 lg:p-8 pt-16 lg:pt-6">{children}</main>
+            <MobileMenuTrigger />
           </div>
         </SidebarProvider>
         <Toaster />

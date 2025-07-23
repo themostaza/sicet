@@ -36,7 +36,7 @@
 
     --sidebar-width: 16rem;
     --sidebar-width-mobile: 18rem;
-    --sidebar-width-icon: 3rem;
+    --sidebar-width-collapsed: 3rem;
   }
 
   .dark {
@@ -94,13 +94,13 @@
 }
 
 /* Mobile menu styles */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   [data-sidebar="sidebar"] {
     @apply w-[var(--sidebar-width-mobile)];
   }
 
   [data-sidebar="trigger"] {
-    @apply fixed top-4 right-4 z-50;
+    @apply fixed top-4 left-4 z-50;
   }
 
   [data-sidebar="menu-button"] {
@@ -119,7 +119,7 @@
 
 /* Mobile menu overlay */
 [data-sidebar="overlay"] {
-  @apply fixed inset-0 bg-black/50 z-40 md:hidden;
+  @apply fixed inset-0 bg-black/50 z-40 lg:hidden;
   animation: fadeIn 0.2s ease-in-out;
 }
 
@@ -134,4 +134,77 @@
 
 [data-sidebar="content"][data-state="closed"] {
   @apply -translate-x-full;
+}
+
+/* Sidebar scrolling improvements */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted)) transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted));
+  border-radius: 3px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground));
+}
+
+/* Mobile responsive improvements */
+@media (max-width: 640px) {
+  .mobile-text-sm {
+    @apply text-sm;
+  }
+  
+  .mobile-text-xs {
+    @apply text-xs;
+  }
+  
+  .mobile-p-2 {
+    @apply p-2;
+  }
+  
+  .mobile-gap-2 {
+    @apply gap-2;
+  }
+}
+
+/* Table responsive improvements */
+@media (max-width: 768px) {
+  .table-responsive {
+    @apply overflow-x-auto;
+  }
+  
+  .table-responsive table {
+    @apply min-w-full;
+  }
+  
+  .table-responsive th,
+  .table-responsive td {
+    @apply whitespace-nowrap;
+  }
+}
+
+/* Card responsive improvements */
+@media (max-width: 640px) {
+  .card-mobile {
+    @apply p-3;
+  }
+  
+  .card-mobile .card-header {
+    @apply pb-3;
+  }
+  
+  .card-mobile .card-content {
+    @apply pt-0;
+  }
 }
