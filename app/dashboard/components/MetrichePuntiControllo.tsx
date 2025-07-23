@@ -47,6 +47,7 @@ export default function MetrichePuntiControllo({
             <div className="flex flex-wrap gap-4 items-center mt-2">
               <span className="text-base font-semibold text-gray-900">Totale: {deviceMetrics?.totalDevices ?? "..."}</span>
               <span className="text-base text-gray-700">Attivi: {deviceMetrics?.activeDevices ?? "..."}</span>
+              <span className="text-base text-blue-600">Mostrati: {deviceMetrics?.devices?.length ?? "..."}</span>
               <span className="text-base text-gray-500 flex items-center gap-1">
                 Disabilitati: {deviceMetrics?.disabledDevices ?? "..."}
                 <Badge variant="outline" className="bg-red-100 text-red-700 border-red-200 ml-1">Disabilitato</Badge>

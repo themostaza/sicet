@@ -16,6 +16,10 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, Legend, Ca
 import { subMonths, startOfDay } from 'date-fns';
 import React from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import TodolistClient from '@/components/todolist/todolist-client';
+import { getTodolistTasksById, getTodolistById, getTodolistCompletionUserEmail } from '@/app/actions/actions-todolist';
+import { getKpis } from '@/app/actions/actions-kpi';
+import { getDevice } from '@/app/actions/actions-device';
 
 const roleLabels: Record<string, string> = {
   operator: 'Operatore',
@@ -46,9 +50,46 @@ export default function TabOperatori({ dateRange, setDateRange, selectedRole, se
   const [userTodolists, setUserTodolists] = useState<Array<{ id: string; entity_id: string; created_at: string; metadata: any }>>([]);
   const [todolistsLoading, setTodolistsLoading] = useState(false);
   const [selectedTodolistId, setSelectedTodolistId] = useState<string | null>(null);
-  const [selectedTodolistDate, setSelectedTodolistDate] = useState<string>('');
 
   const [activeTab, setActiveTab] = useState<'tabella' | 'grafico'>('tabella');
+  
+  // Chart data state
+  const [chartData, setChartData] = useState<Array<Record<string, any>>>([]);
+  const [chartLoading, setChartLoading] = useState(false);
+  
+  // Todolist detail state
+  const [todolistDetailData, setTodolistDetailData] = useState<{
+    initialData: any;
+    kpis: any[];
+    device: any;
+    todolist: any;
+    completionUserEmail: string | null;
+  } | null>(null);
+  const [todolistDetailLoading, setTodolistDetailLoading] = useState(false);
+
+  // Load chart data
+  const loadChartData = async () => {
+    if (!dateRange.from || !dateRange.to) return;
+    
+    setChartLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.append('from', dateRange.from.toISOString());
+      params.append('to', dateRange.to.toISOString());
+      params.append('role', selectedRole);
+      
+      const res = await fetch(`/api/summary/operators-daily-completions?${params.toString()}`);
+      if (!res.ok) throw new Error('Errore nel recupero dati grafico');
+      
+      const data = await res.json();
+      setChartData(data.data || []);
+    } catch (err) {
+      console.error('Error loading chart data:', err);
+      setChartData([]);
+    } finally {
+      setChartLoading(false);
+    }
+  };
 
   useEffect(() => {
     async function loadOperatori() {
@@ -72,12 +113,24 @@ export default function TabOperatori({ dateRange, setDateRange, selectedRole, se
     loadOperatori();
   }, [dateRange, selectedRole]);
 
+  // Load chart data when filters change
+  useEffect(() => {
+    loadChartData();
+  }, [dateRange, selectedRole]);
+
   // Fetch todolists when dialog opens and user is selected
   useEffect(() => {
     if (!dialogOpen || !selectedUser) return;
     setTodolistsLoading(true);
     setUserTodolists([]);
-    fetch(`/api/summary/user-completed-todolists?user_id=${selectedUser.id}`)
+    
+    // Costruisci parametri includendo il periodo selezionato
+    const params = new URLSearchParams();
+    params.append('user_id', selectedUser.id);
+    if (dateRange.from) params.append('from', dateRange.from.toISOString());
+    if (dateRange.to) params.append('to', dateRange.to.toISOString());
+    
+    fetch(`/api/summary/user-completed-todolists?${params.toString()}`)
       .then(async res => {
         if (!res.ok) throw new Error('Errore nel recupero delle todolist');
         const data = await res.json();
@@ -85,7 +138,7 @@ export default function TabOperatori({ dateRange, setDateRange, selectedRole, se
       })
       .catch(() => setUserTodolists([]))
       .finally(() => setTodolistsLoading(false));
-  }, [dialogOpen, selectedUser]);
+  }, [dialogOpen, selectedUser, dateRange]);
 
   // Imposta intervallo di default ultimi 3 mesi
   useEffect(() => {
@@ -100,45 +153,61 @@ export default function TabOperatori({ dateRange, setDateRange, selectedRole, se
     setSelectedUser(user);
     setDialogOpen(true);
     setSelectedTodolistId(null);
+    setTodolistDetailData(null);
   };
 
-  // Prepara dati per il grafico lineare: [{ date, user1: count, user2: count, ... }]
-  const lineChartData = React.useMemo(() => {
-    if (!operatori.length) return [];
-    const from = dateRange.from ? startOfDay(dateRange.from) : null;
-    const to = dateRange.to ? startOfDay(dateRange.to) : null;
-    if (!from || !to) return [];
-    // Crea lista di tutte le date nell'intervallo
-    const days: string[] = [];
-    for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-      days.push(d.toISOString().slice(0, 10));
-    }
-    // Mappa: { userId: { email, completions: { [date]: count } } }
-    const userMap: Record<string, { email: string; completions: Record<string, number> }> = {};
-    operatori.forEach(op => {
-      userMap[op.id] = { email: op.email, completions: {} };
-      days.forEach(day => { userMap[op.id].completions[day] = 0; });
-    });
-    // Per ogni utente, fetch le todolist completate (solo se userTodolists contiene tutte, altrimenti serve API aggregata)
-    // Qui userTodolists contiene solo quelle dell'utente selezionato, quindi il grafico sarà vuoto a meno di API aggregata
-    // Per demo, mostriamo solo la linea dell'utente selezionato se presente
-    if (selectedUser && userTodolists.length > 0) {
-      userTodolists.forEach(tl => {
-        const day = tl.created_at.slice(0, 10);
-        if (userMap[selectedUser.id]) {
-          userMap[selectedUser.id].completions[day] = (userMap[selectedUser.id].completions[day] || 0) + 1;
-        }
+  // Load todolist detail data
+  const loadTodolistDetail = async (todolistId: string, deviceId: string, date: string, timeSlot: string) => {
+    setTodolistDetailLoading(true);
+    try {
+      // Carica in parallelo tutti i dati necessari (come nella pagina originale)
+      const [initialData, kpisData, device, todolist, completionUserEmail] = await Promise.all([
+        getTodolistTasksById({
+          todolistId,
+          offset: 0,
+          limit: 20,
+        }),
+        getKpis({ offset: 0, limit: 100 }),
+        getDevice(deviceId),
+        getTodolistById(todolistId),
+        getTodolistCompletionUserEmail(todolistId)
+      ]);
+
+      // Transform todolist fields come nella pagina originale
+      const safeTodolist = todolist && todolist !== null ? {
+        ...todolist,
+        status: ["pending", "in_progress", "completed"].includes(todolist.status)
+          ? todolist.status as "pending" | "in_progress" | "completed"
+          : "pending",
+        time_slot_type: ["standard", "custom"].includes(todolist.time_slot_type)
+          ? todolist.time_slot_type as "standard" | "custom"
+          : "standard"
+      } : null;
+
+      setTodolistDetailData({
+        initialData,
+        kpis: kpisData.kpis,
+        device: device ? { name: device.name, location: device.location } : null,
+        todolist: safeTodolist,
+        completionUserEmail
       });
+    } catch (error) {
+      console.error('Error loading todolist detail:', error);
+      setTodolistDetailData(null);
+    } finally {
+      setTodolistDetailLoading(false);
     }
-    // Costruisci array per Recharts
-    return days.map(day => {
-      const entry: Record<string, any> = { date: day };
-      Object.values(userMap).forEach(u => {
-        entry[u.email] = u.completions[day];
-      });
-      return entry;
-    });
-  }, [operatori, dateRange, selectedUser, userTodolists]);
+  };
+
+  // Formatta data per l'asse X: "2024-01-15" -> "15 Gen"
+  const formatXAxisLabel = (dateStr: string) => {
+    try {
+      const date = new Date(dateStr);
+      return format(date, 'd MMM', { locale: it });
+    } catch {
+      return dateStr;
+    }
+  };
 
   // Colori per le linee
   const lineColors = [
@@ -288,13 +357,24 @@ export default function TabOperatori({ dateRange, setDateRange, selectedRole, se
                   <CardDescription>Numero di todolist completate per giorno nel periodo selezionato</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {lineChartData.length > 0 ? (
+                  {chartLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin mr-2 text-gray-400" />
+                      <span className="text-gray-600">Caricamento dati grafico...</span>
+                    </div>
+                  ) : chartData.length > 0 ? (
                     <ResponsiveContainer width="100%" height={450}>
-                      <LineChart data={lineChartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                      <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="date" />
+                        <XAxis 
+                          dataKey="date" 
+                          tickFormatter={formatXAxisLabel}
+                          tick={{ fontSize: 12 }}
+                        />
                         <YAxis allowDecimals={false} />
-                        <Tooltip />
+                        <Tooltip 
+                          labelFormatter={(label) => `Data: ${formatXAxisLabel(label)}`}
+                        />
                         <Legend />
                         {operatori.map((op, idx) => (
                           <Line
@@ -305,6 +385,7 @@ export default function TabOperatori({ dateRange, setDateRange, selectedRole, se
                             strokeWidth={2}
                             dot={false}
                             isAnimationActive={false}
+                            name={op.email}
                           />
                         ))}
                       </LineChart>
@@ -322,40 +403,43 @@ export default function TabOperatori({ dateRange, setDateRange, selectedRole, se
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="w-full max-w-5xl h-[90vh] flex flex-row p-0" style={{ maxWidth: '100vw', width: '100vw', height: '100vh', borderRadius: 0 }}>
           {/* Colonna todolist completate */}
-          <div className="flex flex-col w-full max-w-md h-full border-r p-6 overflow-y-auto bg-white">
-            <h2 className="text-lg font-semibold mb-4">Todolist completate</h2>
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-1">Filtra per data</label>
-              <input
-                type="date"
-                className="border rounded px-2 py-1 text-sm"
-                value={selectedTodolistDate}
-                onChange={e => setSelectedTodolistDate(e.target.value)}
-              />
-            </div>
+          <div className="flex flex-col w-80 h-full border-r p-4 overflow-y-auto bg-white">
+            <h2 className="text-lg font-semibold mb-4">
+              Todolist completate
+              {dateRange.from && dateRange.to && (
+                <span className="block text-sm font-normal text-muted-foreground mt-1">
+                  {format(dateRange.from, "d MMM yyyy", { locale: it })} - {format(dateRange.to, "d MMM yyyy", { locale: it })}
+                </span>
+              )}
+            </h2>
             {todolistsLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin mr-2 text-gray-400" />
                 <span className="text-gray-600">Caricamento todolist...</span>
               </div>
             ) : userTodolists.length === 0 ? (
-              <div className="text-muted-foreground">Nessuna todolist completata trovata.</div>
+              <div className="text-muted-foreground">Nessuna todolist completata trovata nel periodo selezionato.</div>
             ) : (
               <ul className="space-y-2">
-                {userTodolists
-                  .filter(tl => {
-                    if (!selectedTodolistDate) return true;
-                    return tl.created_at && tl.created_at.slice(0, 10) === selectedTodolistDate;
-                  })
-                  .map(tl => (
+                {userTodolists.map(tl => (
                     <li key={tl.id}>
                       <button
                         className={`w-full text-left px-3 py-2 rounded hover:bg-gray-100 ${selectedTodolistId === tl.id ? 'bg-gray-200' : ''}`}
-                        onClick={() => setSelectedTodolistId(tl.id)}
+                        onClick={() => {
+                          setSelectedTodolistId(tl.id);
+                          // Estrai parametri dalla todolist per caricare il dettaglio
+                          if (tl.metadata?.device_id && tl.metadata?.scheduled_execution) {
+                            const scheduledDate = new Date(tl.metadata.scheduled_execution);
+                            const date = scheduledDate.toISOString().split('T')[0];
+                            const timeSlot = `${scheduledDate.getHours().toString().padStart(2, '0')}:${scheduledDate.getMinutes().toString().padStart(2, '0')}`;
+                            
+                            loadTodolistDetail(tl.id, tl.metadata.device_id, date, timeSlot);
+                          }
+                        }}
                       >
-                        <div className="flex justify-between items-center">
+                        <div className="flex flex-col">
                           <span className="font-medium">{tl.entity_id}</span>
-                          <span className="text-xs text-muted-foreground">{format(new Date(tl.created_at), 'dd/MM/yyyy, HH:mm', { locale: it })}</span>
+                          <span className="text-xs text-muted-foreground mt-1">{format(new Date(tl.created_at), 'd MMM yyyy, HH:mm', { locale: it })}</span>
                         </div>
                       </button>
                     </li>
@@ -365,7 +449,7 @@ export default function TabOperatori({ dateRange, setDateRange, selectedRole, se
           </div>
           {/* Colonna destra: titolo + dettaglio */}
           <div className="flex-1 flex flex-col h-full">
-            <div className="flex items-start p-6 border-b min-h-[88px]">
+            <div className="flex items-start p-4 border-b min-h-[80px]">
               <DialogTitle className="text-2xl font-bold flex items-center gap-2">
                 {selectedUser?.email}
                 {selectedUser && (
@@ -373,12 +457,39 @@ export default function TabOperatori({ dateRange, setDateRange, selectedRole, se
                 )}
               </DialogTitle>
             </div>
-            <div className="flex-1 p-6">
+            <div className="flex-1 p-4 overflow-y-auto">
               {selectedTodolistId ? (
-                <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
-                  <div className="text-lg font-semibold mb-2">Dettaglio Todolist</div>
-                  <div className="text-sm">(placeholder dettagli per id: <span className="font-mono">{selectedTodolistId}</span>)</div>
-                </div>
+                todolistDetailLoading ? (
+                  <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
+                    <Loader2 className="h-8 w-8 animate-spin mr-2 text-gray-400" />
+                    <div className="text-lg">Caricamento dettagli todolist...</div>
+                  </div>
+                ) : todolistDetailData ? (
+                  <div className="h-full">
+                    <TodolistClient
+                      initialData={todolistDetailData.initialData}
+                      todolistId={selectedTodolistId}
+                      deviceId={todolistDetailData.todolist?.device_id || ''}
+                      date={todolistDetailData.todolist?.scheduled_execution?.split('T')[0] || ''}
+                      timeSlot={(() => {
+                        if (todolistDetailData.todolist?.scheduled_execution) {
+                          const scheduledDate = new Date(todolistDetailData.todolist.scheduled_execution);
+                          return `${scheduledDate.getHours().toString().padStart(2, '0')}:${scheduledDate.getMinutes().toString().padStart(2, '0')}`;
+                        }
+                        return '';
+                      })()}
+                      initialKpis={todolistDetailData.kpis}
+                      deviceInfo={todolistDetailData.device}
+                      todolistData={todolistDetailData.todolist}
+                      completionUserEmail={todolistDetailData.completionUserEmail}
+                    />
+                  </div>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
+                    <div className="text-lg">Errore nel caricamento dei dettagli</div>
+                    <div className="text-sm">Riprova selezionando nuovamente la todolist</div>
+                  </div>
+                )
               ) : (
                 <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
                   <div className="text-lg">Seleziona una todolist dalla lista per vedere i dettagli</div>

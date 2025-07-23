@@ -722,6 +722,12 @@ export async function completeTodolist(todolistId: string): Promise<void> {
   )) {
     throw new Error("Non è possibile completare una todolist scaduta")
   }
+
+  // Ottieni l'ID dell'utente corrente
+  const { data: { user }, error: authError } = await (await getSupabaseClient()).auth.getUser()
+  if (authError || !user) {
+    throw new Error("Utente non autenticato")
+  }
   
   // Update all tasks to completed
   const { error: tasksError } = await (await getSupabaseClient())
@@ -730,6 +736,18 @@ export async function completeTodolist(todolistId: string): Promise<void> {
     .eq("todolist_id", todolistId)
   
   if (tasksError) handleError(tasksError)
+
+  // Update todolist to completed with completion data
+  const { error: todolistUpdateError } = await (await getSupabaseClient())
+    .from("todolist")
+    .update({ 
+      status: "completed",
+      completion_date: new Date().toISOString(),
+      completed_by: user.id
+    })
+    .eq("id", todolistId)
+  
+  if (todolistUpdateError) handleError(todolistUpdateError)
   
   // Log the activity
   await logCurrentUserActivity('complete_todolist', 'todolist', todolistId, {
@@ -817,7 +835,8 @@ export async function getTodolistById(todolistId: string) {
       time_slot_start,
       time_slot_end,
       created_at,
-      updated_at
+      updated_at,
+      completion_date
     `)
     .eq("id", todolistId)
     .single()
@@ -1076,27 +1095,50 @@ export async function getTodolistsWithPagination(params: {
 // Ottieni la mail dell'utente che ha completato una todolist
 export async function getTodolistCompletionUserEmail(todolistId: string): Promise<string | null> {
   const supabase = await getSupabaseClient();
-  // Cerca l'attività di completamento
-  const { data: activity, error: activityError } = await supabase
-    .from('user_activities')
-    .select('user_id')
-    .eq('entity_id', todolistId)
-    .eq('action_type', 'complete_todolist')
+  
+  // Prima cerca direttamente dal campo completed_by nella todolist
+  const { data: todolist, error: todolistError } = await supabase
+    .from('todolist')
+    .select('completed_by')
+    .eq('id', todolistId)
     .maybeSingle();
-  if (activityError) {
-    console.error('Errore nel recupero attività di completamento:', activityError);
+    
+  if (todolistError) {
+    console.error('Errore nel recupero todolist:', todolistError);
     return null;
   }
-  if (!activity?.user_id) return null;
-  // Recupera la mail dal profilo
+  
+  let userId = todolist?.completed_by;
+  
+  // Se non trovato nel campo completed_by, cerca nelle attività (fallback per todolist completate prima di questo aggiornamento)
+  if (!userId) {
+    const { data: activity, error: activityError } = await supabase
+      .from('user_activities')
+      .select('user_id')
+      .eq('entity_id', todolistId)
+      .eq('action_type', 'complete_todolist')
+      .maybeSingle();
+      
+    if (activityError) {
+      console.error('Errore nel recupero attività di completamento:', activityError);
+      return null;
+    }
+    userId = activity?.user_id;
+  }
+  
+  if (!userId) return null;
+  
+  // Recupera l'email dal profilo usando auth_id
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('email')
-    .eq('id', activity.user_id)
+    .eq('auth_id', userId)
     .maybeSingle();
+    
   if (profileError) {
     console.error('Errore nel recupero profilo utente:', profileError);
     return null;
   }
+  
   return profile?.email ?? null;
 }
