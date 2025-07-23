@@ -26,6 +26,7 @@ import { FormField } from '@/components/form/form-field';
 import { UserDeleteDialog } from '@/app/admin/user-delete-dialog';
 import { useToast } from '@/components/ui/use-toast';
 import { preregisterUser, getPreregisteredUsers } from '@/app/actions/actions-user';
+import { formatDateEuropean } from '@/lib/utils';
 
 type Role       = 'operator' | 'admin' | 'referrer';
 type Status     = 'registered' | 'activated' | 'reset-password' | 'deleted';
@@ -217,7 +218,7 @@ export default function PreRegisterPage() {
                          profile.status === 'deleted' ? 'Cancellato' : profile.status}
                       </TableCell>
                       <TableCell>
-                        {new Date(profile.created_at).toLocaleDateString()}
+                        {formatDateEuropean(profile.created_at)}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">

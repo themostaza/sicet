@@ -22,6 +22,7 @@ import { useRouter } from "next/navigation"
 import { createClientSupabaseClient } from "@/lib/supabase-client"
 import Image from "next/image"
 import { isTodolistExpired, isCustomTimeSlotString, parseCustomTimeSlotString } from "@/lib/validation/todolist-schemas"
+import { formatDateEuropean } from "@/lib/utils"
 
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -603,7 +604,7 @@ export default function TodolistClient({
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
                 {currentValue ? (
-                  format(new Date(currentValue), "PPP", { locale: it })
+                  format(new Date(currentValue), "dd/MM/yyyy", { locale: it })
                 ) : (
                   <span className="text-muted-foreground">Seleziona una data</span>
                 )}
@@ -810,7 +811,7 @@ export default function TodolistClient({
                 {deviceId} – {deviceInfo && typeof deviceInfo === 'object' && 'name' in deviceInfo && deviceInfo.name ? deviceInfo.name : "Dispositivo sconosciuto"}
               </p>
               <p className="text-sm text-muted-foreground">
-                {date} – {formatTimeSlotLabel(timeSlot)}
+                {formatDateEuropean(date)} – {formatTimeSlotLabel(timeSlot)}
               </p>
               {isExpired && (
                 <p className="text-sm text-red-600 font-medium mt-1">

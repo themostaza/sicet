@@ -159,11 +159,11 @@ export default function TabAttivita({
                       {dateRange.from ? (
                         dateRange.to ? (
                           <>
-                            {format(dateRange.from, "d MMM yyyy", { locale: it })} -{" "}
-                            {format(dateRange.to, "d MMM yyyy", { locale: it })}
+                                        {format(dateRange.from, "dd/MM/yyyy", { locale: it })} -{" "}
+            {format(dateRange.to, "dd/MM/yyyy", { locale: it })}
                           </>
                         ) : (
-                          format(dateRange.from, "d MMM yyyy", { locale: it })
+                          format(dateRange.from, "dd/MM/yyyy", { locale: it })
                         )
                       ) : (
                         <span>Seleziona intervallo date</span>
@@ -260,7 +260,7 @@ export default function TabAttivita({
                     <div className="flex items-start gap-2 text-sm text-muted-foreground">
                       <Clock className="h-4 w-4" />
                       <time dateTime={activity.created_at}>
-                        {format(new Date(activity.created_at), "d MMM yyyy 'alle' HH:mm", { locale: it })}
+                        {format(new Date(activity.created_at), "dd/MM/yyyy 'alle' HH:mm", { locale: it })}
                       </time>
                     </div>
                   </div>

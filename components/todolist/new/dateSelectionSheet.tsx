@@ -254,7 +254,7 @@ export function DateSelectionSheet() {
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {tempSelectedDate ? (
-                      format(tempSelectedDate, "EEEE d MMMM", { locale: it })
+                      format(tempSelectedDate, "EEEE dd/MM/yyyy", { locale: it })
                     ) : (
                       <span>Seleziona una data</span>
                     )}
@@ -386,7 +386,7 @@ export function DateSelectionSheet() {
                     .map((entry, idx) => (
                       <tr key={idx} className="border-b last:border-b-0">
                         <td className="py-2">
-                          {format(entry.date, "EEEE d MMMM", { locale: it })}
+                          {format(entry.date, "EEEE dd/MM/yyyy", { locale: it })}
                         </td>
                         <td className="py-2">
                           <span className="flex items-center">

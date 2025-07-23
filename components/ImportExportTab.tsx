@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { formatDateEuropean } from "@/lib/utils"
 
 function isValidExcelCell(ref: string) {
   // Regex: una o più lettere (A-Z, case insensitive) seguite da uno o più numeri
@@ -685,7 +686,7 @@ export default function ImportExportTab() {
                     <tr key={tpl.id} className="border-b">
                       <td className="px-4 py-3 font-medium">{tpl.template_name}</td>
                       <td className="px-4 py-3 text-muted-foreground">
-                        {tpl.created_at ? new Date(tpl.created_at).toLocaleDateString() : "-"}
+                        {tpl.created_at ? formatDateEuropean(tpl.created_at) : "-"}
                       </td>
                       <td className="px-4 py-3">
                         {tpl.email_autosend ? (

@@ -193,7 +193,7 @@ export function MultiDatePicker({ selectedEntries = [], onEntriesChange, classNa
                                   )}
                                 >
                                   <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {format(entry.date, "dd MMMM yyyy", { locale: it })}
+                                  {format(entry.date, "dd/MM/yyyy", { locale: it })}
                                 </Button>
                               </PopoverTrigger>
                               <PopoverContent className="w-auto p-0" align="start">

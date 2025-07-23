@@ -329,7 +329,7 @@ export default function ExportCsvTab() {
                       )}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {startDate ? format(startDate, "PPP") : <span>Seleziona data</span>}
+                      {startDate ? format(startDate, "dd/MM/yyyy") : <span>Seleziona data</span>}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -355,7 +355,7 @@ export default function ExportCsvTab() {
                       )}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {endDate ? format(endDate, "PPP") : <span>Seleziona data</span>}
+                      {endDate ? format(endDate, "dd/MM/yyyy") : <span>Seleziona data</span>}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">

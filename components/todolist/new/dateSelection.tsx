@@ -60,7 +60,7 @@ export function DateSelection() {
                 {dateEntries.map((entry, index) => (
                   <TableRow key={index}>
                     <TableCell className="font-medium">
-                      {format(entry.date, "EEEE d MMMM", { locale: it })}
+                      {format(entry.date, "EEEE dd/MM/yyyy", { locale: it })}
                     </TableCell>
                     <TableCell>
                       <span className="flex items-center">

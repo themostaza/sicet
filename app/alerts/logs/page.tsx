@@ -190,7 +190,11 @@ export default async function AlertLogsPage() {
                           </TableCell>
                           <TableCell>
                             {log.todolist?.scheduled_execution 
-                              ? new Date(log.todolist.scheduled_execution).toLocaleDateString('it-IT')
+                              ? new Date(log.todolist.scheduled_execution).toLocaleDateString('it-IT', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                  })
                               : 'N/A'
                             }
                           </TableCell>

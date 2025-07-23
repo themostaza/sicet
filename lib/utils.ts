@@ -58,6 +58,28 @@ export function formatDateForDisplay(dateString: string | null | undefined): str
   }
 }
 
+// Utility per formattare date in formato europeo (dd/MM/yyyy)
+export function formatDateEuropean(date: Date | string): string {
+  const dateObj = typeof date === 'string' ? new Date(date) : date
+  return dateObj.toLocaleDateString('it-IT', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  })
+}
+
+// Utility per formattare date e ora in formato europeo (dd/MM/yyyy HH:mm)
+export function formatDateTimeEuropean(date: Date | string): string {
+  const dateObj = typeof date === 'string' ? new Date(date) : date
+  return dateObj.toLocaleString('it-IT', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
 /**
  * Genera un ID alfanumerico corto (8 caratteri)
  * Usa caratteri maiuscoli e numeri per evitare confusione

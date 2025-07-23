@@ -17,7 +17,7 @@ import { deleteTodolistById } from "@/app/actions/actions-todolist"
 import { toast } from "@/components/ui/use-toast"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Checkbox as UICheckbox } from "@/components/ui/checkbox"
-import { formatDateForDisplay } from "@/lib/utils"
+import { formatDateForDisplay, formatDateEuropean } from "@/lib/utils"
 import { format } from "date-fns"
 import { it } from "date-fns/locale"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
@@ -512,7 +512,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                             )}
                           >
                             <Calendar className="mr-2 h-4 w-4" />
-                            {selectedDate ? format(selectedDate, "PPP", { locale: it }) : "Seleziona data"}
+                            {selectedDate ? format(selectedDate, "dd/MM/yyyy", { locale: it }) : "Seleziona data"}
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
@@ -619,7 +619,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
           <div className="flex items-center justify-between text-sm text-gray-600 bg-gray-50 px-4 py-2 rounded-lg mb-4">
             <div>
               Filtri applicati:
-              {selectedDate && <span className="inline-block bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs mr-2 ml-2">Data: {format(selectedDate, "PPP", { locale: it })}</span>}
+                              {selectedDate && <span className="inline-block bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs mr-2 ml-2">Data: {format(selectedDate, "dd/MM/yyyy", { locale: it })}</span>}
               {selectedDevice !== "all" && <span className="inline-block bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs mr-2">Dispositivo: {devices.find(d => d.id === selectedDevice)?.name}</span>}
               {selectedTags.length > 0 && (
                 <span className="inline-block bg-purple-100 text-purple-800 px-2 py-0.5 rounded text-xs">
@@ -727,7 +727,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                           )}
                         </div>
                       </TableCell>
-                      <TableCell onClick={() => canClick && handleRowClick(item)}>{item.date}</TableCell>
+                      <TableCell onClick={() => canClick && handleRowClick(item)}>{formatDateEuropean(item.date)}</TableCell>
                       <TableCell onClick={() => canClick && handleRowClick(item)}>{formatTimeSlot(item.time_slot)}</TableCell>
                       <TableCell onClick={() => canClick && handleRowClick(item)}>{getStatusDisplay(item)}</TableCell>
                       <TableCell onClick={() => canClick && handleRowClick(item)}>{item.count}</TableCell>

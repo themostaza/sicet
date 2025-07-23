@@ -170,11 +170,11 @@ export default function TabOperatori({ dateRange, setDateRange, selectedRole, se
                         {dateRange.from ? (
                           dateRange.to ? (
                             <>
-                              {format(dateRange.from, "d MMM yyyy", { locale: it })} -{" "}
-                              {format(dateRange.to, "d MMM yyyy", { locale: it })}
+                                          {format(dateRange.from, "dd/MM/yyyy", { locale: it })} -{" "}
+            {format(dateRange.to, "dd/MM/yyyy", { locale: it })}
                             </>
                           ) : (
-                            format(dateRange.from, "d MMM yyyy", { locale: it })
+                            format(dateRange.from, "dd/MM/yyyy", { locale: it })
                           )
                         ) : (
                           <span>Seleziona intervallo date</span>
@@ -355,7 +355,7 @@ export default function TabOperatori({ dateRange, setDateRange, selectedRole, se
                       >
                         <div className="flex justify-between items-center">
                           <span className="font-medium">{tl.entity_id}</span>
-                          <span className="text-xs text-muted-foreground">{format(new Date(tl.created_at), 'd MMM yyyy, HH:mm', { locale: it })}</span>
+                          <span className="text-xs text-muted-foreground">{format(new Date(tl.created_at), 'dd/MM/yyyy, HH:mm', { locale: it })}</span>
                         </div>
                       </button>
                     </li>
