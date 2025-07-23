@@ -13,9 +13,9 @@ import { format } from "date-fns"
 // Define types for alert conditions
 interface AlertCondition {
   field_id: string;
-  type: 'numeric' | 'text' | 'boolean';
-  min?: number;
-  max?: number;
+  type: 'number' | 'decimal' | 'text' | 'boolean';
+  min?: number | string;
+  max?: number | string;
   match_text?: string;
   boolean_value?: boolean;
 }

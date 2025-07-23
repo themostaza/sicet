@@ -21,7 +21,7 @@ interface KpiField {
   id: string;
   name: string;
   description?: string;
-  type: 'numeric' | 'text' | 'boolean' | 'unsupported';
+  type: 'number' | 'decimal' | 'text' | 'boolean' | 'unsupported';
   placeholder?: string;
   min?: string | number;
   max?: string | number;
@@ -32,9 +32,9 @@ interface KpiField {
 // Define types for alert conditions
 interface AlertCondition {
   field_id: string;
-  type: 'numeric' | 'text' | 'boolean';
-  min?: number;
-  max?: number;
+  type: 'number' | 'decimal' | 'text' | 'boolean';
+  min?: number | string;
+  max?: number | string;
   match_text?: string;
   boolean_value?: boolean;
 }
@@ -109,7 +109,7 @@ export function KpiSelection() {
         id: `${kpi.id}-value`,
         name: 'Valore',
         description: 'Misura corrente',
-        type: 'numeric'
+        type: 'number'
       },
       {
         id: `${kpi.id}-unit`,
@@ -121,11 +121,12 @@ export function KpiSelection() {
   };
 
   // Map KPI field types to alert field types
-  const mapFieldType = (type: string): 'numeric' | 'text' | 'boolean' | 'unsupported' => {
+  const mapFieldType = (type: string): 'number' | 'decimal' | 'text' | 'boolean' | 'unsupported' => {
     switch (String(type).toLowerCase()) {
       case 'number':
+        return 'number';
       case 'decimal':
-        return 'numeric';
+        return 'decimal';
       case 'text':
       case 'textarea':
         return 'text';
@@ -157,7 +158,8 @@ export function KpiSelection() {
 
     const handler = setTimeout(() => {
       const activeConditions = localAlertConditions.filter(c => 
-        (c.type === 'numeric' && (c.min !== undefined || c.max !== undefined)) ||
+        (c.type === 'number' && (c.min !== undefined || c.max !== undefined)) ||
+        (c.type === 'decimal' && (c.min !== undefined || c.max !== undefined)) ||
         (c.type === 'text' && c.match_text) ||
         (c.type === 'boolean' && c.boolean_value !== undefined)
       );
@@ -203,7 +205,7 @@ export function KpiSelection() {
 
   const handleConditionChange = (
     fieldId: string,
-    type: 'numeric' | 'text' | 'boolean',
+    type: 'number' | 'decimal' | 'text' | 'boolean',
     value: Partial<AlertCondition>
   ) => {
     const existing = localAlertConditions.findIndex((c) => c.field_id === fieldId)
@@ -348,7 +350,7 @@ export function KpiSelection() {
                 </div>
                 <p className="text-sm text-muted-foreground">{field.description}</p>
                 
-                {field.type === 'numeric' ? (
+                {field.type === 'number' ? (
                   <div className="space-y-2">
                     <div className="grid grid-cols-2 gap-2">
                       <div>
@@ -360,7 +362,7 @@ export function KpiSelection() {
                           value={localAlertConditions.find(c => c.field_id === field.id)?.min ?? ''}
                           onChange={(e) => handleConditionChange(
                             field.id,
-                            'numeric',
+                            'number',
                             { min: e.target.value ? Number(e.target.value) : undefined }
                           )}
                         />
@@ -374,9 +376,96 @@ export function KpiSelection() {
                           value={localAlertConditions.find(c => c.field_id === field.id)?.max ?? ''}
                           onChange={(e) => handleConditionChange(
                             field.id,
-                            'numeric',
+                            'number',
                             { max: e.target.value ? Number(e.target.value) : undefined }
                           )}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : field.type === 'decimal' ? (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label htmlFor={`${field.id}-min`}>Min</Label>
+                        <Input 
+                          id={`${field.id}-min`} 
+                          type="text" 
+                          placeholder="Valore minimo (es. 3,14)"
+                          value={String(localAlertConditions.find(c => c.field_id === field.id)?.min ?? '')}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            // Allow only digits, minus sign, and one decimal separator (comma or dot)
+                            if (value === '' || /^-?\d*[.,]?\d*$/.test(value)) {
+                              // Check that there's only one decimal separator
+                              const commaCount = (value.match(/,/g) || []).length
+                              const dotCount = (value.match(/\./g) || []).length
+                              if (commaCount + dotCount <= 1) {
+                                // Store as string to preserve comma/dot during input
+                                handleConditionChange(
+                                  field.id,
+                                  'decimal',
+                                  { min: value === '' ? undefined : value }
+                                )
+                              }
+                            }
+                          }}
+                          onBlur={(e) => {
+                            // Convert to number only when leaving the field
+                            const value = e.target.value
+                            if (value && value !== '') {
+                              const normalizedValue = value.replace(',', '.')
+                              const parsedValue = parseFloat(normalizedValue)
+                              if (!isNaN(parsedValue)) {
+                                handleConditionChange(
+                                  field.id,
+                                  'decimal',
+                                  { min: parsedValue }
+                                )
+                              }
+                            }
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor={`${field.id}-max`}>Max</Label>
+                        <Input 
+                          id={`${field.id}-max`} 
+                          type="text" 
+                          placeholder="Valore massimo (es. 3,14)"
+                          value={String(localAlertConditions.find(c => c.field_id === field.id)?.max ?? '')}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            // Allow only digits, minus sign, and one decimal separator (comma or dot)
+                            if (value === '' || /^-?\d*[.,]?\d*$/.test(value)) {
+                              // Check that there's only one decimal separator
+                              const commaCount = (value.match(/,/g) || []).length
+                              const dotCount = (value.match(/\./g) || []).length
+                              if (commaCount + dotCount <= 1) {
+                                // Store as string to preserve comma/dot during input
+                                handleConditionChange(
+                                  field.id,
+                                  'decimal',
+                                  { max: value === '' ? undefined : value }
+                                )
+                              }
+                            }
+                          }}
+                          onBlur={(e) => {
+                            // Convert to number only when leaving the field
+                            const value = e.target.value
+                            if (value && value !== '') {
+                              const normalizedValue = value.replace(',', '.')
+                              const parsedValue = parseFloat(normalizedValue)
+                              if (!isNaN(parsedValue)) {
+                                handleConditionChange(
+                                  field.id,
+                                  'decimal',
+                                  { max: parsedValue }
+                                )
+                              }
+                            }
+                          }}
                         />
                       </div>
                     </div>

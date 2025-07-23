@@ -20,7 +20,7 @@ const supabase = async (): Promise<SupabaseClient<Database>> =>
 // Schema for alert validation
 const AlertConditionSchema = z.object({
   field_id: z.string(),
-  type: z.enum(['numeric', 'text', 'boolean']),
+  type: z.enum(['number', 'decimal', 'text', 'boolean']),
   min: z.number().optional(),
   max: z.number().optional(),
   match_text: z.string().optional(),
@@ -322,7 +322,8 @@ export async function checkKpiAlerts(
 
       let conditionTriggered = false
       switch (condition.type) {
-        case 'numeric':
+        case 'number':
+        case 'decimal':
           const numValue = Number(fieldValue)
           if (!isNaN(numValue)) {
             if (

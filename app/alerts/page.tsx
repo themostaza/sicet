@@ -31,7 +31,7 @@ type TodolistAlert = Database['public']['Tables']['todolist_alert']['Row'] & {
 }
 
 type AlertCondition = {
-  type: 'numeric' | 'text' | 'boolean'
+  type: 'number' | 'decimal' | 'text' | 'boolean'
   field_id: string
   min?: number
   max?: number
@@ -122,7 +122,7 @@ function renderKpiConditions(alert: KpiAlert) {
         return (
           <li key={field.id} className="text-xs bg-gray-50 rounded px-2 py-1">
             <span className="font-semibold">{field.name}</span>
-            {cond.type === 'numeric' && (
+            {(cond.type === 'number' || cond.type === 'decimal') && (
               <>
                 {cond.min !== undefined && <> | Min: <span className="font-mono">{cond.min}</span></>}
                 {cond.max !== undefined && <> | Max: <span className="font-mono">{cond.max}</span></>}
@@ -141,7 +141,7 @@ function renderKpiConditions(alert: KpiAlert) {
       {/* Se nessun campo del KPI ha una condizione, mostra tutte le condizioni raw */}
       {fields.length === 0 && conditions.map((cond: any, idx: number) => (
         <li key={idx} className="text-xs bg-gray-50 rounded px-2 py-1 whitespace-nowrap truncate">
-          {cond.type === 'numeric' && (
+          {(cond.type === 'number' || cond.type === 'decimal') && (
             <>
               {cond.min !== undefined && <> Min: <span className="font-mono">{cond.min}</span></>}
               {cond.max !== undefined && <> | Max: <span className="font-mono">{cond.max}</span></>}
