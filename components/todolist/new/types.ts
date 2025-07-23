@@ -32,29 +32,8 @@ export const mapDbKpiToKpi = (dbKpi: KPI): KPI => ({
 })
 
 // Mappare la fascia oraria al formato per il database
+// scheduled_execution è sempre impostato a mezzanotte (00:00)
 export const timeSlotToScheduledTime = (date: Date, timeSlot: TimeSlotValue): string => {
   const dateStr = date.toISOString().split('T')[0]
-  
-  if (isCustomTimeSlot(timeSlot)) {
-    // Per i timeslot personalizzati, usa l'ora e minuti di inizio
-    const startHour = timeSlot.startHour.toString().padStart(2, '0')
-    const startMinute = (timeSlot.startMinute || 0).toString().padStart(2, '0')
-    return `${dateStr}T${startHour}:${startMinute}:00`
-  }
-  
-  // Per i timeslot standard
-  switch (timeSlot) {
-    case "mattina":
-      return `${dateStr}T06:00:00`
-    case "pomeriggio":
-      return `${dateStr}T14:00:00`
-    case "notte":
-      return `${dateStr}T22:00:00`
-    case "giornata":
-      return `${dateStr}T06:00:00`
-    case "sera":
-      return `${dateStr}T18:00:00`
-    default:
-      return `${dateStr}T06:00:00`
-  }
+  return `${dateStr}T00:00:00`
 }

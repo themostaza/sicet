@@ -12,7 +12,7 @@ import { it } from "date-fns/locale"
 import { CalendarIcon, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-export type TimeSlot = "mattina" | "pomeriggio" | "sera" | "notte" | "giornata"
+export type TimeSlot = "mattina" | "pomeriggio" | "notte" | "giornata"
 
 export interface DateEntry {
   date: Date
@@ -118,6 +118,8 @@ export function MultiDatePicker({ selectedEntries = [], onEntriesChange, classNa
         return "Pomeriggio (fino alle 22:00)"
       case "notte":
         return "Notte (fino alle 06:00)"
+      case "giornata":
+        return "Giornata (fino alle 17:00)"
       default:
         return timeSlot
     }
@@ -154,9 +156,8 @@ export function MultiDatePicker({ selectedEntries = [], onEntriesChange, classNa
                   <SelectContent>
                     <SelectItem value="mattina">Mattina (fino alle 14:00)</SelectItem>
                     <SelectItem value="pomeriggio">Pomeriggio (fino alle 22:00)</SelectItem>
-                    <SelectItem value="sera">Sera (fino alle 22:00)</SelectItem>
                     <SelectItem value="notte">Notte (fino alle 06:00)</SelectItem>
-                    <SelectItem value="giornata">Giornata (fino alle 20:00)</SelectItem>
+                    <SelectItem value="giornata">Giornata (fino alle 17:00)</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-sm text-muted-foreground mt-2">
@@ -217,9 +218,8 @@ export function MultiDatePicker({ selectedEntries = [], onEntriesChange, classNa
                               <SelectContent>
                                 <SelectItem value="mattina">Mattina (fino alle 14:00)</SelectItem>
                                 <SelectItem value="pomeriggio">Pomeriggio (fino alle 22:00)</SelectItem>
-                                <SelectItem value="sera">Sera (fino alle 22:00)</SelectItem>
                                 <SelectItem value="notte">Notte (fino alle 06:00)</SelectItem>
-                                <SelectItem value="giornata">Giornata (fino alle 20:00)</SelectItem>
+                                <SelectItem value="giornata">Giornata (fino alle 17:00)</SelectItem>
                               </SelectContent>
                             </Select>
                           </TableCell>

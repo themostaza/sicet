@@ -31,6 +31,8 @@ import {
   isCustomTimeSlotString,
   parseCustomTimeSlotString,
   timeToMinutes,
+
+  getTimeSlotDatabaseValues,
   type CustomTimeSlot,
   type TimeSlotValue,
   minutesToTime
@@ -116,13 +118,15 @@ function handleZodError(e: z.ZodError): never {
 // Ottieni una todolist
 export async function getTodolist(params: unknown): Promise<Todolist | null> {
   const { deviceId, date, timeSlot } = TodolistParamsSchema.parse(params)
-  const { startTime } = getTimeRangeFromSlot(date, timeSlot)
+  
+  // scheduled_execution is always midnight
+  const scheduledExecution = `${date}T00:00:00`
 
   const { data, error } = await (await getSupabaseClient())
     .from("todolist")
     .select("*")
     .eq("device_id", deviceId)
-    .eq("scheduled_execution", startTime)
+    .eq("scheduled_execution", scheduledExecution)
     .single()
 
   if (error) {
@@ -236,14 +240,15 @@ export async function updateTaskValue(taskId: string, value: any): Promise<Task>
 
 // Elimina una todolist e tutte le sue task
 export async function deleteTodolist(deviceId: string, date: string, timeSlot: string): Promise<void> {
-  const { startTime } = getTimeRangeFromSlot(date, timeSlot)
+  // scheduled_execution is always midnight
+  const scheduledExecution = `${date}T00:00:00`
   
   // Get todolist info before deleting for logging
   const { data: todolistData, error: todolistError } = await (await getSupabaseClient())
     .from("todolist")
     .select("id")
     .eq("device_id", deviceId)
-    .eq("scheduled_execution", startTime)
+    .eq("scheduled_execution", scheduledExecution)
     .single()
 
   if (todolistError) {
@@ -273,7 +278,7 @@ export async function deleteTodolist(deviceId: string, date: string, timeSlot: s
       logCurrentUserActivity('delete_todolist', 'task', task.id, {
         device_id: deviceId,
         kpi_id: task.kpi_id,
-        scheduled_execution: startTime,
+        scheduled_execution: scheduledExecution,
         time_slot: timeSlot
       })
     ));
@@ -372,9 +377,9 @@ export async function getTodolistsGrouped() {
         const date = new Date(item.scheduled_execution).toISOString().split("T")[0]
         let timeSlotValue: TimeSlotValue
         
-        // Determina il tipo di time slot
+        // Determine time slot based on type and stored values
         if (item.time_slot_type === "custom" && item.time_slot_start !== null && item.time_slot_end !== null) {
-          // Time slot personalizzato - converti da minuti a ore e minuti
+          // Custom time slot - convert from minutes to hours and minutes
           const startTime = minutesToTime(item.time_slot_start)
           const endTime = minutesToTime(item.time_slot_end)
           const customSlot: CustomTimeSlot = {
@@ -385,8 +390,33 @@ export async function getTodolistsGrouped() {
             endMinute: endTime.minute
           }
           timeSlotValue = customSlot
+        } else if (item.time_slot_type === "standard" && item.time_slot_start !== null && item.time_slot_end !== null) {
+          // Standard time slot - reconstruct from stored values
+          const startTime = minutesToTime(item.time_slot_start)
+          const endTime = minutesToTime(item.time_slot_end)
+          
+          // Map to standard time slot
+          if (startTime.hour === 6 && endTime.hour === 14) {
+            timeSlotValue = "mattina"
+          } else if (startTime.hour === 14 && endTime.hour === 22) {
+            timeSlotValue = "pomeriggio"
+          } else if (startTime.hour === 22 && endTime.hour === 6) {
+            timeSlotValue = "notte"
+          } else if (startTime.hour === 7 && endTime.hour === 17) {
+            timeSlotValue = "giornata"
+          } else {
+            // Fallback to custom if no match
+            const customSlot: CustomTimeSlot = {
+              type: "custom",
+              startHour: startTime.hour,
+              startMinute: startTime.minute,
+              endHour: endTime.hour,
+              endMinute: endTime.minute
+            }
+            timeSlotValue = customSlot
+          }
         } else {
-          // Time slot standard
+          // Fallback for old data - reconstruct from scheduled_execution
           const standardSlot = getTimeSlotFromDateTime(item.scheduled_execution)
           timeSlotValue = standardSlot
         }
@@ -436,19 +466,7 @@ export async function getTodolistsGrouped() {
   }
 }
 
-function getCurrentTimeSlot(dateObj: Date): TimeSlot {
-  const hours = dateObj.getHours();
-  if (hours >= 6 && hours < 14) return "mattina";
-  if (hours >= 14 && hours < 22) return "pomeriggio";
-  return "notte";
-}
 
-// Helper function to get time slot with delay
-function getTimeSlotWithDelay(dateObj: Date, delayHours: number = 3): TimeSlot {
-  const delayedDate = new Date(dateObj);
-  delayedDate.setHours(delayedDate.getHours() - delayHours);
-  return getCurrentTimeSlot(delayedDate);
-}
 
 export async function getTodolistsGroupedWithFilters() {
   try {
@@ -462,18 +480,18 @@ export async function getTodolistsGroupedWithFilters() {
         (item) =>
           item.date === today &&
           item.status !== "completed" &&
-          !isTodolistExpired(item.scheduled_execution, item.time_slot_type, item.time_slot_end)
+          !isTodolistExpired(item.scheduled_execution, item.time_slot_type, item.time_slot_end, item.time_slot_start)
       ),
       overdue: todolists.filter(
         (item) =>
           item.status !== "completed" &&
-          isTodolistExpired(item.scheduled_execution, item.time_slot_type, item.time_slot_end)
+          isTodolistExpired(item.scheduled_execution, item.time_slot_type, item.time_slot_end, item.time_slot_start)
       ),
       future: todolists.filter(
         (item) =>
           item.status !== "completed" &&
           new Date(item.date) > new Date(today) &&
-          !isTodolistExpired(item.scheduled_execution, item.time_slot_type, item.time_slot_end)
+          !isTodolistExpired(item.scheduled_execution, item.time_slot_type, item.time_slot_end, item.time_slot_start)
       ),
       completed: todolists.filter((item) => item.status === "completed"),
     };
@@ -508,27 +526,21 @@ export async function createTodolist(
   alertEnabled?: boolean,
   email?: string
 ): Promise<Task> {
-  const { startTime } = getTimeRangeFromSlot(date, timeSlot)
+  // Get time slot database values
+  const dbValues = getTimeSlotDatabaseValues(timeSlot)
   
-  // Determine if this is a custom time slot
-  const isCustom = isCustomTimeSlotString(timeSlot)
-  let customTimeSlot: CustomTimeSlot | null = null
-  
-  if (isCustom) {
-    customTimeSlot = parseCustomTimeSlotString(timeSlot)
-  }
+  // scheduled_execution is always midnight
+  const scheduledExecution = `${date}T00:00:00`
   
   // First create the todolist
   const todolistData: TablesInsert<"todolist"> = {
     id: generateUUID(),
     device_id: deviceId,
-    scheduled_execution: startTime,
+    scheduled_execution: scheduledExecution,
     status: "pending",
-    time_slot_type: isCustom ? "custom" : "standard",
-    ...(isCustom && customTimeSlot && {
-      time_slot_start: timeToMinutes(customTimeSlot.startHour, customTimeSlot.startMinute || 0),
-      time_slot_end: timeToMinutes(customTimeSlot.endHour, customTimeSlot.endMinute || 0)
-    })
+    time_slot_type: dbValues.type,
+    time_slot_start: dbValues.start,
+    time_slot_end: dbValues.end
   }
   
   const { data: todolist, error: todolistError } = await (await getSupabaseClient())
@@ -588,7 +600,7 @@ export async function createTodolist(
   await logCurrentUserActivity('create_todolist', 'task', task!.id, {
     device_id: deviceId,
     kpi_id: kpiId,
-    scheduled_execution: startTime,
+    scheduled_execution: scheduledExecution,
     time_slot: timeSlot,
     alert_enabled: alertEnabled,
     alert_email: email
@@ -607,27 +619,21 @@ export async function createMultipleTasks(
   alertEnabled?: boolean,
   email?: string
 ): Promise<{ id: string }> {
-  const { startTime } = getTimeRangeFromSlot(date, timeSlot)
+  // Get time slot database values
+  const dbValues = getTimeSlotDatabaseValues(timeSlot)
   
-  // Determine if this is a custom time slot
-  const isCustom = isCustomTimeSlotString(timeSlot)
-  let customTimeSlot: CustomTimeSlot | null = null
-  
-  if (isCustom) {
-    customTimeSlot = parseCustomTimeSlotString(timeSlot)
-  }
+  // scheduled_execution is always midnight
+  const scheduledExecution = `${date}T00:00:00`
   
   // First create the todolist
   const todolistData: TablesInsert<"todolist"> = {
     id: generateUUID(),
     device_id: deviceId,
-    scheduled_execution: startTime,
+    scheduled_execution: scheduledExecution,
     status: "pending",
-    time_slot_type: isCustom ? "custom" : "standard",
-    ...(isCustom && customTimeSlot && {
-      time_slot_start: timeToMinutes(customTimeSlot.startHour, customTimeSlot.startMinute || 0),
-      time_slot_end: timeToMinutes(customTimeSlot.endHour, customTimeSlot.endMinute || 0)
-    })
+    time_slot_type: dbValues.type,
+    time_slot_start: dbValues.start,
+    time_slot_end: dbValues.end
   }
   
   const { data: todolist, error: todolistError } = await (await getSupabaseClient())
@@ -685,7 +691,7 @@ export async function createMultipleTasks(
   await logCurrentUserActivity('create_todolist', 'todolist', todolist!.id, {
     device_id: deviceId,
     kpi_count: kpiIds.length,
-    scheduled_execution: startTime,
+    scheduled_execution: scheduledExecution,
     time_slot: timeSlot,
     alert_enabled: alertEnabled,
     alert_email: email
@@ -700,7 +706,7 @@ export async function completeTodolist(todolistId: string): Promise<void> {
   // Prima ottieni i dati della todolist per verificare se è scaduta
   const { data: todolist, error: todolistError } = await (await getSupabaseClient())
     .from("todolist")
-    .select("device_id, scheduled_execution, status, time_slot_type, time_slot_end")
+    .select("device_id, scheduled_execution, status, time_slot_type, time_slot_end, time_slot_start")
     .eq("id", todolistId)
     .single()
   
@@ -711,7 +717,8 @@ export async function completeTodolist(todolistId: string): Promise<void> {
   if (todolist.status !== "completed" && isTodolistExpired(
     todolist.scheduled_execution, 
     todolist.time_slot_type as "standard" | "custom", 
-    todolist.time_slot_end
+    todolist.time_slot_end,
+    todolist.time_slot_start
   )) {
     throw new Error("Non è possibile completare una todolist scaduta")
   }
@@ -789,7 +796,8 @@ export async function getTodolistsForDeviceToday(deviceId: string, today: string
     !isTodolistExpired(
       todolist.scheduled_execution,
       todolist.time_slot_type as "standard" | "custom",
-      todolist.time_slot_end
+      todolist.time_slot_end,
+      todolist.time_slot_start
     )
   ) || []
 
@@ -941,7 +949,9 @@ export async function getTodolistsWithPagination(params: {
           const date = new Date(item.scheduled_execution).toISOString().split("T")[0]
           let timeSlotValue: TimeSlotValue
           
+          // Determine time slot based on type and stored values
           if (item.time_slot_type === "custom" && item.time_slot_start !== null && item.time_slot_end !== null) {
+            // Custom time slot - convert from minutes to hours and minutes
             const startTime = minutesToTime(item.time_slot_start)
             const endTime = minutesToTime(item.time_slot_end)
             const customSlot: CustomTimeSlot = {
@@ -952,7 +962,33 @@ export async function getTodolistsWithPagination(params: {
               endMinute: endTime.minute
             }
             timeSlotValue = customSlot
+          } else if (item.time_slot_type === "standard" && item.time_slot_start !== null && item.time_slot_end !== null) {
+            // Standard time slot - reconstruct from stored values
+            const startTime = minutesToTime(item.time_slot_start)
+            const endTime = minutesToTime(item.time_slot_end)
+            
+            // Map to standard time slot
+            if (startTime.hour === 6 && endTime.hour === 14) {
+              timeSlotValue = "mattina"
+            } else if (startTime.hour === 14 && endTime.hour === 22) {
+              timeSlotValue = "pomeriggio"
+            } else if (startTime.hour === 22 && endTime.hour === 6) {
+              timeSlotValue = "notte"
+            } else if (startTime.hour === 7 && endTime.hour === 17) {
+              timeSlotValue = "giornata"
+            } else {
+              // Fallback to custom if no match
+              const customSlot: CustomTimeSlot = {
+                type: "custom",
+                startHour: startTime.hour,
+                startMinute: startTime.minute,
+                endHour: endTime.hour,
+                endMinute: endTime.minute
+              }
+              timeSlotValue = customSlot
+            }
           } else {
+            // Fallback for old data - reconstruct from scheduled_execution
             const standardSlot = getTimeSlotFromDateTime(item.scheduled_execution)
             timeSlotValue = standardSlot
           }

@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     // Query base per le metriche
     let query = supabase
       .from("todolist")
-      .select("id, status, scheduled_execution, time_slot_type, time_slot_end, completion_date")
+      .select("id, status, scheduled_execution, time_slot_type, time_slot_end, time_slot_start, completion_date")
 
     // Applica filtri per data se specificati
     if (dateFrom) {
@@ -43,7 +43,8 @@ export async function GET(request: NextRequest) {
       !isTodolistExpired(
         t.scheduled_execution,
         (t.time_slot_type === "standard" || t.time_slot_type === "custom") ? t.time_slot_type as "standard" | "custom" : undefined,
-        t.time_slot_end
+        t.time_slot_end,
+        t.time_slot_start
       )
     ).length
     const inProgress = todolists.filter(t => t.status === 'in_progress').length // opzionale, legacy
@@ -53,7 +54,8 @@ export async function GET(request: NextRequest) {
       isTodolistExpired(
         t.scheduled_execution,
         (t.time_slot_type === "standard" || t.time_slot_type === "custom") ? t.time_slot_type as "standard" | "custom" : undefined,
-        t.time_slot_end
+        t.time_slot_end,
+        t.time_slot_start
       )
     ).length
 

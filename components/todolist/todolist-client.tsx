@@ -78,44 +78,7 @@ interface KpiField {
 /* --------------------------------------------------------------
  * Helpers
  * ----------------------------------------------------------- */
-const TIMESLOT_LABEL: Record<string, string> = {
-  mattina: "Mattina (6-12)",
-  pomeriggio: "Pomeriggio (12-18)",
-  sera: "Sera (18-22)",
-  notte: "Notte (22-6)",
-  giornata: "Giornata (6-20)",
-}
 
-const labelForSlot = (s: string) => {
-  // Check if it's a standard time slot
-  if (s in TIMESLOT_LABEL) {
-    return TIMESLOT_LABEL[s]
-  }
-  
-  // Check if it's a custom time slot string (e.g., "custom:90-1020")
-  if (s.startsWith('custom:')) {
-    const parts = s.split(':')[1]?.split('-')
-    if (parts && parts.length === 2) {
-      const startMinutes = parseInt(parts[0])
-      const endMinutes = parseInt(parts[1])
-      
-      if (!isNaN(startMinutes) && !isNaN(endMinutes)) {
-        const startHours = Math.floor(startMinutes / 60)
-        const startMins = startMinutes % 60
-        const endHours = Math.floor(endMinutes / 60)
-        const endMins = endMinutes % 60
-        
-        const startTime = `${startHours.toString().padStart(2, '0')}:${startMins.toString().padStart(2, '0')}`
-        const endTime = `${endHours.toString().padStart(2, '0')}:${endMins.toString().padStart(2, '0')}`
-        
-        return `Personalizzato (${startTime}-${endTime})`
-      }
-    }
-  }
-  
-  // Fallback to original string
-  return s
-}
 
 const storageKey = (id: string, day: string, slot: string) =>
   `todolist-${id}-${day}-${slot}`
@@ -799,18 +762,18 @@ export default function TodolistClient({
   const isExpired = Boolean(todolistData && todolistData.status !== "completed" && isTodolistExpired(
     todolistData.scheduled_execution,
     todolistData.time_slot_type,
-    todolistData.time_slot_end
+    todolistData.time_slot_end,
+    todolistData.time_slot_start
   ));
 
   // Funzione helper per formattare l'orario (anche custom)
   function formatTimeSlotLabel(timeSlot: string) {
     // Standard
     const slotLabels: Record<string, string> = {
-      mattina: "Mattina (6-12)",
-      pomeriggio: "Pomeriggio (12-18)",
-      sera: "Sera (18-22)",
+      mattina: "Mattina (6-14)",
+      pomeriggio: "Pomeriggio (14-22)",
       notte: "Notte (22-6)",
-      giornata: "Giornata (6-20)"
+      giornata: "Giornata (7-17)"
     }
     if (slotLabels[timeSlot]) return slotLabels[timeSlot]
     // Custom
@@ -829,7 +792,7 @@ export default function TodolistClient({
   let stato: "completata" | "futuro" | "scaduta" | "in_corso" = "in_corso";
   if (todolistData?.completion_date || todolistData?.status === "completed") {
     stato = "completata";
-  } else if (todolistData?.scheduled_execution && isTodolistExpired(todolistData.scheduled_execution, todolistData.time_slot_type, todolistData.time_slot_end)) {
+  } else if (todolistData?.scheduled_execution && isTodolistExpired(todolistData.scheduled_execution, todolistData.time_slot_type, todolistData.time_slot_end, todolistData.time_slot_start)) {
     stato = "scaduta";
   } else if (todolistData?.scheduled_execution && new Date(todolistData.scheduled_execution) > new Date()) {
     stato = "futuro";

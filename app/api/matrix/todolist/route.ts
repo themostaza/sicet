@@ -53,7 +53,8 @@ export async function GET(request: NextRequest) {
       const isExpired = isTodolistExpired(
         todolist.scheduled_execution,
         todolist.time_slot_type as "standard" | "custom",
-        todolist.time_slot_end
+        todolist.time_slot_end,
+        todolist.time_slot_start
       )
       
       return isExpired
@@ -141,7 +142,8 @@ export async function GET(request: NextRequest) {
       isExpired: todolist.status !== "completed" && isTodolistExpired(
         todolist.scheduled_execution,
         todolist.time_slot_type as "standard" | "custom",
-        todolist.time_slot_end
+        todolist.time_slot_end,
+        todolist.time_slot_start
       ),
       tasks: tasksByTodolist[todolist.id] || []
     }))

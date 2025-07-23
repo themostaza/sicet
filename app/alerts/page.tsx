@@ -179,11 +179,10 @@ function formatTimeSlot(todolist: any) {
   
   // For standard time slots, we need to determine which one based on the scheduled time
   const hour = new Date(todolist.scheduled_execution).getHours()
-  if (hour >= 6 && hour < 12) return 'Mattina (06:00-11:00)'
-  if (hour >= 12 && hour < 18) return 'Pomeriggio (12:00-17:00)'
-  if (hour >= 18 && hour < 22) return 'Sera (18:00-21:00)'
-  if (hour >= 6 && hour < 17) return 'Giornata (06:00-17:00)'
-  return 'Notte (22:00-05:00)'
+  if (hour >= 7 && hour < 17) return 'Giornata (07:00-17:00)'
+  if (hour >= 6 && hour < 14) return 'Mattina (06:00-14:00)'
+  if (hour >= 14 && hour < 22) return 'Pomeriggio (14:00-22:00)'
+  return 'Notte (22:00-06:00)'
 }
 
 export default async function AlertsPage() {

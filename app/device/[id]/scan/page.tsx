@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge"
 // Helper function to get time slot string for URL
 const getTimeSlotString = (todolist: any): string => {
   if (todolist.time_slot_type === "custom" && todolist.time_slot_start !== null && todolist.time_slot_end !== null) {
-    // For custom time slots, create the custom time slot object and convert to string
+    // Custom time slot - convert to string
     const startTime = minutesToTime(todolist.time_slot_start)
     const endTime = minutesToTime(todolist.time_slot_end)
     const customSlot = {
@@ -25,8 +25,33 @@ const getTimeSlotString = (todolist: any): string => {
       endMinute: endTime.minute
     }
     return customTimeSlotToString(customSlot)
+  } else if (todolist.time_slot_type === "standard" && todolist.time_slot_start !== null && todolist.time_slot_end !== null) {
+    // Standard time slot - reconstruct from stored values
+    const startTime = minutesToTime(todolist.time_slot_start)
+    const endTime = minutesToTime(todolist.time_slot_end)
+    
+    // Map to standard time slot string
+    if (startTime.hour === 6 && endTime.hour === 14) {
+      return "mattina"
+    } else if (startTime.hour === 14 && endTime.hour === 22) {
+      return "pomeriggio"
+    } else if (startTime.hour === 22 && endTime.hour === 6) {
+      return "notte"
+    } else if (startTime.hour === 7 && endTime.hour === 17) {
+      return "giornata"
+    } else {
+      // Fallback to custom string
+      const customSlot = {
+        type: "custom" as const,
+        startHour: startTime.hour,
+        startMinute: startTime.minute,
+        endHour: endTime.hour,
+        endMinute: endTime.minute
+      }
+      return customTimeSlotToString(customSlot)
+    }
   } else {
-    // For standard time slots, use the existing function
+    // Fallback for old data - reconstruct from scheduled_execution
     return getCurrentTimeSlot(new Date(todolist.scheduled_execution))
   }
 }

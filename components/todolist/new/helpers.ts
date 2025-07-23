@@ -19,7 +19,7 @@ export const formatTimeSlot = (timeSlot: string) => {
     case "notte":
       return "Notte (fino alle 06:00)"
     case "giornata":
-      return "Giornata (fino alle 20:00)"
+      return "Giornata (fino alle 17:00)"
     default:
       return timeSlot
   }

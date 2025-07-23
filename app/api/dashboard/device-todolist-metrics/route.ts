@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     const supabase = await createServerSupabaseClient()
     const { data: todolists, error } = await supabase
       .from("todolist")
-      .select("id, status, scheduled_execution, completion_date, time_slot_type, time_slot_end")
+      .select("id, status, scheduled_execution, completion_date, time_slot_type, time_slot_end, time_slot_start")
       .eq("device_id", deviceId)
       .gte("scheduled_execution", `${dateFrom}T00:00:00`)
       .lte("scheduled_execution", `${dateTo}T23:59:59`)
@@ -32,7 +32,8 @@ export async function GET(request: NextRequest) {
       !isTodolistExpired(
         t.scheduled_execution,
         (t.time_slot_type === "standard" || t.time_slot_type === "custom") ? t.time_slot_type as "standard" | "custom" : undefined,
-        t.time_slot_end
+        t.time_slot_end,
+        t.time_slot_start
       )
     ).length
     const overdue = todolists.filter(t =>
@@ -40,7 +41,8 @@ export async function GET(request: NextRequest) {
       isTodolistExpired(
         t.scheduled_execution,
         (t.time_slot_type === "standard" || t.time_slot_type === "custom") ? t.time_slot_type as "standard" | "custom" : undefined,
-        t.time_slot_end
+        t.time_slot_end,
+        t.time_slot_start
       )
     ).length
     const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0

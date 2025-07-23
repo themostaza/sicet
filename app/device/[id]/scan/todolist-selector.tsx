@@ -40,7 +40,7 @@ const statusLabels = {
 // Helper function to get time slot string for URL
 const getTimeSlotString = (todolist: Todolist): string => {
   if (todolist.time_slot_type === "custom" && todolist.time_slot_start !== null && todolist.time_slot_end !== null) {
-    // For custom time slots, create the custom time slot object and convert to string
+    // Custom time slot - convert to string
     const startTime = minutesToTime(todolist.time_slot_start)
     const endTime = minutesToTime(todolist.time_slot_end)
     const customSlot = {
@@ -51,8 +51,33 @@ const getTimeSlotString = (todolist: Todolist): string => {
       endMinute: endTime.minute
     }
     return customTimeSlotToString(customSlot)
+  } else if (todolist.time_slot_type === "standard" && todolist.time_slot_start !== null && todolist.time_slot_end !== null) {
+    // Standard time slot - reconstruct from stored values
+    const startTime = minutesToTime(todolist.time_slot_start)
+    const endTime = minutesToTime(todolist.time_slot_end)
+    
+    // Map to standard time slot string
+    if (startTime.hour === 6 && endTime.hour === 14) {
+      return "mattina"
+    } else if (startTime.hour === 14 && endTime.hour === 22) {
+      return "pomeriggio"
+    } else if (startTime.hour === 22 && endTime.hour === 6) {
+      return "notte"
+    } else if (startTime.hour === 7 && endTime.hour === 17) {
+      return "giornata"
+    } else {
+      // Fallback to custom string
+      const customSlot = {
+        type: "custom" as const,
+        startHour: startTime.hour,
+        startMinute: startTime.minute,
+        endHour: endTime.hour,
+        endMinute: endTime.minute
+      }
+      return customTimeSlotToString(customSlot)
+    }
   } else {
-    // For standard time slots, use the existing function
+    // Fallback for old data - reconstruct from scheduled_execution
     return getTimeSlotFromDateTime(todolist.scheduled_execution)
   }
 }
@@ -60,21 +85,49 @@ const getTimeSlotString = (todolist: Todolist): string => {
 // Helper function to format time slot for display
 const formatTimeSlotDisplay = (todolist: Todolist): string => {
   if (todolist.time_slot_type === "custom" && todolist.time_slot_start !== null && todolist.time_slot_end !== null) {
+    // Custom time slot
     const startTime = minutesToTime(todolist.time_slot_start)
     const endTime = minutesToTime(todolist.time_slot_end)
     const startStr = `${startTime.hour.toString().padStart(2, '0')}:${startTime.minute.toString().padStart(2, '0')}`
     const endStr = `${endTime.hour.toString().padStart(2, '0')}:${endTime.minute.toString().padStart(2, '0')}`
     return `Personalizzato (${startStr}-${endStr})`
+  } else if (todolist.time_slot_type === "standard" && todolist.time_slot_start !== null && todolist.time_slot_end !== null) {
+    // Standard time slot - reconstruct from stored values
+    const startTime = minutesToTime(todolist.time_slot_start)
+    const endTime = minutesToTime(todolist.time_slot_end)
+    
+    const timeSlotNames: Record<string, string> = {
+      mattina: "Mattina",
+      pomeriggio: "Pomeriggio",
+      notte: "Notte",
+      giornata: "Giornata"
+    }
+    
+    // Map to standard time slot name
+    if (startTime.hour === 6 && endTime.hour === 14) {
+      return timeSlotNames.mattina
+    } else if (startTime.hour === 14 && endTime.hour === 22) {
+      return timeSlotNames.pomeriggio
+    } else if (startTime.hour === 22 && endTime.hour === 6) {
+      return timeSlotNames.notte
+    } else if (startTime.hour === 7 && endTime.hour === 17) {
+      return timeSlotNames.giornata
+    } else {
+      // Fallback to custom display
+      const startStr = `${startTime.hour.toString().padStart(2, '0')}:${startTime.minute.toString().padStart(2, '0')}`
+      const endStr = `${endTime.hour.toString().padStart(2, '0')}:${endTime.minute.toString().padStart(2, '0')}`
+      return `Personalizzato (${startStr}-${endStr})`
+    }
   } else {
+    // Fallback for old data
     const timeSlot = getTimeSlotFromDateTime(todolist.scheduled_execution)
     const timeSlotNames: Record<string, string> = {
       mattina: "Mattina",
       pomeriggio: "Pomeriggio",
-      sera: "Sera",
       notte: "Notte",
       giornata: "Giornata"
     }
-    return timeSlotNames[timeSlot] || timeSlot
+    return timeSlotNames[timeSlot] || "Custom"
   }
 }
 

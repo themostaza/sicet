@@ -141,11 +141,10 @@ export default function TodolistAlertsPage() {
               <div>
                 <h4 className="font-medium mb-2">Fasce orarie standard:</h4>
                 <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                  <li><strong>Mattina:</strong> 06:00-11:00 (scade alle 14:00)</li>
-                  <li><strong>Pomeriggio:</strong> 12:00-17:00 (scade alle 20:00)</li>
-                  <li><strong>Sera:</strong> 18:00-21:00 (scade alle 00:00)</li>
-                  <li><strong>Notte:</strong> 22:00-05:00 (scade alle 08:00)</li>
-                  <li><strong>Giornata:</strong> 06:00-17:00 (scade alle 20:00)</li>
+                  <li><strong>Mattina:</strong> 06:00-14:00 (scade alle 17:00)</li>
+                  <li><strong>Pomeriggio:</strong> 14:00-22:00 (scade alle 01:00)</li>
+                  <li><strong>Notte:</strong> 22:00-06:00 (scade alle 09:00)</li>
+                  <li><strong>Giornata:</strong> 07:00-17:00 (scade alle 20:00)</li>
                 </ul>
               </div>
 

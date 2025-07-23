@@ -62,8 +62,8 @@ function calculateTodolistDeadline(
 ): Date {
   const scheduledDate = new Date(scheduledExecution)
   
-  if (timeSlotType === "custom" && timeSlotStart !== null && timeSlotEnd !== null) {
-    // For custom time slots, convert minutes to hours and minutes
+  if (timeSlotStart !== null && timeSlotEnd !== null) {
+    // Use explicit end time from database
     const endTime = minutesToTime(timeSlotEnd)
     const deadline = new Date(scheduledDate)
     
@@ -79,7 +79,7 @@ function calculateTodolistDeadline(
     
     return deadline
   } else {
-    // For standard time slots, use the predefined intervals
+    // Fallback for old data - reconstruct from scheduled_execution
     const hour = scheduledDate.getHours()
     let endHour = 23 // Default to end of day
     

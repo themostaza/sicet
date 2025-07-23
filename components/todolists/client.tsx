@@ -57,10 +57,9 @@ type Props = {
 const timeSlotOrder: Record<TimeSlot, number> = {
   mattina: 1,
   pomeriggio: 2,
-  sera: 3,
-  notte: 4,
-  giornata: 5,
-  custom: 6
+  notte: 3,
+  giornata: 4,
+  custom: 5
 }
 
 const ITEMS_PER_PAGE = 20
@@ -315,7 +314,8 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
     const isExpired = todolist.status !== "completed" && isTodolistExpired(
       todolist.scheduled_execution, 
       todolist.time_slot_type, 
-      todolist.time_slot_end
+      todolist.time_slot_end,
+      todolist.time_slot_start
     )
     
     if (todolist.status === "completed") {
@@ -359,7 +359,6 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
     const timeSlotNames: Record<TimeSlot, string> = {
       mattina: "Mattina",
       pomeriggio: "Pomeriggio",
-      sera: "Sera",
       notte: "Notte",
       giornata: "Giornata",
       custom: "Personalizzato"
@@ -693,7 +692,8 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                   const isExpired = item.status !== "completed" && isTodolistExpired(
                     item.scheduled_execution, 
                     item.time_slot_type, 
-                    item.time_slot_end
+                    item.time_slot_end,
+                    item.time_slot_start
                   )
                   const canClick = !isOperator || (activeFilter === 'today' || activeFilter === 'completed')
                   return (

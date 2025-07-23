@@ -43,7 +43,6 @@ const getTimeSlotLabel = (timeSlot: TimeSlot) => {
   const timeSlotNames: Record<TimeSlot, string> = {
     mattina: "Mattina",
     pomeriggio: "Pomeriggio",
-    sera: "Sera",
     notte: "Notte",
     giornata: "Giornata",
     custom: "Personalizzato"

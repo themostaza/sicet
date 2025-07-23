@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
       // Prendi tutte le todolist per questi device (includi time_slot_type, time_slot_end, completion_date)
       const { data: todolists, error: todolistError } = await supabase
         .from("todolist")
-        .select("id, device_id, status, scheduled_execution, time_slot_type, time_slot_end, completion_date")
+        .select("id, device_id, status, scheduled_execution, time_slot_type, time_slot_end, time_slot_start, completion_date")
         .in("device_id", deviceIds)
       if (todolistError) throw todolistError
 
@@ -58,7 +58,8 @@ export async function GET(request: NextRequest) {
           !isTodolistExpired(
             t.scheduled_execution,
             (t.time_slot_type === "standard" || t.time_slot_type === "custom") ? t.time_slot_type as "standard" | "custom" : undefined,
-            t.time_slot_end
+            t.time_slot_end,
+            t.time_slot_start
           )
         ).length
         const overdue = todolistsForDevice.filter(t =>
@@ -66,7 +67,8 @@ export async function GET(request: NextRequest) {
           isTodolistExpired(
             t.scheduled_execution,
             (t.time_slot_type === "standard" || t.time_slot_type === "custom") ? t.time_slot_type as "standard" | "custom" : undefined,
-            t.time_slot_end
+            t.time_slot_end,
+            t.time_slot_start
           )
         ).length
         todolistMetricsByDevice[deviceId] = { total, completed, pending, overdue }
