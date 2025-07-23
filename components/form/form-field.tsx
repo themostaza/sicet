@@ -46,14 +46,16 @@ const validateInput = (value: string, dataType?: string, type?: FieldType): stri
 
     // For decimal data type
     if (dataType === "decimal") {
-      // Allow only digits, minus sign, and one decimal point
-      const hasDecimal = value.includes(".")
+      // Allow only digits, minus sign, and one decimal separator (dot or comma)
+      const hasDecimal = value.includes(".") || value.includes(",")
       if (hasDecimal) {
-        const [whole, decimal] = value.split(".")
+        // Convert comma to dot for validation
+        const normalizedValue = value.replace(',', '.')
+        const [whole, decimal] = normalizedValue.split(".")
         // Keep only one decimal point and digits
         return `${whole.replace(/[^\d-]/g, "")}.${decimal.replace(/\D/g, "")}`
       }
-      return value.replace(/[^\d.-]/g, "")
+      return value.replace(/[^\d.,-]/g, "")
     }
 
     // Default number handling
@@ -125,6 +127,25 @@ export function FormField({
         )
 
       case "number":
+        // For decimal data type, use text input to support comma
+        if (dataType === "decimal") {
+          return (
+            <Input
+              {...commonProps}
+              type="text"
+              value={value || ""}
+              onChange={(e) => {
+                const validatedValue = validateInput(e.target.value, dataType, "number")
+                onChange(validatedValue)
+              }}
+              min={min}
+              max={max}
+              placeholder={placeholder || "Inserisci un numero decimale (es. 3,14 o 3.14)"}
+              className={`${hasError ? "border-red-500" : ""} ${className}`}
+            />
+          )
+        }
+        // For integer data type, use number input
         return (
           <Input
             {...commonProps}
@@ -136,7 +157,7 @@ export function FormField({
             }}
             min={min}
             max={max}
-            step={step || (dataType === "integer" ? "1" : "any")}
+            step={step || "1"}
             placeholder={placeholder}
             className={`${hasError ? "border-red-500" : ""} ${className}`}
           />

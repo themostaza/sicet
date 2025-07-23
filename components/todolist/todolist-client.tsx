@@ -557,18 +557,34 @@ export default function TodolistClient({
       case "decimal":
         return (
           <Input
-            type="number"
-            step="0.01"
-            value={currentValue}
+            type="text"
+            value={String(currentValue || '')}
             onChange={(e) => {
               const value = e.target.value
-              // Allow decimals
-              if (value === '' || /^-?\d*\.?\d*$/.test(value)) {
-                setLocalValue(fieldKey, value === '' ? '' : parseFloat(value))
+              // Allow only digits, minus sign, and at most one decimal separator (comma or dot)
+              if (value === '' || /^-?\d*[.,]?\d*$/.test(value)) {
+                // Check that there's only one decimal separator
+                const commaCount = (value.match(/,/g) || []).length
+                const dotCount = (value.match(/\./g) || []).length
+                if (commaCount + dotCount <= 1) {
+                  // Store as string to preserve comma/dot during input
+                  setLocalValue(fieldKey, value)
+                }
+              }
+            }}
+            onBlur={(e) => {
+              // Convert to number only when leaving the field
+              const value = e.target.value
+              if (value && value !== '') {
+                const normalizedValue = value.replace(',', '.')
+                const parsedValue = parseFloat(normalizedValue)
+                if (!isNaN(parsedValue)) {
+                  setLocalValue(fieldKey, parsedValue)
+                }
               }
             }}
             disabled={isPending || isReadOnly}
-            placeholder="Inserisci un numero decimale"
+            placeholder="Inserisci un numero decimale (es. 3,14 o 3.14)"
             min={field.min}
             max={field.max}
           />
