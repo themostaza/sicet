@@ -60,7 +60,7 @@ function formatTriggeredCondition(triggered: TriggeredCondition, kpiValue: any):
   switch (condition.type) {
     case 'text':
       return `<strong>${fieldName} (Testo)</strong>: "${String(fieldValue)}" ⚠️`;
-    case 'numeric':
+    case 'number':
       let range = '';
       if (condition.min !== undefined && condition.max !== undefined) {
         range = `fuori dal range ${condition.min} - ${condition.max}`;

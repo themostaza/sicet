@@ -355,7 +355,7 @@ export function isTodolistExpired(scheduledExecution: string, timeSlotType?: "st
     let deadlineDayOffset = 0
 
     // Se lo slot attraversa la mezzanotte (es. notte: 22-6), la deadline è il giorno dopo
-    if (startTime && (timeSlotEnd <= timeSlotStart)) {
+    if (startTime && timeSlotStart !== null && timeSlotStart !== undefined && (timeSlotEnd <= timeSlotStart)) {
       deadlineDayOffset = 1
     }
     deadline.setDate(deadline.getDate() + deadlineDayOffset)

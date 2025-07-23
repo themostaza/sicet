@@ -124,9 +124,16 @@ function TodolistCreationForm() {
 
     // Poi crea gli alert KPI associati alle nuove todolist
     if (alertConditions.length > 0 && alertEmail) {
+      // Converti le condizioni per assicurarsi che min e max siano numeri
+      const convertedConditions = alertConditions.map(condition => ({
+        ...condition,
+        min: condition.min !== undefined ? Number(condition.min) : undefined,
+        max: condition.max !== undefined ? Number(condition.max) : undefined
+      }))
+      
       for (const result of todolistResults) {
         for (const kpiId of result.kpiIds) {
-          await createAlert(kpiId, result.todolist.id, alertEmail, alertConditions)
+          await createAlert(kpiId, result.todolist.id, alertEmail, convertedConditions)
         }
       }
     }
