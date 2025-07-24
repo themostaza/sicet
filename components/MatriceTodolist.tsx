@@ -83,6 +83,9 @@ export default function MatriceTodolist() {
   // Stato per gestire la visibilità delle todolist
   const [visibleTodolists, setVisibleTodolists] = useState<Set<string>>(new Set())
   
+  // Stato per ricordare se le todolist scadute devono essere nascoste
+  const [hideExpiredTodolists, setHideExpiredTodolists] = useState(false)
+  
   // Stato per gestire la visibilità dei controlli per ogni todolist
   const [controlVisibility, setControlVisibility] = useState<TodolistControlVisibility>({})
   
@@ -110,25 +113,49 @@ export default function MatriceTodolist() {
       setTodolists(data.todolists)
       setAllControls(data.controls)
       
-      // Inizializza tutte le todolist come visibili
-      setVisibleTodolists(new Set(data.todolists.map((t: TodolistData) => t.id)))
+      // Inizializza le todolist visibili, rispettando il filtro delle scadute
+      const allTodolistIds = data.todolists.map((t: TodolistData) => t.id)
+      const visibleIds = hideExpiredTodolists 
+        ? data.todolists.filter((t: TodolistData) => !t.isExpired).map((t: TodolistData) => t.id)
+        : allTodolistIds
+      setVisibleTodolists(new Set(visibleIds))
       
       // Inizializza tutti i controlli come visibili
       const initialVisibility: TodolistControlVisibility = {}
+      
+      // Prima, trova tutti i controlli che sono presenti nelle todolist completate
+      const controlsInCompletedTodolists = new Set<string>()
+      data.todolists.forEach((todolist: TodolistData) => {
+        if (!todolist.isExpired) {
+          todolist.tasks.forEach((task: Task) => {
+            if (task.value && Array.isArray(task.value)) {
+              task.value.forEach(item => {
+                controlsInCompletedTodolists.add(item.id)
+              })
+            }
+          })
+        }
+      })
+      
+      // Poi, inizializza la visibilità
       data.todolists.forEach((todolist: TodolistData) => {
         initialVisibility[todolist.id] = {}
-        // Inizializza tutti i campi JSONB trovati in questa todolist
         data.controls.forEach((control: Control) => {
-          // Verifica se questa todolist ha questo campo JSONB (considerando anche task non completati)
-          const hasField = todolist.tasks.some((task: Task) => {
-            // Se il task è completato, controlla nel valore JSONB
-            if (task.value && Array.isArray(task.value)) {
-              return task.value.some(item => item.id === control.id)
-            }
-            // Se il task non è completato ma la todolist è scaduta, mostra comunque i controlli
-            // (assumiamo che tutti i KPI potrebbero avere tutti i campi)
-            return todolist.isExpired
-          })
+          let hasField = false
+          
+          if (todolist.isExpired) {
+            // Per le todolist scadute, mostra solo i controlli che esistono in almeno una todolist completata
+            hasField = controlsInCompletedTodolists.has(control.id)
+          } else {
+            // Per le todolist non scadute, controlla nei valori JSONB
+            hasField = todolist.tasks.some((task: Task) => {
+              if (task.value && Array.isArray(task.value)) {
+                return task.value.some(item => item.id === control.id)
+              }
+              return false
+            })
+          }
+          
           initialVisibility[todolist.id][control.id] = hasField
         })
       })
@@ -195,13 +222,31 @@ export default function MatriceTodolist() {
     const newControlVisibility = { ...controlVisibility }
     const newValue = !newControlVisibility[todolistId]?.[controlId]
     
-    // Trova tutte le todolist che hanno questo campo JSONB
-    const todolistsWithControl = todolists.filter(todolist => 
-      todolist.tasks.some(task => 
-        task.value && Array.isArray(task.value) && 
-        task.value.some(item => item.id === controlId)
-      )
+    // Prima, trova se questo controllo esiste in almeno una todolist completata
+    const controlExistsInCompleted = todolists.some(todolist => 
+      !todolist.isExpired && todolist.tasks.some(task => {
+        if (task.value && Array.isArray(task.value)) {
+          return task.value.some(item => item.id === controlId)
+        }
+        return false
+      })
     )
+    
+    // Trova tutte le todolist che hanno questo campo JSONB
+    const todolistsWithControl = todolists.filter(todolist => {
+      if (todolist.isExpired) {
+        // Per le todolist scadute, hanno il controllo solo se esiste in almeno una completata
+        return controlExistsInCompleted
+      } else {
+        // Per le todolist non scadute, controlla nei valori JSONB
+        return todolist.tasks.some(task => {
+          if (task.value && Array.isArray(task.value)) {
+            return task.value.some(item => item.id === controlId)
+          }
+          return false
+        })
+      }
+    })
     
     // Applica la modifica a tutte le todolist che hanno questo controllo
     todolistsWithControl.forEach(todolist => {
@@ -236,9 +281,11 @@ export default function MatriceTodolist() {
     if (allExpiredVisible) {
       // Nascondi tutte le todolist scadute
       expiredIds.forEach(id => newVisibleTodolists.delete(id))
+      setHideExpiredTodolists(true)
     } else {
       // Mostra tutte le todolist scadute
       expiredIds.forEach(id => newVisibleTodolists.add(id))
+      setHideExpiredTodolists(false)
     }
     
     setVisibleTodolists(newVisibleTodolists)
@@ -252,29 +299,56 @@ export default function MatriceTodolist() {
     const newControlVisibility = { ...controlVisibility }
     
     // Ottieni tutti i campi JSONB che questa todolist ha
-    const todolistFields = allControls.filter(control => 
-      todolist.tasks.some(task => {
-        // Se il task è completato, controlla nel valore JSONB
-        if (task.value && Array.isArray(task.value)) {
-          return task.value.some(item => item.id === control.id)
-        }
-        // Se il task non è completato ma la todolist è scaduta, mostra comunque i controlli
-        return todolist.isExpired
-      })
-    )
+    const todolistFields = allControls.filter(control => {
+      if (todolist.isExpired) {
+        // Per le todolist scadute, hanno il controllo solo se esiste in almeno una completata
+        return todolists.some(t => 
+          !t.isExpired && t.tasks.some(task => {
+            if (task.value && Array.isArray(task.value)) {
+              return task.value.some(item => item.id === control.id)
+            }
+            return false
+          })
+        )
+      } else {
+        // Per le todolist non scadute, controlla nei valori JSONB
+        return todolist.tasks.some(task => {
+          if (task.value && Array.isArray(task.value)) {
+            return task.value.some(item => item.id === control.id)
+          }
+          return false
+        })
+      }
+    })
     
     const allSelected = todolistFields.every(field => 
       newControlVisibility[todolistId]?.[field.id]
     )
     
-    todolistFields.forEach(field => {
-      // Trova tutte le todolist che hanno questo campo JSONB
-      const todolistsWithField = todolists.filter(t => 
-        t.tasks.some(task => 
-          task.value && Array.isArray(task.value) && 
-          task.value.some(item => item.id === field.id)
+          todolistFields.forEach(field => {
+        // Prima trova se questo controllo esiste in almeno una todolist completata
+        const fieldExistsInCompleted = todolists.some(t => 
+          !t.isExpired && t.tasks.some(task => {
+            if (task.value && Array.isArray(task.value)) {
+              return task.value.some(item => item.id === field.id)
+            }
+            return false
+          })
         )
-      )
+        
+        // Trova tutte le todolist che hanno questo campo JSONB
+        const todolistsWithField = todolists.filter(t => {
+          if (t.isExpired) {
+            return fieldExistsInCompleted
+          } else {
+            return t.tasks.some(task => {
+              if (task.value && Array.isArray(task.value)) {
+                return task.value.some(item => item.id === field.id)
+              }
+              return false
+            })
+          }
+        })
       
       // Applica la modifica a tutte le todolist che hanno questo campo
       todolistsWithField.forEach(t => {
@@ -306,15 +380,28 @@ export default function MatriceTodolist() {
     
     // Verifica se ha almeno un campo JSONB visibile
     return allControls.some(control => {
-      // Controlla se questa todolist ha questo campo JSONB
-      const hasField = todolist.tasks.some(task => {
-        // Se il task è completato, controlla nel valore JSONB
-        if (task.value && Array.isArray(task.value)) {
-          return task.value.some(item => item.id === control.id)
-        }
-        // Se il task non è completato ma la todolist è scaduta, mostra comunque i controlli
-        return todolist.isExpired
-      })
+      let hasField = false
+      
+      if (todolist.isExpired) {
+        // Per le todolist scadute, hanno il controllo solo se esiste in almeno una completata
+        hasField = todolists.some(t => 
+          !t.isExpired && t.tasks.some(task => {
+            if (task.value && Array.isArray(task.value)) {
+              return task.value.some(item => item.id === control.id)
+            }
+            return false
+          })
+        )
+      } else {
+        // Per le todolist non scadute, controlla nei valori JSONB
+        hasField = todolist.tasks.some(task => {
+          if (task.value && Array.isArray(task.value)) {
+            return task.value.some(item => item.id === control.id)
+          }
+          return false
+        })
+      }
+      
       return hasField && controlVisibility[todolistId]?.[control.id]
     })
   }
@@ -573,13 +660,29 @@ export default function MatriceTodolist() {
                        {hoveredColHeader === control.id && (
                          <button
                            onClick={() => {
-                             // Nascondi questo campo JSONB per tutte le todolist che lo hanno
-                             const todolistsWithField = todolists.filter(t => 
-                               t.tasks.some(task => 
-                                 task.value && Array.isArray(task.value) && 
-                                 task.value.some(item => item.id === control.id)
-                               )
+                             // Prima, trova se questo controllo esiste in almeno una todolist completata
+                             const controlExistsInCompleted = todolists.some(t => 
+                               !t.isExpired && t.tasks.some(task => {
+                                 if (task.value && Array.isArray(task.value)) {
+                                   return task.value.some(item => item.id === control.id)
+                                 }
+                                 return false
+                               })
                              )
+                             
+                             // Nascondi questo campo JSONB per tutte le todolist che lo hanno
+                             const todolistsWithField = todolists.filter(t => {
+                               if (t.isExpired) {
+                                 return controlExistsInCompleted
+                               } else {
+                                 return t.tasks.some(task => {
+                                   if (task.value && Array.isArray(task.value)) {
+                                     return task.value.some(item => item.id === control.id)
+                                   }
+                                   return false
+                                 })
+                               }
+                             })
                              const newControlVisibility = { ...controlVisibility }
                              todolistsWithField.forEach(todolist => {
                                if (!newControlVisibility[todolist.id]) {
@@ -748,16 +851,27 @@ export default function MatriceTodolist() {
                            onClick={() => toggleAllControlsForTodolist(todolist.id)}
                            disabled={!visibleTodolists.has(todolist.id)}
                          >
-                           {allControls.filter(control => 
-                             todolist.tasks.some(task => {
-                               // Se il task è completato, controlla nel valore JSONB
-                               if (task.value && Array.isArray(task.value)) {
-                                 return task.value.some(item => item.id === control.id)
-                               }
-                               // Se il task non è completato ma la todolist è scaduta, mostra comunque i controlli
-                               return todolist.isExpired
-                             })
-                           ).every(control => controlVisibility[todolist.id]?.[control.id]) 
+                           {allControls.filter(control => {
+                             if (todolist.isExpired) {
+                               // Per le todolist scadute, mostra solo i controlli che esistono in almeno una completata
+                               return todolists.some(t => 
+                                 !t.isExpired && t.tasks.some(task => {
+                                   if (task.value && Array.isArray(task.value)) {
+                                     return task.value.some(item => item.id === control.id)
+                                   }
+                                   return false
+                                 })
+                               )
+                             } else {
+                               // Per le todolist non scadute, controlla nei valori JSONB
+                               return todolist.tasks.some(task => {
+                                 if (task.value && Array.isArray(task.value)) {
+                                   return task.value.some(item => item.id === control.id)
+                                 }
+                                 return false
+                               })
+                             }
+                           }).every(control => controlVisibility[todolist.id]?.[control.id]) 
                              ? 'Deseleziona controlli' 
                              : 'Seleziona controlli'}
                          </Button>
@@ -767,24 +881,51 @@ export default function MatriceTodolist() {
                     {visibleTodolists.has(todolist.id) && (
                                              <div className="ml-6 space-y-2">
                          <div className="grid grid-cols-2 gap-2">
-                           {allControls.filter(control => 
+                           {allControls.filter(control => {
                              // Mostra solo i campi JSONB che questa todolist ha
-                             todolist.tasks.some(task => {
-                               // Se il task è completato, controlla nel valore JSONB
-                               if (task.value && Array.isArray(task.value)) {
-                                 return task.value.some(item => item.id === control.id)
-                               }
-                               // Se il task non è completato ma la todolist è scaduta, mostra comunque i controlli
-                               return todolist.isExpired
-                             })
-                           ).map((control) => {
-                             // Verifica se il controllo è condiviso
-                             const isShared = todolists.filter(t => 
-                               t.tasks.some(task => 
-                                 task.value && Array.isArray(task.value) && 
-                                 task.value.some(item => item.id === control.id)
+                             if (todolist.isExpired) {
+                               // Per le todolist scadute, mostra solo i controlli che esistono in almeno una completata
+                               return todolists.some(t => 
+                                 !t.isExpired && t.tasks.some(task => {
+                                   if (task.value && Array.isArray(task.value)) {
+                                     return task.value.some(item => item.id === control.id)
+                                   }
+                                   return false
+                                 })
                                )
-                             ).length > 1
+                             } else {
+                               // Per le todolist non scadute, controlla nei valori JSONB
+                               return todolist.tasks.some(task => {
+                                 if (task.value && Array.isArray(task.value)) {
+                                   return task.value.some(item => item.id === control.id)
+                                 }
+                                 return false
+                               })
+                             }
+                           }).map((control) => {
+                             // Prima trova se questo controllo esiste in almeno una todolist completata
+                             const controlExistsInCompleted = todolists.some(t => 
+                               !t.isExpired && t.tasks.some(task => {
+                                 if (task.value && Array.isArray(task.value)) {
+                                   return task.value.some(item => item.id === control.id)
+                                 }
+                                 return false
+                               })
+                             )
+                             
+                             // Verifica se il controllo è condiviso
+                             const isShared = todolists.filter(t => {
+                               if (t.isExpired) {
+                                 return controlExistsInCompleted
+                               } else {
+                                 return t.tasks.some(task => {
+                                   if (task.value && Array.isArray(task.value)) {
+                                     return task.value.some(item => item.id === control.id)
+                                   }
+                                   return false
+                                 })
+                               }
+                             }).length > 1
                              
                              return (
                                <div key={control.id} className="flex items-center space-x-2">
