@@ -61,6 +61,13 @@ export function DateSelection() {
                   <TableRow key={index}>
                     <TableCell className="font-medium">
                       {format(entry.date, "EEEE dd/MM/yyyy", { locale: it })}
+                      {entry.category && (
+                        <div>
+                          <Badge variant="outline" className="text-xs mt-1">
+                            {entry.category}
+                          </Badge>
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell>
                       <span className="flex items-center">

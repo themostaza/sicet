@@ -111,7 +111,8 @@ function TodolistCreationForm() {
           isCustomTimeSlot(entry.timeSlot) ? customTimeSlotToString(entry.timeSlot) : entry.timeSlot,
           kpiIds,
           alertEnabled,
-          email
+          email,
+          entry.category
         )
         todolistResults.push({ todolist, deviceId, kpiIds })
         

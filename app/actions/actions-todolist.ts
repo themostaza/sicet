@@ -75,6 +75,42 @@ type TodolistWithTasks = TodolistRow & {
 }
 
 /** -------------------------------------------------------------------------
+ * CATEGORIES
+ * ------------------------------------------------------------------------*/
+
+// Get all existing todolist categories from database
+export async function getTodolistCategories(): Promise<string[]> {
+  try {
+    const supabase = await createServerSupabaseClient()
+    
+    const { data, error } = await supabase
+      .from("todolist")
+      .select("todolist_category")
+      .not("todolist_category", "is", null)
+      .not("todolist_category", "eq", "")
+    
+    if (error) {
+      console.error("Error fetching todolist categories:", error)
+      return []
+    }
+    
+    // Extract unique categories and filter out nulls/empty strings
+    const categories = [...new Set(
+      data
+        .map(item => item.todolist_category)
+        .filter((category): category is string => 
+          category !== null && category !== undefined && category.trim() !== ""
+        )
+    )].sort()
+    
+    return categories
+  } catch (error) {
+    console.error("Error in getTodolistCategories:", error)
+    return []
+  }
+}
+
+/** -------------------------------------------------------------------------
  * 2 · HELPERS
  * ------------------------------------------------------------------------*/
 
@@ -524,7 +560,8 @@ export async function createTodolist(
   timeSlot: string, 
   kpiId: string,
   alertEnabled?: boolean,
-  email?: string
+  email?: string,
+  category?: string
 ): Promise<Task> {
   // Get time slot database values
   const dbValues = getTimeSlotDatabaseValues(timeSlot)
@@ -617,7 +654,8 @@ export async function createMultipleTasks(
   timeSlot: string, 
   kpiIds: string[],
   alertEnabled?: boolean,
-  email?: string
+  email?: string,
+  category?: string
 ): Promise<{ id: string }> {
   // Get time slot database values
   const dbValues = getTimeSlotDatabaseValues(timeSlot)
@@ -633,7 +671,8 @@ export async function createMultipleTasks(
     status: "pending",
     time_slot_type: dbValues.type,
     time_slot_start: dbValues.start,
-    time_slot_end: dbValues.end
+    time_slot_end: dbValues.end,
+    todolist_category: category || null
   }
   
   const { data: todolist, error: todolistError } = await (await getSupabaseClient())

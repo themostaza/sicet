@@ -5,10 +5,11 @@ import { useToast } from "@/components/ui/use-toast"
 import { getDevices } from "@/app/actions/actions-device"
 import { getKpis } from "@/app/actions/actions-kpi"
 import { 
-  Device, KPI, DateTimeEntry, ValidationErrors, TimeSlot, TimeSlotValue, CustomTimeSlot, isCustomTimeSlot
+  Device, KPI, DateTimeEntry, ValidationErrors, TimeSlot, TimeSlotValue, CustomTimeSlot, isCustomTimeSlot, TodolistCategory
 } from "./types"
 import { toggle, areEqual } from "./helpers"
 import { format } from "date-fns"
+import { getTodolistCategories } from "@/app/actions/actions-todolist"
 
 // Define types for alert conditions
 interface AlertCondition {
@@ -34,6 +35,11 @@ interface TodolistContextType {
   setEmail: (email: string) => void
   alertEnabled: boolean
   setAlertEnabled: (enabled: boolean) => void
+
+  // Categoria
+  availableCategories: TodolistCategory[]
+  selectedCategory: TodolistCategory
+  setSelectedCategory: (category: TodolistCategory) => void
 
   // Selezioni utente
   selectedTags: Set<string>
@@ -96,7 +102,7 @@ interface TodolistContextType {
   clearAllTags: () => void
   handleToggleAllDevices: () => void
   handleToggleAllKpis: () => void
-  updateDateEntry: (date: Date, timeSlot: TimeSlotValue) => void
+  updateDateEntry: (date: Date, timeSlot: TimeSlotValue, category?: string) => void
   removeDateEntry: (index: number) => void
   applyIntervalSelection: (timeSlot?: TimeSlotValue) => void
   updateExistingDateEntry: (index: number, newDate: Date, newTimeSlot: TimeSlotValue) => void
@@ -147,6 +153,10 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
   const [email, setEmail] = useState("")
   const [alertEnabled, setAlertEnabled] = useState(false)
 
+  // Categoria
+  const [availableCategories, setAvailableCategories] = useState<TodolistCategory[]>([])
+  const [selectedCategory, setSelectedCategory] = useState<TodolistCategory>("")
+
   // New fields
   const [alertConditions, setAlertConditions] = useState<AlertCondition[]>([])
   const [alertEmail, setAlertEmail] = useState("")
@@ -155,9 +165,10 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [devicesResponse, kpisResponse] = await Promise.all([
+        const [devicesResponse, kpisResponse, categoriesResponse] = await Promise.all([
           getDevices({ limit: 100 }),
-          getKpis({ limit: 100 })
+          getKpis({ limit: 100 }),
+          getTodolistCategories()
         ])
         
         // Map devices to expected format
@@ -186,6 +197,7 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
 
         setDevices(mappedDevices)
         setKpis(mappedKpis)
+        setAvailableCategories(categoriesResponse)
         setIsLoading(false)
       } catch (error) {
         console.error("Error loading data:", error)
@@ -406,7 +418,7 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
   }, [allKpiSelected, filteredKpis])
   
   // Aggiorna o aggiungi una data entry
-  const updateDateEntry = useCallback((date: Date, timeSlot: TimeSlotValue) => {
+  const updateDateEntry = useCallback((date: Date, timeSlot: TimeSlotValue, category?: string) => {
     if (!date) return;
     
     // Normalize date to avoid timezone issues
@@ -434,7 +446,8 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
         return [...prev, { 
           date: normalizedDate, 
           timeSlot, 
-          time: format(normalizedDate, "HH:mm") 
+          time: format(normalizedDate, "HH:mm"),
+          category: category || selectedCategory || undefined
         }]
       }
     })
@@ -500,7 +513,7 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
     
     // Add each date with the specified time slot
     for (const newDate of newDates) {
-      updateDateEntry(newDate, slotToUse)
+      updateDateEntry(newDate, slotToUse, selectedCategory)
     }
     
     // Show feedback message
@@ -531,7 +544,8 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
       newEntries[index] = {
         date: normalizedDate,
         timeSlot: newTimeSlot,
-        time: format(normalizedDate, "HH:mm")
+        time: format(normalizedDate, "HH:mm"),
+        category: selectedCategory || undefined
       }
       
       // If the date has changed, update selectedDates as well
@@ -603,7 +617,12 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
     email,
     setEmail,
     alertEnabled,
-    setAlertEnabled
+    setAlertEnabled,
+
+    // Categoria
+    availableCategories,
+    selectedCategory,
+    setSelectedCategory
   }
 
   return <TodolistContext.Provider value={contextValue}>{children}</TodolistContext.Provider>

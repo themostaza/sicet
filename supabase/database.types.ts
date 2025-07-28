@@ -325,6 +325,7 @@ export type Database = {
           time_slot_end: number | null
           time_slot_start: number | null
           time_slot_type: string
+          todolist_category: string | null
           updated_at: string | null
         }
         Insert: {
@@ -339,6 +340,7 @@ export type Database = {
           time_slot_end?: number | null
           time_slot_start?: number | null
           time_slot_type?: string
+          todolist_category?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -353,6 +355,7 @@ export type Database = {
           time_slot_end?: number | null
           time_slot_start?: number | null
           time_slot_type?: string
+          todolist_category?: string | null
           updated_at?: string | null
         }
         Relationships: [

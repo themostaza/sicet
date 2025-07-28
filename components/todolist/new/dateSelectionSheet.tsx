@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Label } from "@/components/ui/label"
@@ -13,7 +13,9 @@ import { CalendarIcon, Clock, Plus, RotateCcw, X } from "lucide-react"
 import { useTodolist } from "./context"
 import { formatTimeSlot } from "./helpers"
 import { TimeSlot, TimeSlotValue, CustomTimeSlot, isCustomTimeSlot, formatTimeSlotValue, TIME_SLOT_TOLERANCE, TIME_SLOT_INTERVALS } from "@/lib/validation/todolist-schemas"
+import { CATEGORY_TIME_SLOT_RULES, isCategoryTimeSlotRecommended } from "./types"
 import { CustomTimeSlotPicker } from "./custom-time-slot"
+import { Badge } from "@/components/ui/badge"
 import {
   Select,
   SelectContent,
@@ -78,6 +80,9 @@ export function DateSelectionSheet() {
     setAlertEnabled,
     setDateEntries,
     setSelectedDates,
+    availableCategories,
+    selectedCategory,
+    setSelectedCategory,
   } = useTodolist()
 
   /**
@@ -90,6 +95,15 @@ export function DateSelectionSheet() {
   const [tempSelectedDate, setTempSelectedDate] = useState<Date | undefined>(new Date())
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
   const [repeatEnabled, setRepeatEnabled] = useState(false)
+  const [tempSelectedCategory, setTempSelectedCategory] = useState<string>(selectedCategory)
+
+  // Sincronizza tempSelectedCategory quando selectedCategory cambia
+  useEffect(() => {
+    setTempSelectedCategory(selectedCategory)
+  }, [selectedCategory])
+
+  // Validation states
+  const [categoryWarning, setCategoryWarning] = useState<string>("")
 
   /**
    * HANDLERS
@@ -105,29 +119,68 @@ export function DateSelectionSheet() {
         }
         setCustomTimeSlot(defaultCustomSlot)
         setSelectedTimeSlot(defaultCustomSlot)
+        checkCategoryWarning(tempSelectedCategory, defaultCustomSlot)
       }
       return
     }
-    setSelectedTimeSlot(value as TimeSlot)
+    const newTimeSlot = value as TimeSlot
+    setSelectedTimeSlot(newTimeSlot)
     setCustomTimeSlot(undefined)
+    checkCategoryWarning(tempSelectedCategory, newTimeSlot)
   }
 
   const handleCustomTimeSlotChange = (value: CustomTimeSlot) => {
     setCustomTimeSlot(value)
     setSelectedTimeSlot(value)
+    checkCategoryWarning(tempSelectedCategory, value)
+  }
+
+  const checkCategoryWarning = (category: string, timeSlot: TimeSlotValue) => {
+    if (!category || !timeSlot) {
+      setCategoryWarning("")
+      return
+    }
+
+    const timeSlotType = isCustomTimeSlot(timeSlot) ? "custom" : timeSlot as TimeSlot
+    
+    if (timeSlotType === "custom") {
+      setCategoryWarning("")
+      return
+    }
+
+    if (!isCategoryTimeSlotRecommended(category, timeSlotType)) {
+      const recommendedSlots = CATEGORY_TIME_SLOT_RULES[category.toLowerCase()]
+      const slotsText = recommendedSlots ? recommendedSlots.join(", ") : "nessuna"
+      setCategoryWarning(`⚠️ Combinazione non standard: '${category}' di solito opera in: ${slotsText}`)
+    } else {
+      setCategoryWarning("")
+    }
+  }
+
+  const handleCategoryChange = (value: string) => {
+    // Validate category format: only lowercase letters, no spaces, no numbers
+    const sanitizedValue = value.toLowerCase().replace(/[^a-z]/g, '')
+    setTempSelectedCategory(sanitizedValue)
+    setSelectedCategory(sanitizedValue)
+    checkCategoryWarning(sanitizedValue, selectedTimeSlot)
   }
 
   const handleAddDate = () => {
     if (!tempSelectedDate) return
     const validDate = new Date(tempSelectedDate)
     validDate.setHours(0, 0, 0, 0)
-    updateDateEntry(validDate, selectedTimeSlot)
+    // Passa la categoria direttamente alla funzione updateDateEntry
+    updateDateEntry(validDate, selectedTimeSlot, tempSelectedCategory)
     setDefaultTimeSlot(selectedTimeSlot)
+    // Aggiorna anche il context per mantenere la sincronizzazione
+    setSelectedCategory(tempSelectedCategory)
   }
 
   const handleApplyInterval = () => {
     if (!tempSelectedDate) return
     setStartDate(tempSelectedDate)
+    // Aggiorna la categoria nel context prima di applicare l'intervallo
+    setSelectedCategory(tempSelectedCategory)
     // Pass the current selectedTimeSlot directly to applyIntervalSelection
     applyIntervalSelection(selectedTimeSlot)
   }
@@ -156,7 +209,7 @@ export function DateSelectionSheet() {
 
   return (
     <Sheet open={isDateSheetOpen} onOpenChange={setIsDateSheetOpen}>
-      <SheetContent className="w-full sm:max-w-3xl overflow-y-auto">
+      <SheetContent className="w-full sm:max-w-5xl overflow-y-auto">
         <SheetHeader className="mb-6">
           <SheetTitle>Seleziona date e orari</SheetTitle>
           <SheetDescription>
@@ -190,6 +243,47 @@ export function DateSelectionSheet() {
                 />
               </div>
             )}
+          </div>
+
+          {/* -------- Categoria Todolist -------- */}
+          <div>
+            <Label htmlFor="category" className="mb-2 block">
+              Categoria Todolist
+            </Label>
+            <div className="space-y-2">
+              <Select 
+                value={tempSelectedCategory} 
+                onValueChange={handleCategoryChange}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Seleziona o digita una categoria" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableCategories.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              <div className="text-xs text-muted-foreground">
+                oppure inserisci una nuova categoria:
+              </div>
+              
+              <Input
+                placeholder="es: caldaista, manutentore, operatore..."
+                value={tempSelectedCategory}
+                onChange={(e) => handleCategoryChange(e.target.value)}
+                className="text-sm"
+              />
+              
+              {categoryWarning && (
+                <div className="p-2 bg-amber-50 border border-amber-200 rounded-md">
+                  <p className="text-sm text-amber-800">{categoryWarning}</p>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* -------- Reset Button -------- */}
@@ -356,6 +450,7 @@ export function DateSelectionSheet() {
                 <tr className="border-b">
                   <th className="text-left pb-2">Data</th>
                   <th className="text-left pb-2">Fascia oraria</th>
+                  <th className="text-left pb-2">Categoria</th>
                   <th className="text-left pb-2">Notifiche</th>
                   <th className="text-right pb-2">Azioni</th>
                 </tr>
@@ -395,6 +490,15 @@ export function DateSelectionSheet() {
                           </span>
                         </td>
                         <td className="py-2">
+                          {entry.category ? (
+                            <Badge variant="outline" className="text-xs">
+                              {entry.category}
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Nessuna</span>
+                          )}
+                        </td>
+                        <td className="py-2">
                           {alertEnabled ? (
                             <div className="flex items-center text-sm">
                               <Switch
@@ -423,7 +527,7 @@ export function DateSelectionSheet() {
                     ))
                 ) : (
                   <tr>
-                    <td colSpan={4} className="py-4 text-center text-muted-foreground">
+                    <td colSpan={5} className="py-4 text-center text-muted-foreground">
                       Nessuna data selezionata
                     </td>
                   </tr>
