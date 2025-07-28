@@ -896,11 +896,12 @@ export async function getTodolistsWithPagination(params: {
   selectedDate?: string
   selectedDevice?: string
   selectedTags?: string[]
+  selectedCategory?: string
   sortColumn?: string
   sortDirection?: string
 }) {
   try {
-    const { filter, offset, limit, selectedDate, selectedDevice, selectedTags, sortColumn, sortDirection } = params
+    const { filter, offset, limit, selectedDate, selectedDevice, selectedTags, selectedCategory, sortColumn, sortDirection } = params
     const supabase = await createServerSupabaseClient()
     
     let query = supabase
@@ -914,6 +915,7 @@ export async function getTodolistsWithPagination(params: {
         time_slot_type,
         time_slot_start,
         time_slot_end,
+        todolist_category,
         devices (
           name,
           tags
@@ -955,6 +957,11 @@ export async function getTodolistsWithPagination(params: {
     // Apply device filter if specified
     if (selectedDevice && selectedDevice !== "all") {
       query = query.eq("device_id", selectedDevice)
+    }
+
+    // Apply category filter if specified
+    if (selectedCategory && selectedCategory !== "all") {
+      query = query.eq("todolist_category", selectedCategory)
     }
 
     // Apply pagination and ordering
@@ -1064,6 +1071,7 @@ export async function getTodolistsWithPagination(params: {
             time_slot_type: item.time_slot_type,
             time_slot_start: item.time_slot_start,
             time_slot_end: item.time_slot_end,
+            todolist_category: item.todolist_category,
             created_at: item.created_at ?? "N/A",
             tasks: item.tasks || []
           }
@@ -1085,6 +1093,7 @@ export async function getTodolistsWithPagination(params: {
         time_slot_type: "standard" | "custom"
         time_slot_start: number | null
         time_slot_end: number | null
+        todolist_category: string | null
         created_at: string | "N/A"
         tasks: Array<{ id: string; kpi_id: string; status: string }>
       }>

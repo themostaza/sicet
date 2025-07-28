@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Calendar, AlertTriangle, ArrowRight, CheckCircle2, Plus, Clock, Trash2, Filter, ArrowUp, ArrowDown, Loader2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -35,6 +35,7 @@ type TodolistItem = {
   time_slot_type: "standard" | "custom"
   time_slot_start: number | null
   time_slot_end: number | null
+  todolist_category: string | null
   created_at: string | "N/A"
   tasks: Array<{
     id: string
@@ -52,6 +53,7 @@ type Props = {
   userRole: string | null
   devices: Array<{ id: string; name: string; tags?: string[] | null }>
   allTags: string[]
+  allCategories: string[]
 }
 
 const timeSlotOrder: Record<TimeSlot, number> = {
@@ -72,12 +74,24 @@ const timeSlotToUrlString = (timeSlot: TimeSlotValue): string => {
   return timeSlot as string
 }
 
-export default function TodolistListClient({ todolistsByFilter, counts, initialFilter, userRole, devices, allTags }: Props) {
+export default function TodolistListClient({ todolistsByFilter, counts, initialFilter, userRole, devices, allTags, allCategories }: Props) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  
+  // Initialize states from URL params or defaults
   const [activeFilter, setActiveFilter] = useState<FilterType>(userRole === 'operator' ? 'today' : initialFilter)
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined)
-  const [selectedDevice, setSelectedDevice] = useState<string>("all")
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(
+    searchParams.get('date') ? new Date(searchParams.get('date')!) : undefined
+  )
+  const [selectedDevice, setSelectedDevice] = useState<string>(
+    searchParams.get('device') || "all"
+  )
+  const [selectedTags, setSelectedTags] = useState<string[]>(
+    searchParams.get('tags')?.split(',').filter(Boolean) || []
+  )
+  const [selectedCategory, setSelectedCategory] = useState<string>(
+    searchParams.get('category') || "all"
+  )
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
   const [isBulkDeleting, setIsBulkDeleting] = useState(false)
@@ -134,6 +148,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
         ...(selectedDate && { selectedDate: format(selectedDate, 'yyyy-MM-dd') }),
         ...(selectedDevice !== "all" && { selectedDevice }),
         ...(selectedTags.length > 0 && { selectedTags: selectedTags.join(',') }),
+        ...(selectedCategory !== "all" && { selectedCategory }),
         sortColumn: sortColumn === "date" ? "scheduled_execution" : sortColumn,
         sortDirection
       })
@@ -170,7 +185,28 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
     } finally {
       setIsLoading(false)
     }
-  }, [activeFilter, selectedDate, selectedDevice, currentOffset, isLoading, selectedTags, sortColumn, sortDirection])
+  }, [activeFilter, selectedDate, selectedDevice, selectedCategory, currentOffset, isLoading, selectedTags, sortColumn, sortDirection])
+
+  // Update URL params when filters change
+  useEffect(() => {
+    const params = new URLSearchParams()
+    
+    if (selectedDate) {
+      params.set('date', format(selectedDate, 'yyyy-MM-dd'))
+    }
+    if (selectedDevice !== "all") {
+      params.set('device', selectedDevice)
+    }
+    if (selectedTags.length > 0) {
+      params.set('tags', selectedTags.join(','))
+    }
+    if (selectedCategory !== "all") {
+      params.set('category', selectedCategory)
+    }
+    
+    const newUrl = params.toString() ? `?${params.toString()}` : ''
+    router.replace(newUrl, { scroll: false })
+  }, [selectedDate, selectedDevice, selectedTags, selectedCategory, router])
 
   // Reset and fetch when filters change
   useEffect(() => {
@@ -179,7 +215,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
     setHasMore(true)
     setSelectedItems(new Set()) // Clear selected items when filters change
     fetchTodolists(true)
-  }, [activeFilter, selectedDate, selectedDevice, selectedTags, sortColumn, sortDirection])
+  }, [activeFilter, selectedDate, selectedDevice, selectedTags, selectedCategory, sortColumn, sortDirection])
 
   // Intersection observer for infinite scroll
   useEffect(() => {
@@ -371,6 +407,24 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="flex items-center gap-4">
           <CardTitle>Todolist</CardTitle>
+          
+          {/* Category Filter - Prominent position */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground">Categoria:</span>
+            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Tutte le categorie" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tutte le categorie</SelectItem>
+                {allCategories.map(category => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           {isAdmin && selectedItems.size > 0 && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
@@ -479,7 +533,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                   Filtri
                   {(selectedDate || selectedDevice !== "all" || selectedTags.length > 0) && (
                     <Badge variant="secondary" className="ml-1">
-                      {(selectedDate ? 1 : 0) + (selectedDevice !== "all" ? 1 : 0) + selectedTags.length}
+                                              {(selectedDate ? 1 : 0) + (selectedDevice !== "all" ? 1 : 0) + selectedTags.length}
                     </Badge>
                   )}
                 </Button>
@@ -615,12 +669,13 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
         )}
 
         {/* Filter Summary */}
-        {(selectedDate || selectedDevice !== "all" || selectedTags.length > 0) && (
+        {(selectedDate || selectedDevice !== "all" || selectedCategory !== "all" || selectedTags.length > 0) && (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-sm text-gray-600 bg-gray-50 px-4 py-2 rounded-lg mb-4 gap-2">
             <div className="flex flex-wrap gap-2">
               Filtri applicati:
               {selectedDate && <span className="inline-block bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs">Data: {format(selectedDate, "dd/MM/yyyy", { locale: it })}</span>}
               {selectedDevice !== "all" && <span className="inline-block bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs">Dispositivo: {devices.find(d => d.id === selectedDevice)?.name}</span>}
+
               {selectedTags.length > 0 && (
                 <span className="inline-block bg-purple-100 text-purple-800 px-2 py-0.5 rounded text-xs">
                   Tag: {selectedTags.join(", ")}
@@ -665,6 +720,9 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                   className="cursor-pointer select-none min-w-[80px]">
                   Fascia
                 </TableHead>
+                <TableHead className="min-w-[100px]">
+                  Categoria
+                </TableHead>
                 <TableHead onClick={() => handleSort("status")}
                   className="cursor-pointer select-none min-w-[100px]">
                   Stato
@@ -683,7 +741,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
             <TableBody>
               {todolists.length === 0 && !isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={isAdmin ? 8 : 7} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={isAdmin ? 9 : 8} className="text-center text-muted-foreground py-8">
                     Nessuna todolist trovata.
                   </TableCell>
                 </TableRow>
@@ -729,6 +787,15 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                       </TableCell>
                       <TableCell onClick={() => canClick && handleRowClick(item)}>{formatDateEuropean(item.date)}</TableCell>
                       <TableCell onClick={() => canClick && handleRowClick(item)}>{formatTimeSlot(item.time_slot)}</TableCell>
+                      <TableCell onClick={() => canClick && handleRowClick(item)}>
+                        {item.todolist_category ? (
+                          <Badge variant="outline" className="text-xs">
+                            {item.todolist_category}
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
                       <TableCell onClick={() => canClick && handleRowClick(item)}>{getStatusDisplay(item)}</TableCell>
                       <TableCell onClick={() => canClick && handleRowClick(item)}>{item.count}</TableCell>
                       <TableCell onClick={() => canClick && handleRowClick(item)}>

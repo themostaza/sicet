@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from "@/lib/supabase-server"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { AlertCircle } from "lucide-react"
 import TodolistListClient from "@/components/todolists/client"
+import { getTodolistCategories } from "@/app/actions/actions-todolist"
 
 export const dynamic = 'force-dynamic'
 
@@ -37,6 +38,9 @@ export default async function TodolistPage() {
       }
       return tags
     }, []) || []
+
+    // Get all existing todolist categories
+    const allCategories = await getTodolistCategories()
 
     // Get initial counts for the filter badges
     const { count: allCount } = await supabase
@@ -90,6 +94,7 @@ export default async function TodolistPage() {
         userRole={userRole}
         devices={devices || []}
         allTags={allTags}
+        allCategories={allCategories}
       />
     )
   } catch (error) {
