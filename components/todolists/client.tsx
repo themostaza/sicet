@@ -254,13 +254,10 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
 
   const handleRowClick = (todolist: TodolistItem) => {
     const timeSlotString = timeSlotToUrlString(todolist.time_slot)
-    if (isOperator) {
-      if (activeFilter === 'today' || activeFilter === 'completed') {
-        router.push(`/todolist/view/${todolist.id}/${todolist.device_id}/${todolist.date}/${timeSlotString}`)
-      }
-    } else {
+    if (!isOperator) {
       router.push(`/todolist/view/${todolist.id}/${todolist.device_id}/${todolist.date}/${timeSlotString}`)
     }
+    // Gli operatori non possono mai cliccare sulle righe
   }
 
   const handleCreateTodolist = () => {
@@ -404,74 +401,78 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div className="flex items-center gap-4">
-          <CardTitle>Todolist</CardTitle>
-          
-          {/* Category Filter - Prominent position */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-muted-foreground">Categoria:</span>
-            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Tutte le categorie" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tutte le categorie</SelectItem>
-                {allCategories.map(category => (
-                  <SelectItem key={category} value={category}>
-                    {category}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      <CardHeader className="space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex flex-col md:flex-row md:items-center gap-4">
+            <CardTitle>Todolist</CardTitle>
+            
+            {/* Category Filter - Responsive position */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground"></span>
+              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Tutte" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tutte</SelectItem>
+                  {allCategories.map(category => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          {isAdmin && selectedItems.size > 0 && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  disabled={isBulkDeleting}
-                >
-                  {isBulkDeleting ? (
-                    <>
-                      <Clock className="mr-2 h-4 w-4 animate-spin" />
-                      Eliminazione...
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Elimina selezionate ({selectedItems.size})
-                    </>
-                  )}
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Sei sicuro?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Questa azione non può essere annullata. Le {selectedItems.size} todolist selezionate e tutte le loro attività verranno eliminate permanentemente.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Annulla</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleBulkDelete}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          <div className="flex items-center gap-2">
+            {userRole !== 'operator' && (
+              <Button onClick={handleCreateTodolist}>
+                <Plus className="mr-2 h-4 w-4" />
+                Nuova Todolist
+              </Button>
+            )}
+            {isAdmin && selectedItems.size > 0 && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    disabled={isBulkDeleting}
                   >
-                    Elimina
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
+                    {isBulkDeleting ? (
+                      <>
+                        <Clock className="mr-2 h-4 w-4 animate-spin" />
+                        Eliminazione...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Elimina selezionate ({selectedItems.size})
+                      </>
+                    )}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Sei sicuro?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Questa azione non può essere annullata. Le {selectedItems.size} todolist selezionate e tutte le loro attività verranno eliminate permanentemente.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Annulla</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleBulkDelete}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Elimina
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+                </AlertDialog>
+            )}
+          </div>
         </div>
-        {userRole !== 'operator' && (
-          <Button onClick={handleCreateTodolist}>
-            <Plus className="mr-2 h-4 w-4" />
-            Nuova Todolist
-          </Button>
-        )}
       </CardHeader>
       <CardContent>
         <div className="flex flex-wrap gap-2 mb-4 items-center">
@@ -696,7 +697,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
 
         <div className="rounded-md border overflow-x-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className={cn(isOperator && "hidden md:table-header-group")}>
               <TableRow>
                 {isAdmin && (
                   <TableHead className="w-[50px]">
@@ -712,27 +713,45 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                   Dispositivo
                 </TableHead>
                 <TableHead onClick={() => handleSort("date")}
-                  className="cursor-pointer select-none min-w-[100px]">
+                  className={cn(
+                    "cursor-pointer select-none min-w-[100px]",
+                    isOperator && "hidden md:table-cell"
+                  )}>
                   Data
                   {sortColumn === "date" || sortColumn === "scheduled_execution" ? (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />) : null}
                 </TableHead>
                 <TableHead onClick={() => handleSort("time_slot")}
-                  className="cursor-pointer select-none min-w-[80px]">
+                  className={cn(
+                    "cursor-pointer select-none min-w-[80px]",
+                    isOperator && "hidden md:table-cell"
+                  )}>
                   Fascia
                 </TableHead>
-                <TableHead className="min-w-[100px]">
+                <TableHead className={cn(
+                  "min-w-[100px]",
+                  isOperator && "hidden md:table-cell"
+                )}>
                   Categoria
                 </TableHead>
                 <TableHead onClick={() => handleSort("status")}
-                  className="cursor-pointer select-none min-w-[100px]">
+                  className={cn(
+                    "cursor-pointer select-none min-w-[100px]",
+                    isOperator && "hidden md:table-cell"
+                  )}>
                   Stato
                 </TableHead>
                 <TableHead onClick={() => handleSort("count")}
-                  className="cursor-pointer select-none min-w-[60px]">
+                  className={cn(
+                    "cursor-pointer select-none min-w-[60px]",
+                    isOperator && "hidden md:table-cell"
+                  )}>
                   Task
                 </TableHead>
                 <TableHead onClick={() => handleSort("created_at")}
-                  className="cursor-pointer select-none min-w-[100px]">
+                  className={cn(
+                    "cursor-pointer select-none min-w-[100px]",
+                    isOperator && "hidden md:table-cell"
+                  )}>
                   Creato
                 </TableHead>
                 <TableHead className="w-[100px] min-w-[100px]"></TableHead>
@@ -753,7 +772,8 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                     item.time_slot_end,
                     item.time_slot_start
                   )
-                  const canClick = !isOperator || (activeFilter === 'today' || activeFilter === 'completed')
+                  const canClick = !isOperator
+                  
                   return (
                     <TableRow
                       key={`${item.id}-${item.device_id}-${item.date}-${item.time_slot}`}
@@ -771,23 +791,60 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                           />
                         </TableCell>
                       )}
-                      <TableCell onClick={() => canClick && handleRowClick(item)}>
+                      <TableCell {...(canClick && { onClick: () => handleRowClick(item) })}>
                         <div>
-                          <div className="font-medium">{item.device_name}</div>
-                          {item.device_tags && item.device_tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {item.device_tags.map((tag: string) => (
-                                <span key={tag} className="inline-block bg-gray-100 rounded-full px-2 py-0.5 text-xs text-gray-800">
-                                  {tag}
-                                </span>
-                              ))}
+                          {isOperator && (
+                            // Su mobile per operatori: stato sopra al nome
+                            <div className="mb-1 md:hidden">
+                              {getStatusDisplay(item)}
                             </div>
+                          )}
+                          <div className="font-medium">{item.device_name}</div>
+                          {isOperator ? (
+                            // Per operatori: mostra categoria e fascia oraria sotto al nome
+                            <div className="mt-1 space-y-1">
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <span>{formatTimeSlot(item.time_slot)}</span>
+                                {item.todolist_category && (
+                                  <>
+                                    <span>•</span>
+                                    <Badge variant="outline" className="text-xs py-0 px-1 h-4">
+                                      {item.todolist_category}
+                                    </Badge>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            // Per admin/referrer: mostra i tag come prima
+                            item.device_tags && item.device_tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {item.device_tags.map((tag: string) => (
+                                  <span key={tag} className="inline-block bg-gray-100 rounded-full px-2 py-0.5 text-xs text-gray-800">
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            )
                           )}
                         </div>
                       </TableCell>
-                      <TableCell onClick={() => canClick && handleRowClick(item)}>{formatDateEuropean(item.date)}</TableCell>
-                      <TableCell onClick={() => canClick && handleRowClick(item)}>{formatTimeSlot(item.time_slot)}</TableCell>
-                      <TableCell onClick={() => canClick && handleRowClick(item)}>
+                      <TableCell 
+                        {...(canClick && { onClick: () => handleRowClick(item) })}
+                        className={cn(isOperator && "hidden md:table-cell")}
+                      >
+                        {formatDateEuropean(item.date)}
+                      </TableCell>
+                      <TableCell 
+                        {...(canClick && { onClick: () => handleRowClick(item) })}
+                        className={cn(isOperator && "hidden md:table-cell")}
+                      >
+                        {formatTimeSlot(item.time_slot)}
+                      </TableCell>
+                      <TableCell 
+                        {...(canClick && { onClick: () => handleRowClick(item) })}
+                        className={cn(isOperator && "hidden md:table-cell")}
+                      >
                         {item.todolist_category ? (
                           <Badge variant="outline" className="text-xs">
                             {item.todolist_category}
@@ -796,9 +853,22 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                           <span className="text-xs text-muted-foreground">-</span>
                         )}
                       </TableCell>
-                      <TableCell onClick={() => canClick && handleRowClick(item)}>{getStatusDisplay(item)}</TableCell>
-                      <TableCell onClick={() => canClick && handleRowClick(item)}>{item.count}</TableCell>
-                      <TableCell onClick={() => canClick && handleRowClick(item)}>
+                      <TableCell 
+                        {...(canClick && { onClick: () => handleRowClick(item) })}
+                        className={cn(isOperator && "hidden md:table-cell")}
+                      >
+                        {getStatusDisplay(item)}
+                      </TableCell>
+                      <TableCell 
+                        {...(canClick && { onClick: () => handleRowClick(item) })}
+                        className={cn(isOperator && "hidden md:table-cell")}
+                      >
+                        {item.count}
+                      </TableCell>
+                      <TableCell 
+                        {...(canClick && { onClick: () => handleRowClick(item) })}
+                        className={cn(isOperator && "hidden md:table-cell")}
+                      >
                         {item.created_at === "N/A" ? "N/A" : formatDateForDisplay(item.created_at)}
                       </TableCell>
                       <TableCell>

@@ -102,10 +102,14 @@ export async function middleware(req: NextRequest) {
         .single()
 
       // If user is authenticated and trying to access login/register, redirect based on role
-      const redirectUrl = new URL(
-        profile?.role === 'referrer' ? '/devices' : '/devices',
-        req.url
-      )
+      let defaultPath = '/devices'
+      if (profile?.role === 'operator') {
+        defaultPath = '/todolist'
+      } else if (profile?.role === 'referrer') {
+        defaultPath = '/devices'
+      }
+      
+      const redirectUrl = new URL(defaultPath, req.url)
       return NextResponse.redirect(redirectUrl)
     }
     
@@ -141,11 +145,15 @@ export async function middleware(req: NextRequest) {
 
   // If role is not found or user doesn't have access to the path
   if (!role || !hasAccess(role, path, referer ?? undefined)) {
-    // Redirect based on role
-    const redirectUrl = new URL(
-      role === 'referrer' ? '/devices' : '/devices',
-      req.url
-    )
+    // Redirect based on role to their appropriate default page
+    let defaultPath = '/devices'
+    if (role === 'operator') {
+      defaultPath = '/todolist'
+    } else if (role === 'referrer') {
+      defaultPath = '/devices'
+    }
+    
+    const redirectUrl = new URL(defaultPath, req.url)
     return NextResponse.redirect(redirectUrl)
   }
 
