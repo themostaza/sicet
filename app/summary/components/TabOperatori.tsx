@@ -438,7 +438,14 @@ export default function TabOperatori({ dateRange, setDateRange, selectedRole, se
                         }}
                       >
                         <div className="flex flex-col">
-                          <span className="font-medium">{tl.entity_id}</span>
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{tl.entity_id}</span>
+                            {tl.metadata?.todolist_category && (
+                              <Badge variant="outline" className="text-xs ml-2">
+                                {tl.metadata.todolist_category}
+                              </Badge>
+                            )}
+                          </div>
                           <span className="text-xs text-muted-foreground mt-1">{format(new Date(tl.created_at), 'd MMM yyyy, HH:mm', { locale: it })}</span>
                         </div>
                       </button>

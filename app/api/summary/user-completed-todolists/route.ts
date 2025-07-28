@@ -32,6 +32,7 @@ export async function GET(req: Request) {
         device_id,
         completion_date,
         scheduled_execution,
+        todolist_category,
         devices!inner(name, id)
       `)
       .eq('completed_by', profile.auth_id)
@@ -63,7 +64,8 @@ export async function GET(req: Request) {
       metadata: {
         device_id: item.device_id,
         scheduled_execution: item.scheduled_execution,
-        device_name: item.devices?.name
+        device_name: item.devices?.name,
+        todolist_category: item.todolist_category
       }
     }));
 
