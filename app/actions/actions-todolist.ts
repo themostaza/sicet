@@ -938,11 +938,14 @@ export async function getTodolistsWithPagination(params: {
     if (filter === "today") {
       if (userRole === "operator") {
         // Per gli operator, usa un range più ampio per catturare gli slot overnight
-        const startOfToday = new Date(today)
-        startOfToday.setHours(0, 0, 0, 0)
-        const endOfTomorrow = new Date(today)
-        endOfTomorrow.setDate(endOfTomorrow.getDate() + 1)
-        endOfTomorrow.setHours(23, 59, 59, 999)
+        // Usa orario italiano invece che orario server
+        const nowItaly = new Date().toLocaleString("sv-SE", {timeZone: "Europe/Rome"})
+        const todayItaly = nowItaly.split(" ")[0]
+        
+        const startOfToday = new Date(`${todayItaly}T00:00:00.000Z`)
+        const endOfTomorrow = new Date(`${todayItaly}T00:00:00.000Z`)
+        endOfTomorrow.setUTCDate(endOfTomorrow.getUTCDate() + 1)
+        endOfTomorrow.setUTCHours(23, 59, 59, 999)
         
         query = query
           .gte("scheduled_execution", startOfToday.toISOString())
