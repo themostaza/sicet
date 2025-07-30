@@ -939,18 +939,32 @@ export async function getTodolistsWithPagination(params: {
       if (userRole === "operator") {
         // Per gli operator, usa un range più ampio per catturare gli slot overnight
         // Usa orario italiano invece che orario server
+        console.log("=== DEBUG OPERATOR FILTER ===")
+        
         const nowItaly = new Date().toLocaleString("sv-SE", {timeZone: "Europe/Rome"})
         const todayItaly = nowItaly.split(" ")[0]
+        console.log("nowItaly:", nowItaly)
+        console.log("todayItaly:", todayItaly)
         
         // Crea le date in CET/CEST, poi converti in UTC per il confronto
         const startOfTodayItaly = new Date(`${todayItaly}T00:00:00`)
         const endOfTomorrowItaly = new Date(`${todayItaly}T23:59:59.999`)
         endOfTomorrowItaly.setDate(endOfTomorrowItaly.getDate() + 1)
         
+        console.log("startOfTodayItaly (locale):", startOfTodayItaly.toISOString())
+        console.log("endOfTomorrowItaly (locale):", endOfTomorrowItaly.toISOString())
+        
         // Aggiusta per il fuso orario italiano (CET = UTC+1, CEST = UTC+2)
         const offsetMinutes = startOfTodayItaly.getTimezoneOffset()
+        console.log("offsetMinutes:", offsetMinutes)
+        
         const startOfToday = new Date(startOfTodayItaly.getTime() - (offsetMinutes * 60000))
         const endOfTomorrow = new Date(endOfTomorrowItaly.getTime() - (offsetMinutes * 60000))
+        
+        console.log("Range finale:")
+        console.log("startOfToday:", startOfToday.toISOString())
+        console.log("endOfTomorrow:", endOfTomorrow.toISOString())
+        console.log("=== END DEBUG ===");
         
         query = query
           .gte("scheduled_execution", startOfToday.toISOString())
