@@ -1148,14 +1148,29 @@ export async function getTodolistsWithPagination(params: {
     
     // Apply operator-specific filtering for "today" filter
     if (userRole === "operator" && filter === "today") {
-      filteredTodolists = filteredTodolists.filter(todolist => 
-        isTodolistCurrentlyValid(
+      console.log("=== DEBUG FILTRO OPERATOR ===")
+      console.log("Todolist prima del filtro isTodolistCurrentlyValid:", filteredTodolists.length)
+      
+      filteredTodolists = filteredTodolists.filter((todolist, index) => {
+        const isValid = isTodolistCurrentlyValid(
           todolist.scheduled_execution,
           todolist.time_slot_start,
           todolist.time_slot_end,
           todolist.status
         )
-      )
+        console.log(`Todolist ${index}:`, {
+          id: todolist.id,
+          scheduled_execution: todolist.scheduled_execution,
+          time_slot_start: todolist.time_slot_start,
+          time_slot_end: todolist.time_slot_end,
+          status: todolist.status,
+          isValid
+        })
+        return isValid
+      })
+      
+      console.log("Todolist dopo il filtro:", filteredTodolists.length)
+      console.log("=== END DEBUG FILTRO ===")
     }
     // Applico ordinamento lato server per device_name e count (non supportato da supabase)
     let finalTodolists = filteredTodolists
