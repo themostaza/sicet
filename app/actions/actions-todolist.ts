@@ -25,6 +25,9 @@ import {
   getTimeRangeFromSlot,
   getTimeSlotFromDateTime,
   isTodolistExpired,
+  isTodolistCurrentlyValid,
+  getTodolistDeadlineDisplay,
+  isTodolistInGracePeriod,
   toTask,
   toTodolist,
   isCustomTimeSlot,
@@ -820,11 +823,12 @@ export async function getTodolistByDeviceAndTimeSlot(deviceId: string, startTime
 export async function getTodolistsForDeviceToday(deviceId: string, today: string) {
   const supabase = await createServerSupabaseClient()
   
-  // Get the start and end of today
+  // Get a wider date range to catch overnight slots
   const startOfDay = new Date(today)
   startOfDay.setHours(0, 0, 0, 0)
-  const endOfDay = new Date(today)
-  endOfDay.setHours(23, 59, 59, 999)
+  const endOfNextDay = new Date(today)
+  endOfNextDay.setDate(endOfNextDay.getDate() + 1)
+  endOfNextDay.setHours(23, 59, 59, 999)
 
   const { data, error } = await supabase
     .from("todolist")
@@ -838,9 +842,8 @@ export async function getTodolistsForDeviceToday(deviceId: string, today: string
       created_at
     `)
     .eq("device_id", deviceId)
-    .neq("status", "completed")
     .gte("scheduled_execution", startOfDay.toISOString())
-    .lte("scheduled_execution", endOfDay.toISOString())
+    .lte("scheduled_execution", endOfNextDay.toISOString())
     .order("scheduled_execution", { ascending: true })
 
   if (error) {
@@ -848,13 +851,13 @@ export async function getTodolistsForDeviceToday(deviceId: string, today: string
     return null
   }
 
-  // Filtra le todolist scadute
+  // Filtra usando la nuova logica: solo todolist attualmente valide (già iniziate e non scadute)
   const filteredData = data?.filter(todolist => 
-    !isTodolistExpired(
+    isTodolistCurrentlyValid(
       todolist.scheduled_execution,
-      todolist.time_slot_type as "standard" | "custom",
+      todolist.time_slot_start,
       todolist.time_slot_end,
-      todolist.time_slot_start
+      todolist.status
     )
   ) || []
 
@@ -899,9 +902,10 @@ export async function getTodolistsWithPagination(params: {
   selectedCategory?: string
   sortColumn?: string
   sortDirection?: string
+  userRole?: string
 }) {
   try {
-    const { filter, offset, limit, selectedDate, selectedDevice, selectedTags, selectedCategory, sortColumn, sortDirection } = params
+    const { filter, offset, limit, selectedDate, selectedDevice, selectedTags, selectedCategory, sortColumn, sortDirection, userRole } = params
     const supabase = await createServerSupabaseClient()
     
     let query = supabase
@@ -932,9 +936,23 @@ export async function getTodolistsWithPagination(params: {
     const today = now.toISOString().split("T")[0]
 
     if (filter === "today") {
-      query = query
-        .gte("scheduled_execution", `${today}T00:00:00`)
-        .lt("scheduled_execution", `${today}T23:59:59`)
+      if (userRole === "operator") {
+        // Per gli operator, usa un range più ampio per catturare gli slot overnight
+        const startOfToday = new Date(today)
+        startOfToday.setHours(0, 0, 0, 0)
+        const endOfTomorrow = new Date(today)
+        endOfTomorrow.setDate(endOfTomorrow.getDate() + 1)
+        endOfTomorrow.setHours(23, 59, 59, 999)
+        
+        query = query
+          .gte("scheduled_execution", startOfToday.toISOString())
+          .lte("scheduled_execution", endOfTomorrow.toISOString())
+      } else {
+        // Logica standard per admin/referrer
+        query = query
+          .gte("scheduled_execution", `${today}T00:00:00`)
+          .lt("scheduled_execution", `${today}T23:59:59`)
+      }
     } else if (filter === "overdue") {
       query = query
         .neq("status", "completed")
@@ -1103,6 +1121,18 @@ export async function getTodolistsWithPagination(params: {
     if (selectedTags && selectedTags.length > 0) {
       filteredTodolists = processedTodolists.filter(todolist => 
         selectedTags.some(selectedTag => todolist.device_tags.includes(selectedTag))
+      )
+    }
+    
+    // Apply operator-specific filtering for "today" filter
+    if (userRole === "operator" && filter === "today") {
+      filteredTodolists = filteredTodolists.filter(todolist => 
+        isTodolistCurrentlyValid(
+          todolist.scheduled_execution,
+          todolist.time_slot_start,
+          todolist.time_slot_end,
+          todolist.status
+        )
       )
     }
     // Applico ordinamento lato server per device_name e count (non supportato da supabase)

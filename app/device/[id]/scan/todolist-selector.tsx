@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { format } from "date-fns"
 import { it } from "date-fns/locale"
 import { useRouter } from "next/navigation"
-import { getTimeSlotFromDateTime, customTimeSlotToString, minutesToTime } from "@/lib/validation/todolist-schemas"
+import { getTimeSlotFromDateTime, customTimeSlotToString, minutesToTime, getTodolistDeadlineDisplay, isTodolistInGracePeriod } from "@/lib/validation/todolist-schemas"
 import { Badge } from "@/components/ui/badge"
 
 type Todolist = {
@@ -152,16 +152,27 @@ export function TodolistSelector({ todolists, deviceId, today }: TodolistSelecto
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Seleziona una todolist di oggi</CardTitle>
+        <CardTitle>Seleziona una todolist attiva</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Mostra solo todolist non completate e non scadute
+          Mostra solo todolist già iniziate e non ancora scadute
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
         {sortedTodolists.map((todolist) => {
           const timeSlotString = getTimeSlotString(todolist)
           const timeSlotDisplay = formatTimeSlotDisplay(todolist)
-          const formattedTime = format(new Date(todolist.scheduled_execution), "HH:mm", { locale: it })
+          
+          // Calcola l'orario di deadline reale (senza tolleranza)
+          const deadline = getTodolistDeadlineDisplay(todolist.scheduled_execution, todolist.time_slot_end)
+          const deadlineTime = deadline ? format(deadline, "HH:mm", { locale: it }) : null
+          
+          // Verifica se è in periodo di grazia
+          const isInGracePeriod = isTodolistInGracePeriod(
+            todolist.scheduled_execution,
+            todolist.time_slot_start,
+            todolist.time_slot_end,
+            todolist.status
+          )
           
           return (
             <Button
@@ -172,11 +183,22 @@ export function TodolistSelector({ todolists, deviceId, today }: TodolistSelecto
             >
               <div className="flex items-center gap-2">
                 <span className="capitalize">{timeSlotDisplay}</span>
-                <span className="text-muted-foreground">({formattedTime})</span>
+                {deadlineTime && (
+                  <span className="text-muted-foreground">
+                    (scade alle {deadlineTime})
+                  </span>
+                )}
               </div>
-              <Badge className={statusColors[todolist.status]}>
-                {statusLabels[todolist.status]}
-              </Badge>
+              <div className="flex items-center gap-2">
+                {isInGracePeriod && (
+                  <Badge variant="destructive" className="text-xs">
+                    In scadenza
+                  </Badge>
+                )}
+                <Badge className={statusColors[todolist.status]}>
+                  {statusLabels[todolist.status]}
+                </Badge>
+              </div>
             </Button>
           )
         })}

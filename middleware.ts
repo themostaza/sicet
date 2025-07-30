@@ -10,7 +10,7 @@ const rolePermissions = {
   operator: [
     // '/devices', 
     // '/device/*', 
-    // '/device/*/scan',  // Allow access to scan route
+    '/device/*/scan',  // Allow access to scan route
     '/todolist',  // Allow access to todolist list page
     '/todolist/view/*/*/*/*'  // Allow access to todolist view with todolist ID
   ],
@@ -27,10 +27,17 @@ const rolePermissions = {
 // Helper function to check if a path matches a pattern
 function pathMatches(pattern: string, path: string): boolean {
   if (pattern === '*') return true
-  if (pattern.endsWith('*')) {
-    const base = pattern.slice(0, -1)
-    return path.startsWith(base)
+  
+  // If pattern contains wildcards, convert to regex
+  if (pattern.includes('*')) {
+    // Escape special regex characters except *
+    const escapedPattern = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+    // Replace * with regex pattern for matching any characters except /
+    const regexPattern = '^' + escapedPattern.replace(/\*/g, '[^/]*') + '$'
+    const regex = new RegExp(regexPattern)
+    return regex.test(path)
   }
+  
   return pattern === path
 }
 

@@ -375,6 +375,97 @@ export function isTodolistExpired(scheduledExecution: string, timeSlotType?: "st
   }
 }
 
+// NEW FUNCTIONS - Nuove funzioni per la gestione delle todolist valide (senza modificare le esistenti)
+
+// Utility per verificare se una todolist è attualmente valida (non scaduta, già iniziata)
+// Usa orari CET e considera time_slot_start/end senza tolleranza per l'utente
+export function isTodolistCurrentlyValid(
+  scheduledExecution: string, 
+  timeSlotStart: number | null, 
+  timeSlotEnd: number | null,
+  status?: string
+): boolean {
+  if (status === "completed") return false;
+  
+  const now = new Date(); // Momento attuale
+  const scheduledDate = new Date(scheduledExecution);
+  
+  // Usa solo la parte data di scheduledExecution (ignora l'orario)
+  const baseDate = new Date(scheduledDate.getFullYear(), scheduledDate.getMonth(), scheduledDate.getDate());
+  
+  if (timeSlotStart !== null && timeSlotEnd !== null) {
+    // Calcola orario di inizio: data + time_slot_start minuti
+    const startTime = new Date(baseDate);
+    startTime.setMinutes(startTime.getMinutes() + timeSlotStart);
+    
+    // Calcola orario di fine: data + time_slot_end minuti (SENZA tolleranza per l'utente)
+    // Ma con tolleranza per il sistema (per non nascondere durante periodo di grazia)
+    const endTime = new Date(baseDate);
+    const endMinutes = timeSlotEnd + (TIME_SLOT_TOLERANCE * 60); // + 3 ore di tolleranza
+    endTime.setMinutes(endTime.getMinutes() + endMinutes);
+    
+    // Gestisci overnight slots (quando end < start, es. notte 22-06)
+    if (timeSlotEnd <= timeSlotStart) {
+      endTime.setDate(endTime.getDate() + 1);
+    }
+    
+    // La todolist è valida se: già iniziata E non scaduta (con tolleranza sistema)
+    return now >= startTime && now <= endTime;
+  }
+  
+  return false;
+}
+
+// Utility per calcolare l'orario di deadline da mostrare all'utente (SENZA tolleranza)
+export function getTodolistDeadlineDisplay(scheduledExecution: string, timeSlotEnd: number | null): Date | null {
+  if (timeSlotEnd === null) return null;
+  
+  const scheduledDate = new Date(scheduledExecution);
+  // Usa solo la parte data di scheduledExecution (ignora l'orario)
+  const baseDate = new Date(scheduledDate.getFullYear(), scheduledDate.getMonth(), scheduledDate.getDate());
+  
+  const deadline = new Date(baseDate);
+  deadline.setMinutes(deadline.getMinutes() + timeSlotEnd);
+  
+  return deadline;
+}
+
+// Utility per verificare se una todolist è in periodo di grazia (badge "In scadenza")
+export function isTodolistInGracePeriod(
+  scheduledExecution: string, 
+  timeSlotStart: number | null,
+  timeSlotEnd: number | null,
+  status?: string
+): boolean {
+  if (status === "completed") return false;
+  
+  const now = new Date();
+  const scheduledDate = new Date(scheduledExecution);
+  const baseDate = new Date(scheduledDate.getFullYear(), scheduledDate.getMonth(), scheduledDate.getDate());
+  
+  if (timeSlotStart !== null && timeSlotEnd !== null) {
+    // Orario di fine reale (senza tolleranza)
+    const realEndTime = new Date(baseDate);
+    realEndTime.setMinutes(realEndTime.getMinutes() + timeSlotEnd);
+    
+    // Orario di fine con tolleranza (sistema)
+    const endTimeWithTolerance = new Date(baseDate);
+    const endMinutes = timeSlotEnd + (TIME_SLOT_TOLERANCE * 60); // + 3 ore
+    endTimeWithTolerance.setMinutes(endTimeWithTolerance.getMinutes() + endMinutes);
+    
+    // Gestisci overnight slots
+    if (timeSlotEnd <= timeSlotStart) {
+      realEndTime.setDate(realEndTime.getDate() + 1);
+      endTimeWithTolerance.setDate(endTimeWithTolerance.getDate() + 1);
+    }
+    
+    // In periodo di grazia se: scaduto l'orario reale MA ancora nel periodo di tolleranza
+    return now > realEndTime && now <= endTimeWithTolerance;
+  }
+  
+  return false;
+}
+
 // Helper functions for converting database rows to types
 export const toTask = (row: {
   id: string

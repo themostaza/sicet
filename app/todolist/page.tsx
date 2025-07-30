@@ -48,12 +48,46 @@ export default async function TodolistPage() {
       .select("*", { count: "exact", head: true })
 
     const today = new Date().toISOString().split("T")[0]
-    const { count: todayCount } = await supabase
-      .from("todolist")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "pending")
-      .gte("scheduled_execution", `${today}T00:00:00`)
-      .lt("scheduled_execution", `${today}T23:59:59`)
+    
+    let todayCount = 0
+    if (userRole === 'operator') {
+      // Per gli operator, calcola count usando la logica di validità corrente
+      const startOfToday = new Date(today)
+      startOfToday.setHours(0, 0, 0, 0)
+      const endOfTomorrow = new Date(today)
+      endOfTomorrow.setDate(endOfTomorrow.getDate() + 1)
+      endOfTomorrow.setHours(23, 59, 59, 999)
+      
+      const { data: operatorTodolists } = await supabase
+        .from("todolist")
+        .select("scheduled_execution, status, time_slot_start, time_slot_end")
+        .gte("scheduled_execution", startOfToday.toISOString())
+        .lte("scheduled_execution", endOfTomorrow.toISOString())
+      
+      if (operatorTodolists) {
+        // Importa le funzioni necessarie per il filtro
+        const { isTodolistCurrentlyValid } = await import("@/lib/validation/todolist-schemas")
+        
+        todayCount = operatorTodolists.filter(item => 
+          isTodolistCurrentlyValid(
+            item.scheduled_execution,
+            item.time_slot_start,
+            item.time_slot_end,
+            item.status
+          )
+        ).length
+      }
+    } else {
+      // Logica standard per admin/referrer
+      const { count } = await supabase
+        .from("todolist")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending")
+        .gte("scheduled_execution", `${today}T00:00:00`)
+        .lt("scheduled_execution", `${today}T23:59:59`)
+      
+      todayCount = count || 0
+    }
 
     const { count: todayTotal } = await supabase
       .from("todolist")
@@ -80,7 +114,7 @@ export default async function TodolistPage() {
 
     const counts = {
       all: allCount || 0,
-      today: todayCount || 0,
+      today: todayCount,
       todayTotal: todayTotal || 0,
       overdue: overdueCount || 0,
       future: futureCount || 0,

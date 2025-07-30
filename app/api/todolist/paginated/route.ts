@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
     const selectedCategory = searchParams.get("selectedCategory") || undefined
     const sortColumn = searchParams.get("sortColumn") || undefined
     const sortDirection = searchParams.get("sortDirection") || undefined
+    const userRole = searchParams.get("userRole") || undefined
 
     if (!filter) {
       return NextResponse.json(
@@ -31,7 +32,8 @@ export async function GET(request: NextRequest) {
       selectedTags,
       selectedCategory,
       sortColumn,
-      sortDirection
+      sortDirection,
+      userRole
     })
 
     return NextResponse.json(result)

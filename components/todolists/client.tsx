@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
-import { TimeSlot, TimeSlotValue, CustomTimeSlot, isCustomTimeSlot, isTodolistExpired, customTimeSlotToString } from "@/lib/validation/todolist-schemas"
+import { TimeSlot, TimeSlotValue, CustomTimeSlot, isCustomTimeSlot, isTodolistExpired, customTimeSlotToString, isTodolistCurrentlyValid, getTodolistDeadlineDisplay, isTodolistInGracePeriod } from "@/lib/validation/todolist-schemas"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -150,7 +150,8 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
         ...(selectedTags.length > 0 && { selectedTags: selectedTags.join(',') }),
         ...(selectedCategory !== "all" && { selectedCategory }),
         sortColumn: sortColumn === "date" ? "scheduled_execution" : sortColumn,
-        sortDirection
+        sortDirection,
+        ...(userRole && { userRole })
       })
 
       const response = await fetch(`/api/todolist/paginated?${params}`)
@@ -185,7 +186,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
     } finally {
       setIsLoading(false)
     }
-  }, [activeFilter, selectedDate, selectedDevice, selectedCategory, currentOffset, isLoading, selectedTags, sortColumn, sortDirection])
+  }, [activeFilter, selectedDate, selectedDevice, selectedCategory, currentOffset, isLoading, selectedTags, sortColumn, sortDirection, userRole])
 
   // Update URL params when filters change
   useEffect(() => {
@@ -371,6 +372,33 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
       return (
         <span className="inline-flex items-center gap-1 text-yellow-600">
           <AlertTriangle size={16} /> In corso
+        </span>
+      )
+    }
+    
+    // Per gli operator, aggiungi orario di deadline alla stringa "Da fare"
+    if (isOperator && todolist.time_slot_end !== null) {
+      const deadline = getTodolistDeadlineDisplay(todolist.scheduled_execution, todolist.time_slot_end)
+      const deadlineTime = deadline ? format(deadline, "HH:mm", { locale: it }) : null
+      const isInGracePeriod = isTodolistInGracePeriod(
+        todolist.scheduled_execution,
+        todolist.time_slot_start,
+        todolist.time_slot_end,
+        todolist.status
+      )
+      
+      return (
+        <span className={cn(
+          "inline-flex items-center gap-1",
+          isInGracePeriod ? "text-red-600" : "text-muted-foreground"
+        )}>
+          <Calendar size={16} /> 
+          {deadlineTime ? `Da fare entro le ${deadlineTime}` : "Da fare"}
+          {isInGracePeriod && (
+            <Badge variant="destructive" className="text-xs ml-1">
+              In scadenza
+            </Badge>
+          )}
         </span>
       )
     }
