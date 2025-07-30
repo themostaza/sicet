@@ -946,9 +946,9 @@ export async function getTodolistsWithPagination(params: {
         console.log("nowItaly:", nowItaly)
         console.log("todayItaly:", todayItaly)
         
-        // Crea le date in CET/CEST, poi converti in UTC per il confronto
-        const startOfTodayItaly = new Date(`${todayItaly}T00:00:00`)
-        const endOfTomorrowItaly = new Date(`${todayItaly}T23:59:59.999`)
+        // Crea le date esplicitamente in fuso orario italiano
+        const startOfTodayItaly = new Date(`${todayItaly}T00:00:00+02:00`) // CEST (estate)
+        const endOfTomorrowItaly = new Date(`${todayItaly}T23:59:59+02:00`)
         endOfTomorrowItaly.setDate(endOfTomorrowItaly.getDate() + 1)
         
         console.log("startOfTodayItaly (locale):", startOfTodayItaly.toISOString())
