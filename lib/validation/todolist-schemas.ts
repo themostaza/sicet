@@ -341,7 +341,7 @@ export function getTimeSlotFromDateTime(dateTimeStr: string): TimeSlot {
 
 // Utility per verificare se una todolist è scaduta
 export function isTodolistExpired(scheduledExecution: string, timeSlotType?: "standard" | "custom", timeSlotEnd?: number | null, timeSlotStart?: number | null): boolean {
-  const now = new Date()
+  const now = new Date(new Date().toLocaleString("en-US", {timeZone: "Europe/Rome"}))
   const scheduledDate = new Date(scheduledExecution)
   
   if (timeSlotEnd !== null && timeSlotEnd !== undefined) {
@@ -387,7 +387,8 @@ export function isTodolistCurrentlyValid(
 ): boolean {
   if (status === "completed") return false;
   
-  const now = new Date(); // Momento attuale
+  // Usa orario italiano invece dell'orario server
+  const now = new Date(new Date().toLocaleString("en-US", {timeZone: "Europe/Rome"}));
   const scheduledDate = new Date(scheduledExecution);
   
   // Usa solo la parte data di scheduledExecution (ignora l'orario)
@@ -439,7 +440,7 @@ export function isTodolistInGracePeriod(
 ): boolean {
   if (status === "completed") return false;
   
-  const now = new Date();
+  const now = new Date(new Date().toLocaleString("en-US", {timeZone: "Europe/Rome"}));
   const scheduledDate = new Date(scheduledExecution);
   const baseDate = new Date(scheduledDate.getFullYear(), scheduledDate.getMonth(), scheduledDate.getDate());
   
