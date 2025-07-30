@@ -190,14 +190,15 @@ export function TodolistSelector({ todolists, deviceId, today }: TodolistSelecto
                 )}
               </div>
               <div className="flex items-center gap-2">
-                {isInGracePeriod && (
+                {isInGracePeriod ? (
                   <Badge variant="destructive" className="text-xs">
                     In scadenza
                   </Badge>
+                ) : (
+                  <Badge className={statusColors[todolist.status]}>
+                    {statusLabels[todolist.status]}
+                  </Badge>
                 )}
-                <Badge className={statusColors[todolist.status]}>
-                  {statusLabels[todolist.status]}
-                </Badge>
               </div>
             </Button>
           )
