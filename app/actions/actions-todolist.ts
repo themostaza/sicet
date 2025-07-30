@@ -942,10 +942,15 @@ export async function getTodolistsWithPagination(params: {
         const nowItaly = new Date().toLocaleString("sv-SE", {timeZone: "Europe/Rome"})
         const todayItaly = nowItaly.split(" ")[0]
         
-        const startOfToday = new Date(`${todayItaly}T00:00:00.000Z`)
-        const endOfTomorrow = new Date(`${todayItaly}T00:00:00.000Z`)
-        endOfTomorrow.setUTCDate(endOfTomorrow.getUTCDate() + 1)
-        endOfTomorrow.setUTCHours(23, 59, 59, 999)
+        // Crea le date in CET/CEST, poi converti in UTC per il confronto
+        const startOfTodayItaly = new Date(`${todayItaly}T00:00:00`)
+        const endOfTomorrowItaly = new Date(`${todayItaly}T23:59:59.999`)
+        endOfTomorrowItaly.setDate(endOfTomorrowItaly.getDate() + 1)
+        
+        // Aggiusta per il fuso orario italiano (CET = UTC+1, CEST = UTC+2)
+        const offsetMinutes = startOfTodayItaly.getTimezoneOffset()
+        const startOfToday = new Date(startOfTodayItaly.getTime() - (offsetMinutes * 60000))
+        const endOfTomorrow = new Date(endOfTomorrowItaly.getTime() - (offsetMinutes * 60000))
         
         query = query
           .gte("scheduled_execution", startOfToday.toISOString())
