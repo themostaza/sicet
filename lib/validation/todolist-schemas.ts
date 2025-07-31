@@ -504,4 +504,347 @@ export const toTodolist = (row: {
   updated_at: row.updated_at ?? row.created_at ?? undefined
 })
 
+// // ================================
+// // V2 SYSTEM - TIMESTAMP BASED
+// // ================================
+
+// // Definizioni degli orari standard per riconoscimento
+// const STANDARD_TIME_SLOTS = {
+//   mattina: { startHour: 6, startMinute: 0, endHour: 14, endMinute: 0 },
+//   pomeriggio: { startHour: 14, startMinute: 0, endHour: 22, endMinute: 0 },
+//   notte: { startHour: 22, startMinute: 0, endHour: 6, endMinute: 0 }, // cross-day
+//   giornata: { startHour: 7, startMinute: 0, endHour: 17, endMinute: 0 }
+// } as const
+
+// // Utility per riconoscere il tipo di time slot dai timestamp del database
+// export function recognizeTimeSlotFromTimestamps(
+//   timeStartTmz: string | null, 
+//   timeEndTmz: string | null
+// ): TimeSlot | "custom" {
+//   if (!timeStartTmz || !timeEndTmz) return "custom"
+  
+//   const startTime = new Date(timeStartTmz)
+//   const endTime = new Date(timeEndTmz)
+  
+//   const startHour = startTime.getHours()
+//   const startMinute = startTime.getMinutes()
+//   const endHour = endTime.getHours()
+//   const endMinute = endTime.getMinutes()
+  
+//   // Verifica se è cross-day (notte)
+//   const isCrossDay = endTime.getDate() !== startTime.getDate()
+  
+//   // Controlla ogni slot standard
+//   for (const [slotName, slot] of Object.entries(STANDARD_TIME_SLOTS)) {
+//     const matchesStart = slot.startHour === startHour && slot.startMinute === startMinute
+//     const matchesEnd = slot.endHour === endHour && slot.endMinute === endMinute
+    
+//     // Per la notte, deve essere cross-day
+//     if (slotName === "notte") {
+//       if (matchesStart && matchesEnd && isCrossDay) {
+//         return "notte" as TimeSlot
+//       }
+//     } else {
+//       // Per gli altri slot, deve essere same-day
+//       if (matchesStart && matchesEnd && !isCrossDay) {
+//         return slotName as TimeSlot
+//       }
+//     }
+//   }
+  
+//   // Se non corrisponde a nessuno slot standard, è custom
+//   return "custom"
+// }
+
+// // Schema per Todolist V2 (timestamp-based)
+// export const TodolistSchemaV2 = z.object({
+//   id: z.string({ message: "ID non valido" }),
+//   device_id: z.string({ message: "ID dispositivo non valido" }),
+//   scheduled_execution: z.string({ message: "Data di esecuzione non valida" }),
+//   status: z.enum(["pending", "in_progress", "completed"], { message: "Stato non valido" }),
+//   created_at: z.string().optional().nullable(),
+//   updated_at: z.string().optional().nullable(),
+//   completion_date: z.string().optional().nullable(),
+//   time_slot_type: z.enum(["standard", "custom"], { message: "Tipo time slot non valido" }),
+//   time_start_tmz: z.string().nullable(), // timestamp ISO string with timezone
+//   time_end_tmz: z.string().nullable(),   // timestamp ISO string with timezone
+//   completed_by: z.string().optional().nullable(),
+//   end_day_time: z.string().optional().nullable(),
+//   todolist_category: z.string().optional().nullable()
+// });
+
+// // Schema per i parametri di una todolist V2
+// export const TodolistParamsSchemaV2 = z.object({
+//   deviceId: z.string({ message: "ID dispositivo richiesto" }),
+//   date: z.string({ message: "Data richiesta" }),
+//   timeSlot: z.string({ message: "Fascia oraria richiesta" }),
+//   offset: z.number().optional().default(0),
+//   limit: z.number().optional().default(20)
+// });
+
+// // Schema per creazione todolist V2
+// export const CreateTodolistSchemaV2 = z.object({
+//   deviceId: z.string({ message: "ID dispositivo richiesto" }),
+//   date: z.string({ message: "Data richiesta" }),
+//   timeSlot: z.string({ message: "Fascia oraria richiesta" }),
+//   kpiIds: z.array(z.string()).min(1, { message: "Seleziona almeno un KPI" }),
+//   // Per custom time slots
+//   customStartTime: z.string().optional(), // ISO timestamp
+//   customEndTime: z.string().optional(),   // ISO timestamp
+// });
+
+// // Types V2
+// export type TodolistV2 = z.infer<typeof TodolistSchemaV2>;
+// export type TodolistParamsV2 = z.infer<typeof TodolistParamsSchemaV2>;
+// export type CreateTodolistParamsV2 = z.infer<typeof CreateTodolistSchemaV2>;
+
+// // Interface per i custom time slot con timestamp
+// export interface CustomTimeSlotTmz {
+//   type: "custom"
+//   startTime: string // ISO timestamp with timezone
+//   endTime: string   // ISO timestamp with timezone
+// }
+
+// // Type union per tutti i possibili tipi di timeslot V2
+// export type TimeSlotValueV2 = TimeSlot | CustomTimeSlotTmz | string
+
+// // Utility per verificare se un timeslot V2 è personalizzato
+// export function isCustomTimeSlotTmz(timeSlot: TimeSlotValueV2): timeSlot is CustomTimeSlotTmz {
+//   return typeof timeSlot === "object" && timeSlot.type === "custom" && "startTime" in timeSlot && "endTime" in timeSlot
+// }
+
+// // Utility per creare timestamp con timezone italiano per una data e orario specifici
+// export function createItalianTimestamp(baseDate: string, hour: number, minute: number = 0): string {
+//   const date = new Date(baseDate)
+//   // Crea il timestamp nel timezone italiano
+//   const italianDate = new Date(date.getFullYear(), date.getMonth(), date.getDate(), hour, minute, 0, 0)
+  
+//   // Converti in timezone italiano (Europe/Rome)
+//   const formatter = new Intl.DateTimeFormat('sv-SE', {
+//     timeZone: 'Europe/Rome',
+//     year: 'numeric',
+//     month: '2-digit',
+//     day: '2-digit',
+//     hour: '2-digit',
+//     minute: '2-digit',
+//     second: '2-digit'
+//   });
+  
+//   const parts = formatter.formatToParts(italianDate);
+//   const year = parts.find(p => p.type === 'year')?.value;
+//   const month = parts.find(p => p.type === 'month')?.value;
+//   const day = parts.find(p => p.type === 'day')?.value;
+//   const hourPart = parts.find(p => p.type === 'hour')?.value;
+//   const minutePart = parts.find(p => p.type === 'minute')?.value;
+//   const second = parts.find(p => p.type === 'second')?.value;
+  
+//   // Costruisci l'ISO string con timezone
+//   const isoString = `${year}-${month}-${day}T${hourPart}:${minutePart}:${second}+01:00`;
+//   return isoString;
+// }
+
+// // Utility per ottenere i timestamp di inizio e fine per un time slot V2
+// export function getTimeSlotTimestampsV2(
+//   baseDate: string,
+//   timeSlot: TimeSlotValueV2
+// ): { startTime: string; endTime: string } {
+  
+//   // Handle custom time slot
+//   if (isCustomTimeSlotTmz(timeSlot)) {
+//     return {
+//       startTime: timeSlot.startTime,
+//       endTime: timeSlot.endTime
+//     }
+//   }
+  
+//   // Handle standard time slots usando le definizioni
+//   if (typeof timeSlot === "string" && timeSlot in STANDARD_TIME_SLOTS) {
+//     const slot = STANDARD_TIME_SLOTS[timeSlot as keyof typeof STANDARD_TIME_SLOTS]
+    
+//     const startTime = createItalianTimestamp(baseDate, slot.startHour, slot.startMinute)
+//     let endTime: string
+    
+//     // Per la notte, l'end time è il giorno successivo
+//     if (timeSlot === "notte") {
+//       const nextDay = new Date(baseDate)
+//       nextDay.setDate(nextDay.getDate() + 1)
+//       endTime = createItalianTimestamp(nextDay.toISOString().split('T')[0], slot.endHour, slot.endMinute)
+//     } else {
+//       endTime = createItalianTimestamp(baseDate, slot.endHour, slot.endMinute)
+//     }
+    
+//     return { startTime, endTime }
+//   }
+  
+//   throw new Error(`Invalid time slot V2: ${timeSlot}`)
+// }
+
+// // Utility per verificare se una todolist V2 è scaduta
+// export function isTodolistExpiredV2(
+//   timeEndTmz: string | null,
+//   status?: string
+// ): boolean {
+//   if (status === "completed" || !timeEndTmz) return false;
+  
+//   const now = new Date();
+//   const endTime = new Date(timeEndTmz);
+  
+//   // Aggiungi tolleranza (3 ore)
+//   const endTimeWithTolerance = new Date(endTime);
+//   endTimeWithTolerance.setHours(endTimeWithTolerance.getHours() + TIME_SLOT_TOLERANCE);
+  
+//   return now > endTimeWithTolerance;
+// }
+
+// // Utility per verificare se una todolist V2 è attualmente valida
+// export function isTodolistCurrentlyValidV2(
+//   timeStartTmz: string | null,
+//   timeEndTmz: string | null,
+//   status?: string
+// ): boolean {
+//   if (status === "completed" || !timeStartTmz || !timeEndTmz) return false;
+  
+//   const now = new Date();
+//   const startTime = new Date(timeStartTmz);
+//   const endTime = new Date(timeEndTmz);
+  
+//   // Aggiungi tolleranza per il sistema (3 ore)
+//   const endTimeWithTolerance = new Date(endTime);
+//   endTimeWithTolerance.setHours(endTimeWithTolerance.getHours() + TIME_SLOT_TOLERANCE);
+  
+//   // La todolist è valida se: già iniziata E non scaduta (con tolleranza)
+//   return now >= startTime && now <= endTimeWithTolerance;
+// }
+
+// // Utility per verificare se una todolist V2 è in periodo di grazia
+// export function isTodolistInGracePeriodV2(
+//   timeStartTmz: string | null,
+//   timeEndTmz: string | null,
+//   status?: string
+// ): boolean {
+//   if (status === "completed" || !timeStartTmz || !timeEndTmz) return false;
+  
+//   const now = new Date();
+//   const startTime = new Date(timeStartTmz);
+//   const endTime = new Date(timeEndTmz);
+  
+//   // Orario di fine con tolleranza
+//   const endTimeWithTolerance = new Date(endTime);
+//   endTimeWithTolerance.setHours(endTimeWithTolerance.getHours() + TIME_SLOT_TOLERANCE);
+  
+//   // In periodo di grazia se: scaduto l'orario reale MA ancora nel periodo di tolleranza
+//   return now > endTime && now <= endTimeWithTolerance;
+// }
+
+// // Utility per ottenere il time slot corrente V2 basato su timestamp
+// export function getCurrentTimeSlotV2(now: Date = new Date()): TimeSlot {
+//   // Converti in orario italiano
+//   const italianTime = new Date(now.toLocaleString("en-US", {timeZone: "Europe/Rome"}));
+//   const hour = italianTime.getHours();
+  
+//   // Stessa logica del sistema V1 ma con awareness del timezone
+//   if (hour >= 7 && hour < 17) {
+//     return "giornata";
+//   } else if (hour >= 6 && hour < 14) {
+//     return "mattina";
+//   } else if (hour >= 14 && hour < 22) {
+//     return "pomeriggio";
+//   } else if (hour >= 22 || hour < 6) {
+//     return "notte";
+//   } else {
+//     return "mattina"; // Fallback
+//   }
+// }
+
+// // Utility per formattare un timeslot V2 per la visualizzazione
+// export function formatTimeSlotValueV2(timeSlot: TimeSlotValueV2): string {
+//   // Handle standard time slots - diretto e semplice
+//   if (typeof timeSlot === "string") {
+//     const timeSlotNames: Record<TimeSlot, string> = {
+//       mattina: "Mattina",
+//       pomeriggio: "Pomeriggio", 
+//       notte: "Notte",
+//       giornata: "Giornata",
+//       custom: "Personalizzato"
+//     }
+    
+//     const definitions: Record<TimeSlot, { display: string; toleranceDisplay: string }> = {
+//       mattina: { 
+//         display: "6:00-14:00", 
+//         toleranceDisplay: "17:00" // 14:00 + 3 ore
+//       },
+//       pomeriggio: { 
+//         display: "14:00-22:00", 
+//         toleranceDisplay: "01:00" // 22:00 + 3 ore = 01:00 del giorno dopo
+//       },
+//       notte: { 
+//         display: "22:00-06:00", 
+//         toleranceDisplay: "09:00" // 06:00 + 3 ore = 09:00
+//       },
+//       giornata: { 
+//         display: "7:00-17:00", 
+//         toleranceDisplay: "20:00" // 17:00 + 3 ore
+//       },
+//       custom: { 
+//         display: "personalizzato", 
+//         toleranceDisplay: "variabile" 
+//       }
+//     }
+    
+//     const def = definitions[timeSlot as TimeSlot]
+//     if (def) {
+//       return `${timeSlotNames[timeSlot as TimeSlot]} (${def.display}, scade alle ${def.toleranceDisplay})`
+//     }
+//   }
+  
+//   // Handle custom time slot
+//   if (isCustomTimeSlotTmz(timeSlot)) {
+//     const startTime = new Date(timeSlot.startTime)
+//     const endTime = new Date(timeSlot.endTime)
+    
+//     const startStr = `${startTime.getHours().toString().padStart(2, '0')}:${startTime.getMinutes().toString().padStart(2, '0')}`
+//     const endStr = `${endTime.getHours().toString().padStart(2, '0')}:${endTime.getMinutes().toString().padStart(2, '0')}`
+    
+//     // Calculate deadline with tolerance
+//     const deadlineTime = new Date(endTime)
+//     deadlineTime.setHours(deadlineTime.getHours() + TIME_SLOT_TOLERANCE)
+//     const deadlineStr = `${deadlineTime.getHours().toString().padStart(2, '0')}:${deadlineTime.getMinutes().toString().padStart(2, '0')}`
+    
+//     return `Personalizzato (${startStr}-${endStr}, scade alle ${deadlineStr})`
+//   }
+  
+//   return String(timeSlot)
+// }
+
+// // Helper function for converting database rows to TodolistV2 type
+// export const toTodolistV2 = (row: {
+//   id: string
+//   device_id: string
+//   scheduled_execution: string
+//   status: "pending" | "in_progress" | "completed"
+//   created_at: string | null
+//   updated_at: string | null
+//   completion_date: string | null
+//   time_slot_type: "standard" | "custom"
+//   time_start_tmz: string | null
+//   time_end_tmz: string | null
+//   completed_by: string | null
+//   end_day_time: string | null
+//   todolist_category: string | null
+// }) => ({
+//   id: row.id,
+//   device_id: row.device_id,
+//   scheduled_execution: row.scheduled_execution,
+//   status: row.status,
+//   created_at: row.created_at ?? undefined,
+//   updated_at: row.updated_at ?? row.created_at ?? undefined,
+//   completion_date: row.completion_date ?? undefined,
+//   time_slot_type: row.time_slot_type,
+//   time_start_tmz: row.time_start_tmz,
+//   time_end_tmz: row.time_end_tmz,
+//   completed_by: row.completed_by ?? undefined,
+//   end_day_time: row.end_day_time ?? undefined,
+//   todolist_category: row.todolist_category ?? undefined
+// })
+
  

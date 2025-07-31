@@ -17,6 +17,7 @@ const rolePermissions = {
   referrer: [
     '/devices',
     '/device/*',
+    '/device/*/scan', // Consenti accesso anche ai referrer
     '/kpis', 
     '/kpi/*',
     '/todolist',
