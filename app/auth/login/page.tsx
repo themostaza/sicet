@@ -12,9 +12,12 @@ import { validationRules } from '@/lib/validation';
 import { FormField } from '@/components/form/form-field';
 import Link from 'next/link';
 import { Eye, EyeOff } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get('redirectTo');
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -70,8 +73,10 @@ export default function LoginPage() {
         return;
       }
 
-      // Redirect based on role
-      if (profile?.role === 'admin') {
+      // Redirect: prima verifica redirectTo, poi fallback su ruolo
+      if (redirectTo) {
+        router.push(redirectTo);
+      } else if (profile?.role === 'admin') {
         router.push('/dashboard');
       } else if (profile?.role === 'operator') {
         router.push('/todolist');
