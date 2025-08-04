@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
-import { deleteTodolistById } from "@/app/actions/actions-todolist"
+import { deleteTodolistById, getTodolistFilteredIds, getTodolistFilteredCount } from "@/app/actions/actions-todolist"
 import { toast } from "@/components/ui/use-toast"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Checkbox as UICheckbox } from "@/components/ui/checkbox"
@@ -98,6 +98,11 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
   const [sortColumn, setSortColumn] = useState<string>("date")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false)
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [isSelectingAllFiltered, setIsSelectingAllFiltered] = useState(false)
+  const [allFilteredIds, setAllFilteredIds] = useState<Set<string>>(new Set())
+  const [filteredCount, setFilteredCount] = useState<number>(0)
+  const [isLoadingCount, setIsLoadingCount] = useState(false)
   
   // Infinite scroll state
   const [todolists, setTodolists] = useState<TodolistItem[]>([])
@@ -123,14 +128,47 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
     setSelectedTags([])
   }
 
+  const toggleCategory = (category: string) => {
+    // When using multiselect, reset single select
+    setSelectedCategory("all")
+    
+    setSelectedCategories(prev => 
+      prev.includes(category) 
+        ? prev.filter(c => c !== category)
+        : [...prev, category]
+    )
+  }
+
+  const handleSingleCategoryChange = (category: string) => {
+    // Ignore MULTI selection (disabled option)
+    if (category === "MULTI") return
+    
+    // When using single select, reset multiselect
+    setSelectedCategories([])
+    setSelectedCategory(category)
+  }
+
+  const clearAllCategories = () => {
+    setSelectedCategories([])
+  }
+
   const clearAllFilters = () => {
     setSelectedDate(undefined)
     setSelectedDevice("all")
     clearAllTags()
+    clearAllCategories()
+    setSelectedCategory("all")
   }
 
   const applyFilters = () => {
     setIsFilterModalOpen(false)
+    // Force re-fetch with current filters
+    setCurrentOffset(0)
+    setTodolists([])
+    setHasMore(true)
+    setSelectedItems(new Set())
+    setAllFilteredIds(new Set())
+    fetchTodolists(true)
   }
 
   // Fetch todolists with pagination
@@ -148,7 +186,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
         ...(selectedDate && { selectedDate: format(selectedDate, 'yyyy-MM-dd') }),
         ...(selectedDevice !== "all" && { selectedDevice }),
         ...(selectedTags.length > 0 && { selectedTags: selectedTags.join(',') }),
-        ...(selectedCategory !== "all" && { selectedCategory }),
+        ...(selectedCategories.length > 0 ? { selectedCategories: selectedCategories.join(',') } : selectedCategory !== "all" && { selectedCategory }),
         sortColumn: sortColumn === "date" ? "scheduled_execution" : sortColumn,
         sortDirection,
         ...(userRole && { userRole })
@@ -215,8 +253,9 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
     setTodolists([])
     setHasMore(true)
     setSelectedItems(new Set()) // Clear selected items when filters change
+    setAllFilteredIds(new Set()) // Clear filtered ids when filters change
     fetchTodolists(true)
-  }, [activeFilter, selectedDate, selectedDevice, selectedTags, selectedCategory, sortColumn, sortDirection])
+  }, [activeFilter, selectedDate, selectedDevice, selectedTags, selectedCategory, selectedCategories, sortColumn, sortDirection])
 
   // Intersection observer for infinite scroll
   useEffect(() => {
@@ -306,9 +345,85 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
       newSelected.add(id)
     } else {
       newSelected.delete(id)
+      // Remove from allFilteredIds if it was selected via "select all filtered"
+      const newAllFiltered = new Set(allFilteredIds)
+      newAllFiltered.delete(id)
+      setAllFilteredIds(newAllFiltered)
     }
     setSelectedItems(newSelected)
   }
+
+  const handleSelectAllFiltered = async () => {
+    if (isSelectingAllFiltered) return
+
+    try {
+      setIsSelectingAllFiltered(true)
+      
+      const filteredIds = await getTodolistFilteredIds({
+        filter: activeFilter,
+        selectedDate: selectedDate ? format(selectedDate, 'yyyy-MM-dd') : undefined,
+        selectedDevice: selectedDevice !== "all" ? selectedDevice : undefined,
+        selectedTags: selectedTags.length > 0 ? selectedTags : undefined,
+        selectedCategory: selectedCategories.length > 0 ? selectedCategories.join(',') : selectedCategory !== "all" ? selectedCategory : undefined,
+        userRole: userRole || undefined,
+      })
+
+      const filteredIdsSet = new Set(filteredIds)
+      setAllFilteredIds(filteredIdsSet)
+      setSelectedItems(filteredIdsSet)
+
+      toast({
+        title: "Selezione completata",
+        description: `${filteredIds.length} todolist sono state selezionate.`,
+      })
+    } catch (error) {
+      console.error("Error selecting all filtered:", error)
+      toast({
+        title: "Errore",
+        description: "Errore durante la selezione delle todolist.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSelectingAllFiltered(false)
+    }
+  }
+
+  const handleDeselectAll = () => {
+    setSelectedItems(new Set())
+    setAllFilteredIds(new Set())
+    
+    toast({
+      title: "Deselezione completata",
+      description: "Tutte le todolist sono state deselezionate.",
+    })
+  }
+
+  const updateFilteredCount = useCallback(async () => {
+    try {
+      setIsLoadingCount(true)
+      
+      const count = await getTodolistFilteredCount({
+        filter: activeFilter,
+        selectedDate: selectedDate ? format(selectedDate, 'yyyy-MM-dd') : undefined,
+        selectedDevice: selectedDevice !== "all" ? selectedDevice : undefined,
+        selectedTags: selectedTags.length > 0 ? selectedTags : undefined,
+        selectedCategory: selectedCategories.length > 0 ? selectedCategories.join(',') : selectedCategory !== "all" ? selectedCategory : undefined,
+        userRole: userRole || undefined,
+      })
+
+      setFilteredCount(count)
+    } catch (error) {
+      console.error("Error updating filtered count:", error)
+      setFilteredCount(0)
+    } finally {
+      setIsLoadingCount(false)
+    }
+  }, [activeFilter, selectedDate, selectedDevice, selectedTags, selectedCategories, selectedCategory, userRole])
+
+  // Update filtered count when filters change
+  useEffect(() => {
+    updateFilteredCount()
+  }, [updateFilteredCount])
 
   const handleBulkDelete = async () => {
     if (selectedItems.size === 0) return
@@ -437,12 +552,18 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
             {/* Category Filter - Responsive position */}
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-muted-foreground"></span>
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <Select value={selectedCategories.length > 0 ? "MULTI" : selectedCategory} onValueChange={handleSingleCategoryChange}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Tutte" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tutte</SelectItem>
+                  {selectedCategories.length > 0 && (
+                    <SelectItem value="MULTI" disabled>
+                      Categoria ({selectedCategories.length})
+                    </SelectItem>
+                  )}
+                  <SelectItem value="__NULL__">Senza categoria</SelectItem>
                   {allCategories.map(category => (
                     <SelectItem key={category} value={category}>
                       {category}
@@ -458,6 +579,43 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                 <Plus className="mr-2 h-4 w-4" />
                 Nuova Todolist
               </Button>
+            )}
+            {isAdmin && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSelectAllFiltered}
+                  disabled={isSelectingAllFiltered || isLoadingCount}
+                >
+                  {isSelectingAllFiltered ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Selezione...
+                    </>
+                  ) : isLoadingCount ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Conteggio...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                      Seleziona tutte filtrate ({filteredCount})
+                    </>
+                  )}
+                </Button>
+                {selectedItems.size > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDeselectAll}
+                  >
+                    <X className="mr-2 h-4 w-4" />
+                    Deseleziona tutte
+                  </Button>
+                )}
+              </>
             )}
             {isAdmin && selectedItems.size > 0 && (
               <AlertDialog>
@@ -675,6 +833,55 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                     </div>
                   )}
 
+                  {/* Category Filter */}
+                  {allCategories.length > 0 && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-medium">Categorie</h3>
+                        {selectedCategories.length > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={clearAllCategories}
+                            className="text-xs text-gray-500 hover:text-gray-700"
+                          >
+                            <X className="w-3 h-3 mr-1" />
+                            Cancella tutte
+                          </Button>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {/* Special option for items without category */}
+                        <Badge
+                          key="__NULL__"
+                          variant={selectedCategories.includes("__NULL__") ? "default" : "outline"}
+                          className={`cursor-pointer transition-colors ${
+                            selectedCategories.includes("__NULL__")
+                              ? "bg-gray-600 text-white hover:bg-gray-700"
+                              : "hover:bg-gray-100"
+                          }`}
+                          onClick={() => toggleCategory("__NULL__")}
+                        >
+                          Senza categoria
+                        </Badge>
+                        {allCategories.map((category) => (
+                          <Badge
+                            key={category}
+                            variant={selectedCategories.includes(category) ? "default" : "outline"}
+                            className={`cursor-pointer transition-colors ${
+                              selectedCategories.includes(category)
+                                ? "bg-black text-white hover:bg-gray-800"
+                                : "hover:bg-gray-100"
+                            }`}
+                            onClick={() => toggleCategory(category)}
+                          >
+                            {category}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Action Buttons */}
                   <div className="flex gap-2 pt-4">
                     <Button
@@ -698,7 +905,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
         )}
 
         {/* Filter Summary */}
-        {(selectedDate || selectedDevice !== "all" || selectedCategory !== "all" || selectedTags.length > 0) && (
+        {(selectedDate || selectedDevice !== "all" || selectedCategory !== "all" || selectedTags.length > 0 || selectedCategories.length > 0) && (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-sm text-gray-600 bg-gray-50 px-4 py-2 rounded-lg mb-4 gap-2">
             <div className="flex flex-wrap gap-2">
               Filtri applicati:
@@ -708,6 +915,18 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
               {selectedTags.length > 0 && (
                 <span className="inline-block bg-purple-100 text-purple-800 px-2 py-0.5 rounded text-xs">
                   Tag: {selectedTags.join(", ")}
+                </span>
+              )}
+
+              {selectedCategories.length > 0 && (
+                <span className="inline-block bg-orange-100 text-orange-800 px-2 py-0.5 rounded text-xs">
+                  Categorie: {selectedCategories.map(cat => cat === "__NULL__" ? "Senza categoria" : cat).join(", ")}
+                </span>
+              )}
+
+              {selectedCategory !== "all" && selectedCategories.length === 0 && (
+                <span className="inline-block bg-orange-100 text-orange-800 px-2 py-0.5 rounded text-xs">
+                  Categoria: {selectedCategory}
                 </span>
               )}
             </div>

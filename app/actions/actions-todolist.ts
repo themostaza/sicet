@@ -900,12 +900,13 @@ export async function getTodolistsWithPagination(params: {
   selectedDevice?: string
   selectedTags?: string[]
   selectedCategory?: string
+  selectedCategories?: string[]
   sortColumn?: string
   sortDirection?: string
   userRole?: string
 }) {
   try {
-    const { filter, offset, limit, selectedDate, selectedDevice, selectedTags, selectedCategory, sortColumn, sortDirection, userRole } = params
+    const { filter, offset, limit, selectedDate, selectedDevice, selectedTags, selectedCategory, selectedCategories, sortColumn, sortDirection, userRole } = params
     const supabase = await createServerSupabaseClient()
     
     let query = supabase
@@ -1000,8 +1001,26 @@ export async function getTodolistsWithPagination(params: {
     }
 
     // Apply category filter if specified
-    if (selectedCategory && selectedCategory !== "all") {
-      query = query.eq("todolist_category", selectedCategory)
+    if (selectedCategories && selectedCategories.length > 0) {
+      const normalCategories = selectedCategories.filter(cat => cat !== "__NULL__")
+      const includesNull = selectedCategories.includes("__NULL__")
+      
+      if (normalCategories.length > 0 && includesNull) {
+        // Both normal categories and null - use OR condition
+        query = query.or(`todolist_category.in.(${normalCategories.join(',')}),todolist_category.is.null`)
+      } else if (normalCategories.length > 0) {
+        // Only normal categories
+        query = query.in("todolist_category", normalCategories)
+      } else if (includesNull) {
+        // Only null category
+        query = query.is("todolist_category", null)
+      }
+    } else if (selectedCategory && selectedCategory !== "all") {
+      if (selectedCategory === "__NULL__") {
+        query = query.is("todolist_category", null)
+      } else {
+        query = query.eq("todolist_category", selectedCategory)
+      }
     }
 
     // Apply pagination and ordering
@@ -1256,4 +1275,353 @@ export async function getTodolistCompletionUserEmail(todolistId: string): Promis
   }
   
   return profile?.email ?? null;
+}
+
+// Ottieni il count totale delle todolist filtrate (senza paginazione)
+export async function getTodolistFilteredCount(params: {
+  filter: "all" | "today" | "overdue" | "future" | "completed"
+  selectedDate?: string
+  selectedDevice?: string
+  selectedTags?: string[]
+  selectedCategory?: string
+  userRole?: string
+}): Promise<number> {
+  try {
+    const { filter, selectedDate, selectedDevice, selectedTags, selectedCategory, userRole } = params
+    const supabase = await createServerSupabaseClient()
+    
+    const now = new Date()
+    const today = now.toISOString().split("T")[0]
+    
+    // Determine if we need device info for tag filtering
+    const needsDeviceInfo = selectedTags && selectedTags.length > 0
+
+    let query: any = supabase.from("todolist")
+
+    if (needsDeviceInfo) {
+      query = query.select(`
+        id,
+        devices!inner (
+          tags
+        )
+      `, { count: "exact", head: true })
+    } else {
+      query = query.select("id", { count: "exact", head: true })
+    }
+
+    // Apply filters (same logic as getTodolistFilteredIds)
+    if (filter === "today") {
+      if (userRole === "operator") {
+        const nowItaly = new Date().toLocaleString("sv-SE", {timeZone: "Europe/Rome"})
+        const todayItaly = nowItaly.split(" ")[0]
+        
+        const startOfTodayItaly = new Date(`${todayItaly}T00:00:00+02:00`)
+        const endOfTomorrowItaly = new Date(`${todayItaly}T23:59:59+02:00`)
+        endOfTomorrowItaly.setDate(endOfTomorrowItaly.getDate() + 1)
+        
+        query = query
+          .gte("scheduled_execution", startOfTodayItaly.toISOString())
+          .lte("scheduled_execution", endOfTomorrowItaly.toISOString())
+      } else {
+        query = query
+          .eq("status", "pending")
+          .gte("scheduled_execution", `${today}T00:00:00`)
+          .lt("scheduled_execution", `${today}T23:59:59`)
+      }
+    } else if (filter === "overdue") {
+      query = query
+        .neq("status", "completed")
+        .lt("scheduled_execution", now.toISOString())
+    } else if (filter === "future") {
+      query = query
+        .neq("status", "completed")
+        .gt("scheduled_execution", `${today}T23:59:59`)
+    } else if (filter === "completed") {
+      query = query.eq("status", "completed")
+    }
+
+    // Apply additional filters
+    if (selectedDate) {
+      const selectedDay = new Date(selectedDate).toISOString().split('T')[0]
+      query = query
+        .gte("scheduled_execution", `${selectedDay}T00:00:00`)
+        .lt("scheduled_execution", `${selectedDay}T23:59:59`)
+    }
+
+    if (selectedDevice && selectedDevice !== "all") {
+      query = query.eq("device_id", selectedDevice)
+    }
+
+    if (selectedCategory && selectedCategory !== "all") {
+      // Check if selectedCategory contains multiple categories (comma-separated)
+      if (selectedCategory.includes(',')) {
+        const categories = selectedCategory.split(',').map(c => c.trim())
+        const normalCategories = categories.filter(cat => cat !== "__NULL__")
+        const includesNull = categories.includes("__NULL__")
+        
+        if (normalCategories.length > 0 && includesNull) {
+          // Both normal categories and null - use OR condition
+          query = query.or(`todolist_category.in.(${normalCategories.join(',')}),todolist_category.is.null`)
+        } else if (normalCategories.length > 0) {
+          // Only normal categories
+          query = query.in("todolist_category", normalCategories)
+        } else if (includesNull) {
+          // Only null category
+          query = query.is("todolist_category", null)
+        }
+      } else {
+        if (selectedCategory === "__NULL__") {
+          query = query.is("todolist_category", null)
+        } else {
+          query = query.eq("todolist_category", selectedCategory)
+        }
+      }
+    }
+
+    const { count, error } = await query
+
+    if (error) {
+      console.error("Error fetching filtered count:", error)
+      return 0
+    }
+
+    // If we have tag filtering, we need to fetch the data to filter by tags
+    if (needsDeviceInfo && selectedTags && selectedTags.length > 0) {
+      // For tag filtering, we need to fetch data and filter manually
+      // This is a limitation but should be acceptable for count queries
+      let tagQuery: any = supabase.from("todolist")
+        .select(`
+          id,
+          devices!inner (
+            tags
+          )
+        `)
+      
+      // Apply all the same filters as before
+      if (filter === "today") {
+        if (userRole === "operator") {
+          const nowItaly = new Date().toLocaleString("sv-SE", {timeZone: "Europe/Rome"})
+          const todayItaly = nowItaly.split(" ")[0]
+          
+          const startOfTodayItaly = new Date(`${todayItaly}T00:00:00+02:00`)
+          const endOfTomorrowItaly = new Date(`${todayItaly}T23:59:59+02:00`)
+          endOfTomorrowItaly.setDate(endOfTomorrowItaly.getDate() + 1)
+          
+          tagQuery = tagQuery
+            .gte("scheduled_execution", startOfTodayItaly.toISOString())
+            .lte("scheduled_execution", endOfTomorrowItaly.toISOString())
+        } else {
+          tagQuery = tagQuery
+            .eq("status", "pending")
+            .gte("scheduled_execution", `${today}T00:00:00`)
+            .lt("scheduled_execution", `${today}T23:59:59`)
+        }
+      } else if (filter === "overdue") {
+        tagQuery = tagQuery
+          .neq("status", "completed")
+          .lt("scheduled_execution", now.toISOString())
+      } else if (filter === "future") {
+        tagQuery = tagQuery
+          .neq("status", "completed")
+          .gt("scheduled_execution", `${today}T23:59:59`)
+      } else if (filter === "completed") {
+        tagQuery = tagQuery.eq("status", "completed")
+      }
+
+      if (selectedDate) {
+        const selectedDay = new Date(selectedDate).toISOString().split('T')[0]
+        tagQuery = tagQuery
+          .gte("scheduled_execution", `${selectedDay}T00:00:00`)
+          .lt("scheduled_execution", `${selectedDay}T23:59:59`)
+      }
+
+      if (selectedDevice && selectedDevice !== "all") {
+        tagQuery = tagQuery.eq("device_id", selectedDevice)
+      }
+
+      if (selectedCategory && selectedCategory !== "all") {
+        if (selectedCategory.includes(',')) {
+          const categories = selectedCategory.split(',').map(c => c.trim())
+          const normalCategories = categories.filter(cat => cat !== "__NULL__")
+          const includesNull = categories.includes("__NULL__")
+          
+          if (normalCategories.length > 0 && includesNull) {
+            tagQuery = tagQuery.or(`todolist_category.in.(${normalCategories.join(',')}),todolist_category.is.null`)
+          } else if (normalCategories.length > 0) {
+            tagQuery = tagQuery.in("todolist_category", normalCategories)
+          } else if (includesNull) {
+            tagQuery = tagQuery.is("todolist_category", null)
+          }
+        } else {
+          if (selectedCategory === "__NULL__") {
+            tagQuery = tagQuery.is("todolist_category", null)
+          } else {
+            tagQuery = tagQuery.eq("todolist_category", selectedCategory)
+          }
+        }
+      }
+      
+      const { data } = await tagQuery
+      
+      if (data) {
+        const filteredData = data.filter((item: any) => {
+          const deviceTags = item.devices?.tags || []
+          return selectedTags.some(tag => deviceTags.includes(tag))
+        })
+        return filteredData.length
+      }
+    }
+
+    return count || 0
+  } catch (error) {
+    console.error("Error in getTodolistFilteredCount:", error)
+    return 0
+  }
+}
+
+// Ottieni tutti gli ID delle todolist filtrate (con paginazione)
+export async function getTodolistFilteredIds(params: {
+  filter: "all" | "today" | "overdue" | "future" | "completed"
+  selectedDate?: string
+  selectedDevice?: string
+  selectedTags?: string[]
+  selectedCategory?: string
+  userRole?: string
+}): Promise<string[]> {
+  try {
+    const { filter, selectedDate, selectedDevice, selectedTags, selectedCategory, userRole } = params
+    const supabase = await createServerSupabaseClient()
+    
+    const BATCH_SIZE = 1000 // Limite Supabase
+    let allIds: string[] = []
+    let offset = 0
+    let hasMore = true
+
+    while (hasMore) {
+      // Determine if we need device info for tag filtering
+      const needsDeviceInfo = selectedTags && selectedTags.length > 0
+      
+      const now = new Date()
+      const today = now.toISOString().split("T")[0]
+
+      let query: any = supabase.from("todolist")
+
+      if (needsDeviceInfo) {
+        query = query.select(`
+          id,
+          devices!inner (
+            tags
+          )
+        `, { count: "exact" })
+      } else {
+        query = query.select("id", { count: "exact" })
+      }
+
+      // Apply filters
+      if (filter === "today") {
+        if (userRole === "operator") {
+          // Logica operator come nell'originale
+          const nowItaly = new Date().toLocaleString("sv-SE", {timeZone: "Europe/Rome"})
+          const todayItaly = nowItaly.split(" ")[0]
+          
+          const startOfTodayItaly = new Date(`${todayItaly}T00:00:00+02:00`)
+          const endOfTomorrowItaly = new Date(`${todayItaly}T23:59:59+02:00`)
+          endOfTomorrowItaly.setDate(endOfTomorrowItaly.getDate() + 1)
+          
+          query = query
+            .gte("scheduled_execution", startOfTodayItaly.toISOString())
+            .lte("scheduled_execution", endOfTomorrowItaly.toISOString())
+        } else {
+          query = query
+            .eq("status", "pending")
+            .gte("scheduled_execution", `${today}T00:00:00`)
+            .lt("scheduled_execution", `${today}T23:59:59`)
+        }
+      } else if (filter === "overdue") {
+        query = query
+          .neq("status", "completed")
+          .lt("scheduled_execution", now.toISOString())
+      } else if (filter === "future") {
+        query = query
+          .neq("status", "completed")
+          .gt("scheduled_execution", `${today}T23:59:59`)
+      } else if (filter === "completed") {
+        query = query.eq("status", "completed")
+      }
+
+      // Apply additional filters
+      if (selectedDate) {
+        const selectedDay = new Date(selectedDate).toISOString().split('T')[0]
+        query = query
+          .gte("scheduled_execution", `${selectedDay}T00:00:00`)
+          .lt("scheduled_execution", `${selectedDay}T23:59:59`)
+      }
+
+      if (selectedDevice && selectedDevice !== "all") {
+        query = query.eq("device_id", selectedDevice)
+      }
+
+      if (selectedCategory && selectedCategory !== "all") {
+        // Check if selectedCategory contains multiple categories (comma-separated)
+        if (selectedCategory.includes(',')) {
+          const categories = selectedCategory.split(',').map(c => c.trim())
+          const normalCategories = categories.filter(cat => cat !== "__NULL__")
+          const includesNull = categories.includes("__NULL__")
+          
+          if (normalCategories.length > 0 && includesNull) {
+            // Both normal categories and null - use OR condition
+            query = query.or(`todolist_category.in.(${normalCategories.join(',')}),todolist_category.is.null`)
+          } else if (normalCategories.length > 0) {
+            // Only normal categories
+            query = query.in("todolist_category", normalCategories)
+          } else if (includesNull) {
+            // Only null category
+            query = query.is("todolist_category", null)
+          }
+        } else {
+          if (selectedCategory === "__NULL__") {
+            query = query.is("todolist_category", null)
+          } else {
+            query = query.eq("todolist_category", selectedCategory)
+          }
+        }
+      }
+
+      const { data, error, count } = await query
+        .range(offset, offset + BATCH_SIZE - 1)
+
+      if (error) {
+        console.error("Error fetching filtered IDs:", error)
+        break
+      }
+
+      if (data) {
+        let filteredData = data
+
+        // Filter by tags if specified
+        if (selectedTags && selectedTags.length > 0) {
+          filteredData = data.filter((item: any) => {
+            const deviceTags = item.devices?.tags || []
+            return selectedTags.some(tag => deviceTags.includes(tag))
+          })
+        }
+
+        // For operator filter, apply validity check
+        if (filter === "today" && userRole === "operator") {
+          // We need more data for validity check, so we'll skip this optimization for operators
+          // and let the client handle it
+        }
+
+        allIds.push(...filteredData.map((item: any) => item.id))
+      }
+
+      hasMore = count !== null && offset + BATCH_SIZE < count
+      offset += BATCH_SIZE
+    }
+
+    return allIds
+  } catch (error) {
+    console.error("Error in getTodolistFilteredIds:", error)
+    return []
+  }
 }

@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
     const selectedDevice = searchParams.get("selectedDevice") || undefined
     const selectedTags = searchParams.get("selectedTags") ? searchParams.get("selectedTags")!.split(",") : undefined
     const selectedCategory = searchParams.get("selectedCategory") || undefined
+    const selectedCategories = searchParams.get("selectedCategories") ? searchParams.get("selectedCategories")!.split(",") : undefined
     const sortColumn = searchParams.get("sortColumn") || undefined
     const sortDirection = searchParams.get("sortDirection") || undefined
     const userRole = searchParams.get("userRole") || undefined
@@ -31,6 +32,7 @@ export async function GET(request: NextRequest) {
       selectedDevice,
       selectedTags,
       selectedCategory,
+      selectedCategories,
       sortColumn,
       sortDirection,
       userRole
