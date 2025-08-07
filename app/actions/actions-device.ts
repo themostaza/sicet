@@ -150,11 +150,16 @@ export async function createDevice(raw: unknown): Promise<Device> {
 
     if (error) handlePostgrestError(error);
 
-    // Log the activity
-    await logCurrentUserActivity('create_device', 'device', data!.id, {
-      device_name: data!.name,
-      device_location: data!.location
-    });
+    // Log the activity (non-blocking)
+    try {
+      await logCurrentUserActivity('create_device', 'device', data!.id, {
+        device_name: data!.name,
+        device_location: data!.location
+      });
+    } catch (activityError) {
+      console.error('Failed to log activity for device creation:', activityError);
+      // Continue with device creation even if activity logging fails
+    }
 
     revalidatePath("/device");
     return toDevice(data!);
@@ -162,6 +167,7 @@ export async function createDevice(raw: unknown): Promise<Device> {
     if (error instanceof z.ZodError) {
       handleZodError(error);
     }
+    console.error("Error creating device:", error);
     throw error;
   }
 }
@@ -179,11 +185,16 @@ export async function updateDevice(raw: unknown): Promise<Device> {
 
     if (error) handlePostgrestError(error);
 
-    // Log the activity
-    await logCurrentUserActivity('update_device', 'device', data!.id, {
-      device_name: data!.name,
-      device_location: data!.location
-    });
+    // Log the activity (non-blocking)
+    try {
+      await logCurrentUserActivity('update_device', 'device', data!.id, {
+        device_name: data!.name,
+        device_location: data!.location
+      });
+    } catch (activityError) {
+      console.error('Failed to log activity for device update:', activityError);
+      // Continue with device update even if activity logging fails
+    }
 
     revalidatePath("/device");
     return toDevice(data!);
@@ -191,6 +202,7 @@ export async function updateDevice(raw: unknown): Promise<Device> {
     if (error instanceof z.ZodError) {
       handleZodError(error);
     }
+    console.error("Error updating device:", error);
     throw error;
   }
 }
