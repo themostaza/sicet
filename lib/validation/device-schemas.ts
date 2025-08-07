@@ -21,6 +21,7 @@ export type Device = z.infer<typeof DeviceSchema>;
 
 export const DeviceInsertSchema = DeviceSchema.omit({
   qrcodeUrl: true,
+  created_at: true,
 }).extend({
   description: z.string().max(250).nullish().optional(),
 });
