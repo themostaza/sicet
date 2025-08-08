@@ -38,7 +38,8 @@ import {
   getTimeSlotDatabaseValues,
   type CustomTimeSlot,
   type TimeSlotValue,
-  minutesToTime
+  minutesToTime,
+  TIME_SLOT_TOLERANCE
 } from "@/lib/validation/todolist-schemas"
 import { checkKpiAlerts } from "./actions-alerts"
 
@@ -823,12 +824,10 @@ export async function getTodolistByDeviceAndTimeSlot(deviceId: string, startTime
 export async function getTodolistsForDeviceToday(deviceId: string, today: string) {
   const supabase = await createServerSupabaseClient()
   
-  // Get a wider date range to catch overnight slots
-  const startOfDay = new Date(today)
-  startOfDay.setHours(0, 0, 0, 0)
-  const endOfNextDay = new Date(today)
-  endOfNextDay.setDate(endOfNextDay.getDate() + 1)
-  endOfNextDay.setHours(23, 59, 59, 999)
+  // New rule for operator validity: scheduled_execution <= now <= end_day_time + tolerance
+  const now = new Date()
+  const toleranceMs = TIME_SLOT_TOLERANCE * 60 * 60 * 1000
+  const threshold = new Date(now.getTime() - toleranceMs)
 
   const { data, error } = await supabase
     .from("todolist")
@@ -839,11 +838,13 @@ export async function getTodolistsForDeviceToday(deviceId: string, today: string
       time_slot_type,
       time_slot_start,
       time_slot_end,
-      created_at
+      created_at,
+      todolist_category
     `)
     .eq("device_id", deviceId)
-    .gte("scheduled_execution", startOfDay.toISOString())
-    .lte("scheduled_execution", endOfNextDay.toISOString())
+    .neq("status", "completed")
+    .lte("scheduled_execution", now.toISOString())
+    .gte("end_day_time", threshold.toISOString())
     .order("scheduled_execution", { ascending: true })
 
   if (error) {
@@ -851,17 +852,7 @@ export async function getTodolistsForDeviceToday(deviceId: string, today: string
     return null
   }
 
-  // Filtra usando la nuova logica: solo todolist attualmente valide (già iniziate e non scadute)
-  const filteredData = data?.filter(todolist => 
-    isTodolistCurrentlyValid(
-      todolist.scheduled_execution,
-      todolist.time_slot_start,
-      todolist.time_slot_end,
-      todolist.status
-    )
-  ) || []
-
-  return filteredData
+  return data || []
 }
 
 // Ottieni i dati completi di una todolist per ID
@@ -938,38 +929,15 @@ export async function getTodolistsWithPagination(params: {
 
     if (filter === "today") {
       if (userRole === "operator") {
-        // Per gli operator, usa un range più ampio per catturare gli slot overnight
-        // Usa orario italiano invece che orario server
-        console.log("=== DEBUG OPERATOR FILTER ===")
-        
-        const nowItaly = new Date().toLocaleString("sv-SE", {timeZone: "Europe/Rome"})
-        const todayItaly = nowItaly.split(" ")[0]
-        console.log("nowItaly:", nowItaly)
-        console.log("todayItaly:", todayItaly)
-        
-        // Crea le date esplicitamente in fuso orario italiano
-        const startOfTodayItaly = new Date(`${todayItaly}T00:00:00+02:00`) // CEST (estate)
-        const endOfTomorrowItaly = new Date(`${todayItaly}T23:59:59+02:00`)
-        endOfTomorrowItaly.setDate(endOfTomorrowItaly.getDate() + 1)
-        
-        console.log("startOfTodayItaly (locale):", startOfTodayItaly.toISOString())
-        console.log("endOfTomorrowItaly (locale):", endOfTomorrowItaly.toISOString())
-        
-        // Aggiusta per il fuso orario italiano (CET = UTC+1, CEST = UTC+2)
-        const offsetMinutes = startOfTodayItaly.getTimezoneOffset()
-        console.log("offsetMinutes:", offsetMinutes)
-        
-        const startOfToday = new Date(startOfTodayItaly.getTime() - (offsetMinutes * 60000))
-        const endOfTomorrow = new Date(endOfTomorrowItaly.getTime() - (offsetMinutes * 60000))
-        
-        console.log("Range finale:")
-        console.log("startOfToday:", startOfToday.toISOString())
-        console.log("endOfTomorrow:", endOfTomorrow.toISOString())
-        console.log("=== END DEBUG ===");
-        
+        // Operatore: validità = scheduled_execution <= now <= end_day_time + tolerance
+        const now = new Date()
+        const toleranceMs = TIME_SLOT_TOLERANCE * 60 * 60 * 1000
+        const threshold = new Date(now.getTime() - toleranceMs)
+
         query = query
-          .gte("scheduled_execution", startOfToday.toISOString())
-          .lte("scheduled_execution", endOfTomorrow.toISOString())
+          .neq("status", "completed")
+          .lte("scheduled_execution", now.toISOString())
+          .gte("end_day_time", threshold.toISOString())
       } else {
         // Logica standard per admin/referrer
         query = query
@@ -1165,32 +1133,7 @@ export async function getTodolistsWithPagination(params: {
       )
     }
     
-    // Apply operator-specific filtering for "today" filter
-    if (userRole === "operator" && filter === "today") {
-      console.log("=== DEBUG FILTRO OPERATOR ===")
-      console.log("Todolist prima del filtro isTodolistCurrentlyValid:", filteredTodolists.length)
-      
-      filteredTodolists = filteredTodolists.filter((todolist, index) => {
-        const isValid = isTodolistCurrentlyValid(
-          todolist.scheduled_execution,
-          todolist.time_slot_start,
-          todolist.time_slot_end,
-          todolist.status
-        )
-        console.log(`Todolist ${index}:`, {
-          id: todolist.id,
-          scheduled_execution: todolist.scheduled_execution,
-          time_slot_start: todolist.time_slot_start,
-          time_slot_end: todolist.time_slot_end,
-          status: todolist.status,
-          isValid
-        })
-        return isValid
-      })
-      
-      console.log("Todolist dopo il filtro:", filteredTodolists.length)
-      console.log("=== END DEBUG FILTRO ===")
-    }
+    // Per operatore non è più necessario un post-filtro: la validità è gestita direttamente a livello DB con end_day_time + tolleranza
     // Applico ordinamento lato server per device_name e count (non supportato da supabase)
     let finalTodolists = filteredTodolists
     if (orderCol === "device_name") {
@@ -1312,16 +1255,14 @@ export async function getTodolistFilteredCount(params: {
     // Apply filters (same logic as getTodolistFilteredIds)
     if (filter === "today") {
       if (userRole === "operator") {
-        const nowItaly = new Date().toLocaleString("sv-SE", {timeZone: "Europe/Rome"})
-        const todayItaly = nowItaly.split(" ")[0]
-        
-        const startOfTodayItaly = new Date(`${todayItaly}T00:00:00+02:00`)
-        const endOfTomorrowItaly = new Date(`${todayItaly}T23:59:59+02:00`)
-        endOfTomorrowItaly.setDate(endOfTomorrowItaly.getDate() + 1)
-        
+        const now = new Date()
+        const toleranceMs = TIME_SLOT_TOLERANCE * 60 * 60 * 1000
+        const threshold = new Date(now.getTime() - toleranceMs)
+
         query = query
-          .gte("scheduled_execution", startOfTodayItaly.toISOString())
-          .lte("scheduled_execution", endOfTomorrowItaly.toISOString())
+          .neq("status", "completed")
+          .lte("scheduled_execution", now.toISOString())
+          .gte("end_day_time", threshold.toISOString())
       } else {
         query = query
           .eq("status", "pending")
@@ -1400,16 +1341,14 @@ export async function getTodolistFilteredCount(params: {
       // Apply all the same filters as before
       if (filter === "today") {
         if (userRole === "operator") {
-          const nowItaly = new Date().toLocaleString("sv-SE", {timeZone: "Europe/Rome"})
-          const todayItaly = nowItaly.split(" ")[0]
-          
-          const startOfTodayItaly = new Date(`${todayItaly}T00:00:00+02:00`)
-          const endOfTomorrowItaly = new Date(`${todayItaly}T23:59:59+02:00`)
-          endOfTomorrowItaly.setDate(endOfTomorrowItaly.getDate() + 1)
-          
+          const now = new Date()
+          const toleranceMs = TIME_SLOT_TOLERANCE * 60 * 60 * 1000
+          const threshold = new Date(now.getTime() - toleranceMs)
+
           tagQuery = tagQuery
-            .gte("scheduled_execution", startOfTodayItaly.toISOString())
-            .lte("scheduled_execution", endOfTomorrowItaly.toISOString())
+            .neq("status", "completed")
+            .lte("scheduled_execution", now.toISOString())
+            .gte("end_day_time", threshold.toISOString())
         } else {
           tagQuery = tagQuery
             .eq("status", "pending")

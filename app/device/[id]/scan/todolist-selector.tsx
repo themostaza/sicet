@@ -17,6 +17,7 @@ type Todolist = {
   time_slot_type: "standard" | "custom"
   time_slot_start: number | null
   time_slot_end: number | null
+  todolist_category?: string | null
 }
 
 type TodolistSelectorProps = {
@@ -181,12 +182,19 @@ export function TodolistSelector({ todolists, deviceId, today }: TodolistSelecto
               className="w-full justify-between"
               onClick={() => router.push(`/todolist/view/${todolist.id}/${deviceId}/${today}/${timeSlotString}`)}
             >
-              <div className="flex items-center gap-2">
-                <span className="capitalize">{timeSlotDisplay}</span>
-                {deadlineTime && (
-                  <span className="text-muted-foreground">
-                    (scade alle {deadlineTime})
-                  </span>
+              <div className="flex flex-col items-start gap-1">
+                <div className="flex items-center gap-2">
+                  <span className="capitalize">{timeSlotDisplay}</span>
+                  {deadlineTime && (
+                    <span className="text-muted-foreground">
+                      (scade alle {deadlineTime})
+                    </span>
+                  )}
+                </div>
+                {todolist.todolist_category && (
+                  <Badge variant="outline" className="text-xs py-0 px-1 h-4">
+                    {todolist.todolist_category}
+                  </Badge>
                 )}
               </div>
               <div className="flex items-center gap-2">

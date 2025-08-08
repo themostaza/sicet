@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { AlertCircle } from "lucide-react"
 import TodolistListClient from "@/components/todolists/client"
 import { getTodolistCategories } from "@/app/actions/actions-todolist"
+import { TIME_SLOT_TOLERANCE } from "@/lib/validation/todolist-schemas"
 
 export const dynamic = 'force-dynamic'
 
@@ -51,32 +52,19 @@ export default async function TodolistPage() {
     
     let todayCount = 0
     if (userRole === 'operator') {
-      // Per gli operator, calcola count usando la logica di validità corrente
-      const startOfToday = new Date(today)
-      startOfToday.setHours(0, 0, 0, 0)
-      const endOfTomorrow = new Date(today)
-      endOfTomorrow.setDate(endOfTomorrow.getDate() + 1)
-      endOfTomorrow.setHours(23, 59, 59, 999)
-      
-      const { data: operatorTodolists } = await supabase
+      // Per gli operatori: validità definita da scheduled_execution <= now <= end_day_time + tolerance
+      const now = new Date()
+      const toleranceMs = TIME_SLOT_TOLERANCE * 60 * 60 * 1000
+      const threshold = new Date(now.getTime() - toleranceMs)
+
+      const { count } = await supabase
         .from("todolist")
-        .select("scheduled_execution, status, time_slot_start, time_slot_end")
-        .gte("scheduled_execution", startOfToday.toISOString())
-        .lte("scheduled_execution", endOfTomorrow.toISOString())
-      
-      if (operatorTodolists) {
-        // Importa le funzioni necessarie per il filtro
-        const { isTodolistCurrentlyValid } = await import("@/lib/validation/todolist-schemas")
-        
-        todayCount = operatorTodolists.filter(item => 
-          isTodolistCurrentlyValid(
-            item.scheduled_execution,
-            item.time_slot_start,
-            item.time_slot_end,
-            item.status
-          )
-        ).length
-      }
+        .select("*", { count: "exact", head: true })
+        .neq("status", "completed")
+        .lte("scheduled_execution", now.toISOString())
+        .gte("end_day_time", threshold.toISOString())
+
+      todayCount = count || 0
     } else {
       // Logica standard per admin/referrer
       const { count } = await supabase
