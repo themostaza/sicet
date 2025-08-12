@@ -823,17 +823,40 @@ export async function getTodolistByDeviceAndTimeSlot(deviceId: string, startTime
 
 export async function getTodolistsForDeviceToday(deviceId: string, today: string) {
   const supabase = await createServerSupabaseClient()
-  
-  // New rule for operator validity: scheduled_execution <= now <= end_day_time + tolerance
+
+  // Regola operatori con fuso ITA: scheduled_execution <= now_IT <= end_day_time + tolleranza
+  // I timestamp in DB rappresentano orari italiani salvati come +00:00; costruiamo now come pseudo-UTC coerente
   const now = new Date()
-  const toleranceMs = TIME_SLOT_TOLERANCE * 60 * 60 * 1000
-  const threshold = new Date(now.getTime() - toleranceMs)
+  const fmt = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit'
+  })
+  const parts = Object.fromEntries(fmt.formatToParts(now).map(p => [p.type, p.value])) as any
+  const y = Number(parts.year), m = Number(parts.month), d = Number(parts.day)
+  const hh = Number(parts.hour), mm = Number(parts.minute), ss = Number(parts.second)
+
+  const nowPseudo = new Date(Date.UTC(y, m - 1, d, hh, mm, ss))
+  const thresholdPseudo = new Date(nowPseudo.getTime() - (TIME_SLOT_TOLERANCE * 60 * 60 * 1000))
+
+  const toPseudoIso = (dt: Date) => {
+    const yy = dt.getUTCFullYear()
+    const mo = String(dt.getUTCMonth() + 1).padStart(2, '0')
+    const da = String(dt.getUTCDate()).padStart(2, '0')
+    const ho = String(dt.getUTCHours()).padStart(2, '0')
+    const mi = String(dt.getUTCMinutes()).padStart(2, '0')
+    const se = String(dt.getUTCSeconds()).padStart(2, '0')
+    return `${yy}-${mo}-${da}T${ho}:${mi}:${se}+00:00`
+  }
+
+  const nowItalyPseudo = toPseudoIso(nowPseudo)
+  const thresholdItalyPseudo = toPseudoIso(thresholdPseudo)
 
   const { data, error } = await supabase
     .from("todolist")
     .select(`
       id,
       scheduled_execution,
+      end_day_time,
       status,
       time_slot_type,
       time_slot_start,
@@ -843,8 +866,8 @@ export async function getTodolistsForDeviceToday(deviceId: string, today: string
     `)
     .eq("device_id", deviceId)
     .neq("status", "completed")
-    .lte("scheduled_execution", now.toISOString())
-    .gte("end_day_time", threshold.toISOString())
+    .lte("scheduled_execution", nowItalyPseudo)
+    .gte("end_day_time", thresholdItalyPseudo)
     .order("scheduled_execution", { ascending: true })
 
   if (error) {
@@ -906,6 +929,7 @@ export async function getTodolistsWithPagination(params: {
         id,
         device_id,
         scheduled_execution,
+        end_day_time,
         status,
         created_at,
         time_slot_type,
@@ -929,15 +953,44 @@ export async function getTodolistsWithPagination(params: {
 
     if (filter === "today") {
       if (userRole === "operator") {
-        // Operatore: validità = scheduled_execution <= now <= end_day_time + tolerance
+        // Operatore (CET): scheduled_execution <= now_IT <= end_day_time + TOLLERANZA
+        // Nota: in DB i timestamp (scheduled_execution, end_day_time) rappresentano orari ITALIANI
+        // ma sono salvati con offset +00. Per confrontarli correttamente,
+        // costruiamo "now" e "threshold" nello stesso spazio (pseudo-UTC con +00).
+
+        // Estrai ora italiana
         const now = new Date()
-        const toleranceMs = TIME_SLOT_TOLERANCE * 60 * 60 * 1000
-        const threshold = new Date(now.getTime() - toleranceMs)
+        const fmt = new Intl.DateTimeFormat('sv-SE', {
+          timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit'
+        })
+        const parts = Object.fromEntries(fmt.formatToParts(now).map(p => [p.type, p.value])) as any
+        const y = Number(parts.year), m = Number(parts.month), d = Number(parts.day)
+        const hh = Number(parts.hour), mm = Number(parts.minute), ss = Number(parts.second)
+
+        // Crea una data "naive" nel dominio +00 per calcoli di tolleranza
+        const nowPseudo = new Date(Date.UTC(y, m - 1, d, hh, mm, ss))
+        const thresholdPseudo = new Date(nowPseudo.getTime() - (TIME_SLOT_TOLERANCE * 60 * 60 * 1000))
+
+        const toPseudoIso = (dt: Date) => {
+          const yy = dt.getUTCFullYear()
+          const mo = String(dt.getUTCMonth() + 1).padStart(2, '0')
+          const da = String(dt.getUTCDate()).padStart(2, '0')
+          const ho = String(dt.getUTCHours()).padStart(2, '0')
+          const mi = String(dt.getUTCMinutes()).padStart(2, '0')
+          const se = String(dt.getUTCSeconds()).padStart(2, '0')
+          return `${yy}-${mo}-${da}T${ho}:${mi}:${se}+00:00`
+        }
+
+        const nowItalyPseudo = toPseudoIso(nowPseudo)
+        const thresholdItalyPseudo = toPseudoIso(thresholdPseudo)
+        //console.log("nowItalyPseudo", nowItalyPseudo)
+        //console.log("thresholdItalyPseudo", thresholdItalyPseudo)
 
         query = query
           .neq("status", "completed")
-          .lte("scheduled_execution", now.toISOString())
-          .gte("end_day_time", threshold.toISOString())
+          .lte("scheduled_execution", nowItalyPseudo)
+          .gte("end_day_time", thresholdItalyPseudo)
       } else {
         // Logica standard per admin/referrer
         query = query
@@ -1093,6 +1146,7 @@ export async function getTodolistsWithPagination(params: {
             date,
             time_slot: timeSlotValue,
             scheduled_execution: item.scheduled_execution,
+            end_day_time: (item as any).end_day_time ?? null,
             status: item.status as "pending" | "in_progress" | "completed",
             count: item.tasks ? item.tasks.length : 0,
             time_slot_type: item.time_slot_type,

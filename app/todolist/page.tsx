@@ -52,17 +52,38 @@ export default async function TodolistPage() {
     
     let todayCount = 0
     if (userRole === 'operator') {
-      // Per gli operatori: validità definita da scheduled_execution <= now <= end_day_time + tolerance
+      // Operatore (CET): scheduled_execution <= now_IT <= end_day_time + TOLLERANZA
       const now = new Date()
-      const toleranceMs = TIME_SLOT_TOLERANCE * 60 * 60 * 1000
-      const threshold = new Date(now.getTime() - toleranceMs)
+      const fmt = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      })
+      const parts = Object.fromEntries(fmt.formatToParts(now).map(p => [p.type, p.value])) as any
+      const y = Number(parts.year), m = Number(parts.month), d = Number(parts.day)
+      const hh = Number(parts.hour), mm = Number(parts.minute), ss = Number(parts.second)
+
+      const nowPseudo = new Date(Date.UTC(y, m - 1, d, hh, mm, ss))
+      const thresholdPseudo = new Date(nowPseudo.getTime() - (TIME_SLOT_TOLERANCE * 60 * 60 * 1000))
+
+      const toPseudoIso = (dt: Date) => {
+        const yy = dt.getUTCFullYear()
+        const mo = String(dt.getUTCMonth() + 1).padStart(2, '0')
+        const da = String(dt.getUTCDate()).padStart(2, '0')
+        const ho = String(dt.getUTCHours()).padStart(2, '0')
+        const mi = String(dt.getUTCMinutes()).padStart(2, '0')
+        const se = String(dt.getUTCSeconds()).padStart(2, '0')
+        return `${yy}-${mo}-${da}T${ho}:${mi}:${se}+00:00`
+      }
+
+      const nowItalyPseudo = toPseudoIso(nowPseudo)
+      const thresholdItalyPseudo = toPseudoIso(thresholdPseudo)
 
       const { count } = await supabase
         .from("todolist")
         .select("*", { count: "exact", head: true })
         .neq("status", "completed")
-        .lte("scheduled_execution", now.toISOString())
-        .gte("end_day_time", threshold.toISOString())
+        .lte("scheduled_execution", nowItalyPseudo)
+        .gte("end_day_time", thresholdItalyPseudo)
 
       todayCount = count || 0
     } else {
@@ -76,12 +97,6 @@ export default async function TodolistPage() {
       
       todayCount = count || 0
     }
-
-    const { count: todayTotal } = await supabase
-      .from("todolist")
-      .select("*", { count: "exact", head: true })
-      .gte("scheduled_execution", `${today}T00:00:00`)
-      .lt("scheduled_execution", `${today}T23:59:59`)
 
     const { count: overdueCount } = await supabase
       .from("todolist")
@@ -103,7 +118,6 @@ export default async function TodolistPage() {
     const counts = {
       all: allCount || 0,
       today: todayCount,
-      todayTotal: todayTotal || 0,
       overdue: overdueCount || 0,
       future: futureCount || 0,
       completed: completedCount || 0,

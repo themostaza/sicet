@@ -30,6 +30,7 @@ type TodolistItem = {
   date: string
   time_slot: TimeSlotValue
   scheduled_execution: string
+  end_day_time: string | null
   status: "pending" | "in_progress" | "completed"
   count: number
   time_slot_type: "standard" | "custom"
@@ -542,6 +543,23 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
     return timeSlotNames[slot]
   }
 
+  const formatTimeIntervalFromDb = (startIso: string, endIso: string | null) => {
+    const extractHHmm = (iso: string | null | undefined): string | null => {
+      if (!iso) return null
+      // Estrarre direttamente HH:mm dalla stringa senza conversioni di fuso
+      // Supporta formati: 2025-08-12T14:00:00Z, 2025-08-12T14:00:00+00:00, 2025-08-12T14:00:00
+      const match = iso.match(/T(\d{2}):(\d{2})/)
+      if (match) return `${match[1]}:${match[2]}`
+      return null
+    }
+
+    const startStr = extractHHmm(startIso)
+    const endStr = extractHHmm(endIso ?? undefined)
+    if (startStr && endStr) return `${startStr}–${endStr}`
+    if (startStr) return startStr
+    return ""
+  }
+
   return (
     <Card>
       <CardHeader className="space-y-4">
@@ -678,7 +696,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
             size="sm"
             className={activeFilter === "today" ? "bg-yellow-500 hover:bg-yellow-600" : ""}
           >
-            Oggi <Badge className="ml-2" variant={activeFilter === "today" ? "outline" : "secondary"}>{counts.today}</Badge>
+            Oggi <Badge className="ml-2" variant={activeFilter === "today" ? "outline" : "secondary"}>{isOperator ? totalCount : counts.today}</Badge>
           </Button>
           {/* Gruppo: Scadute, Future, Completate */}
           {!isOperator && (
@@ -1080,7 +1098,12 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                         {...(canClick && { onClick: () => handleRowClick(item) })}
                         className={cn(isOperator && "hidden md:table-cell")}
                       >
-                        {formatDateEuropean(item.date)}
+                        <div className="flex flex-col">
+                          <span>{formatDateEuropean(item.date)}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {formatTimeIntervalFromDb(item.scheduled_execution, item.end_day_time)}
+                          </span>
+                        </div>
                       </TableCell>
                       <TableCell 
                         {...(canClick && { onClick: () => handleRowClick(item) })}
