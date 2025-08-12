@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
-import { LayoutGrid, Layers, ClipboardList, FileText, Menu, BellRing, AlertCircle, Users, BarChart2, Database, Table, ChevronsLeft, ChevronsRight } from "lucide-react"
+import { LayoutGrid, Layers, ClipboardList, FileText, Menu, BellRing, AlertCircle, Users, BarChart2, Database, Table, Table2, ChevronsLeft, ChevronsRight } from "lucide-react"
 import NavLinkWithLoading from "./ui/NavLinkWithLoading"
 import { Button } from "./ui/button"
 import {
@@ -56,6 +56,11 @@ const menuItemsByRole: Record<Role, Array<{
       href: "matrix",
       icon: <Table size={20} />,
       label: "Matrice Todolist"
+    },
+    {
+      href: "/matrix/madre",
+      icon: <Table2 size={20} />,
+      label: "Gestione Matrice Madre"
     },
     {
       href: "/export",
