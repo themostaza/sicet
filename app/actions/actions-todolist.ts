@@ -1014,7 +1014,7 @@ export async function getTodolistsWithPagination(params: {
           .lte("scheduled_execution", nowItalyPseudo)
           .gte("end_day_time", thresholdItalyPseudo)
       } else {
-        // Logica standard per admin/referrer
+        // Logica standard per admin/referrer: TUTTE le todolist di oggi (qualsiasi stato)
         query = query
           .gte("scheduled_execution", `${today}T00:00:00`)
           .lt("scheduled_execution", `${today}T23:59:59`)
@@ -1348,7 +1348,6 @@ export async function getTodolistFilteredCount(params: {
           .gte("end_day_time", threshold.toISOString())
       } else {
         query = query
-          .eq("status", "pending")
           .gte("scheduled_execution", `${today}T00:00:00`)
           .lt("scheduled_execution", `${today}T23:59:59`)
       }
@@ -1434,7 +1433,6 @@ export async function getTodolistFilteredCount(params: {
             .gte("end_day_time", threshold.toISOString())
         } else {
           tagQuery = tagQuery
-            .eq("status", "pending")
             .gte("scheduled_execution", `${today}T00:00:00`)
             .lt("scheduled_execution", `${today}T23:59:59`)
         }
@@ -1555,7 +1553,6 @@ export async function getTodolistFilteredIds(params: {
             .lte("scheduled_execution", endOfTomorrowItaly.toISOString())
         } else {
           query = query
-            .eq("status", "pending")
             .gte("scheduled_execution", `${today}T00:00:00`)
             .lt("scheduled_execution", `${today}T23:59:59`)
         }

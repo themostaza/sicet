@@ -87,11 +87,10 @@ export default async function TodolistPage() {
 
       todayCount = count || 0
     } else {
-      // Logica standard per admin/referrer
+      // Admin/referrer: tutte le todolist di oggi (qualsiasi stato)
       const { count } = await supabase
         .from("todolist")
         .select("*", { count: "exact", head: true })
-        .eq("status", "pending")
         .gte("scheduled_execution", `${today}T00:00:00`)
         .lt("scheduled_execution", `${today}T23:59:59`)
       
