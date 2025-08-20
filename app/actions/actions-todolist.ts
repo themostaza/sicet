@@ -923,6 +923,28 @@ export async function getTodolistsWithPagination(params: {
     const { filter, offset, limit, selectedDate, selectedDevice, selectedTags, selectedCategory, selectedCategories, sortColumn, sortDirection, userRole } = params
     const supabase = await createServerSupabaseClient()
     
+    // If tag filters are present, precompute matching device IDs so pagination/count are consistent
+    let appliedDbTagFilter = false
+    let deviceIdsForTags: string[] | null = null
+    if (selectedTags && selectedTags.length > 0) {
+      const { data: devicesWithTags, error: devicesWithTagsError } = await supabase
+        .from("devices")
+        .select("id, tags")
+        .overlaps("tags", selectedTags)
+
+      if (devicesWithTagsError) {
+        console.error("Error fetching devices for tag filter:", devicesWithTagsError)
+      } else {
+        deviceIdsForTags = (devicesWithTags || []).map((d: any) => d.id)
+        appliedDbTagFilter = true
+
+        // If no devices match the selected tags, we can short-circuit returning empty results
+        if (deviceIdsForTags.length === 0) {
+          return { todolists: [], hasMore: false, totalCount: 0 }
+        }
+      }
+    }
+
     let query = supabase
       .from("todolist")
       .select(`
@@ -1021,6 +1043,11 @@ export async function getTodolistsWithPagination(params: {
       query = query.eq("device_id", selectedDevice)
     }
 
+    // Apply tag-based device filter at DB level (if computed)
+    if (appliedDbTagFilter && deviceIdsForTags && deviceIdsForTags.length > 0) {
+      query = query.in("device_id", deviceIdsForTags)
+    }
+
     // Apply category filter if specified
     if (selectedCategories && selectedCategories.length > 0) {
       const normalCategories = selectedCategories.filter(cat => cat !== "__NULL__")
@@ -1065,13 +1092,15 @@ export async function getTodolistsWithPagination(params: {
     // For device_name and count, we need to sort after fetching (not supported nativamente da supabase su join/aggregati)
     let data, count, error
     if (orderCol === "device_name" || orderCol === "count") {
-      // Fallback: order by scheduled_execution, sort after fetch
+      // Fallback: order by scheduled_execution for DB, ensure stable pagination with secondary id order
       ({ data, count, error } = await query
         .order("scheduled_execution", { ascending: false })
+        .order("id", { ascending: false })
         .range(offset, offset + limit - 1))
     } else {
       ({ data, count, error } = await query
         .order(orderCol, { ascending: orderAsc })
+        .order("id", { ascending: orderAsc })
         .range(offset, offset + limit - 1))
     }
 
@@ -1179,10 +1208,10 @@ export async function getTodolistsWithPagination(params: {
         tasks: Array<{ id: string; kpi_id: string; status: string }>
       }>
 
-    // Apply tag filtering if specified
+    // Apply tag filtering only if not already done at DB level (fallback)
     let filteredTodolists = processedTodolists
-    if (selectedTags && selectedTags.length > 0) {
-      filteredTodolists = processedTodolists.filter(todolist => 
+    if (!appliedDbTagFilter && selectedTags && selectedTags.length > 0) {
+      filteredTodolists = processedTodolists.filter(todolist =>
         selectedTags.some(selectedTag => todolist.device_tags.includes(selectedTag))
       )
     }

@@ -227,26 +227,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
     }
   }, [activeFilter, selectedDate, selectedDevice, selectedCategory, currentOffset, isLoading, selectedTags, sortColumn, sortDirection, userRole])
 
-  // Update URL params when filters change
-  useEffect(() => {
-    const params = new URLSearchParams()
-    
-    if (selectedDate) {
-      params.set('date', format(selectedDate, 'yyyy-MM-dd'))
-    }
-    if (selectedDevice !== "all") {
-      params.set('device', selectedDevice)
-    }
-    if (selectedTags.length > 0) {
-      params.set('tags', selectedTags.join(','))
-    }
-    if (selectedCategory !== "all") {
-      params.set('category', selectedCategory)
-    }
-    
-    const newUrl = params.toString() ? `?${params.toString()}` : ''
-    router.replace(newUrl, { scroll: false })
-  }, [selectedDate, selectedDevice, selectedTags, selectedCategory, router])
+  // Intentionally do not write filters to URL; keep only initial read via useSearchParams
 
   // Reset and fetch when filters change
   useEffect(() => {
@@ -743,11 +724,9 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                   )}
                 </Button>
               </DialogTrigger>
-              {/* MAPPA CONTEGGI COLORATA */}
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge className="bg-green-500 text-white" variant="default">Completate: {counts.completed}</Badge>
-                <Badge className="bg-red-500 text-white" variant="default">Scadute: {counts.overdue}</Badge>
-                <Badge className="bg-yellow-500 text-black" variant="default">Da fare: {counts.today}</Badge>
+              {/* Indicator: shown vs backend total (filtered) */}
+              <div className="text-sm text-muted-foreground">
+                Mostrati {todolists.length} di {filteredCount} risultati
               </div>
               <DialogContent className="max-w-md">
                 <DialogHeader>
