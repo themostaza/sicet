@@ -299,7 +299,7 @@ export function KpiSelection() {
 
       {/* KPI Selection Sheet */}
       <Sheet open={isKpiSheetOpen} onOpenChange={setIsKpiSheetOpen}>
-        <SheetContent>
+        <SheetContent className="overflow-y-auto">
           <SheetHeader>
             <SheetTitle>Seleziona Controlli</SheetTitle>
           </SheetHeader>
@@ -319,7 +319,7 @@ export function KpiSelection() {
 
       {/* Alert Sheet */}
       <Sheet open={isAlertSheetOpen} onOpenChange={setIsAlertSheetOpen}>
-        <SheetContent className="sm:max-w-md">
+        <SheetContent className="sm:max-w-md overflow-y-auto">
           <SheetHeader>
             <SheetTitle>
               {selectedKpiForAlert && `Imposta alert per il controllo ${selectedKpiForAlert.name}`}

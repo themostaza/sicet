@@ -61,12 +61,12 @@ interface TodolistContextType {
   kpiSearchTerm: string
   errors: ValidationErrors
   selectedDates: Date[]
+  tagFilterMode: "and" | "or"
   
   // Dati derivati
   devicesByTag: Record<string, Set<string>>
   availableTags: string[]
   tagCounts: Record<string, number>
-  autoSelectedFromTags: Set<string>
   selectedDevices: Set<string>
   filteredDevices: Device[]
   filteredKpis: KPI[]
@@ -96,6 +96,7 @@ interface TodolistContextType {
   setSelectedDates: (dates: Date[]) => void
   setErrors: (errors: ValidationErrors) => void
   setIsSubmitting: (submitting: boolean) => void
+  setTagFilterMode: (mode: "and" | "or") => void
   
   // Handlers
   handleTagClick: (tag: string) => void
@@ -148,6 +149,7 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
   const [kpiSearchTerm, setKpiSearchTerm] = useState("")
   const [errors, setErrors] = useState<ValidationErrors>({})
   const [selectedDates, setSelectedDates] = useState<Date[]>([])
+  const [tagFilterMode, setTagFilterMode] = useState<"and" | "or">("and")
   
   // Email e Alert
   const [email, setEmail] = useState("")
@@ -166,7 +168,7 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
     const loadData = async () => {
       try {
         const [devicesResponse, kpisResponse, categoriesResponse] = await Promise.all([
-          getDevices({ limit: 100 }),
+          getDevices({ limit: 1000 }),
           getKpis({ limit: 100 }),
           getTodolistCategories()
         ])
@@ -242,28 +244,8 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
     return counts
   }, [availableTags, devicesByTag])
   
-  // Dispositivi selezionati automaticamente dai tag
-  const autoSelectedFromTags = useMemo(() => {
-    const selectedDeviceIds = new Set<string>()
-    
-    if (selectedTags.size === 0) return selectedDeviceIds
-    
-    for (const tag of selectedTags) {
-      if (devicesByTag[tag]) {
-        for (const deviceId of devicesByTag[tag]) {
-          selectedDeviceIds.add(deviceId)
-        }
-      }
-    }
-    
-    return selectedDeviceIds
-  }, [selectedTags, devicesByTag])
-  
-  // Unione dei dispositivi selezionati manualmente e tramite tag
-  const selectedDevices = useMemo(() => {
-    const allSelected = new Set([...autoSelectedFromTags, ...manualSelectedDevices])
-    return allSelected
-  }, [autoSelectedFromTags, manualSelectedDevices])
+  // Solo selezioni manuali: i tag filtrano, non selezionano
+  const selectedDevices = useMemo(() => new Set(manualSelectedDevices), [manualSelectedDevices])
   
   // Dispositivi filtrati per ricerca e pre-selezione
   const filteredDevices = useMemo(() => {
@@ -275,12 +257,19 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
         device.id.toLowerCase().includes(deviceSearchTerm.toLowerCase()) ||
         (device.location && device.location.toLowerCase().includes(deviceSearchTerm.toLowerCase()))
       
-      const matchesTags = selectedTags.size === 0 || 
-        (device.tags && [...selectedTags].every(tag => device.tags?.includes(tag)))
+      let matchesTags = selectedTags.size === 0
+      if (selectedTags.size > 0) {
+        const deviceTags = device.tags || []
+        if (tagFilterMode === "and") {
+          matchesTags = [...selectedTags].every(tag => deviceTags.includes(tag))
+        } else {
+          matchesTags = [...selectedTags].some(tag => deviceTags.includes(tag))
+        }
+      }
       
       return matchesSearch && matchesTags
     })
-  }, [devices, deviceSearchTerm, selectedTags])
+  }, [devices, deviceSearchTerm, selectedTags, tagFilterMode])
   
   // KPIs filtrati per ricerca
   const filteredKpis = useMemo(() => {
@@ -337,38 +326,8 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
   
   // Handler per click su tag
   const handleTagClick = useCallback((tag: string) => {
-    setSelectedTags(prev => {
-      const next = toggle(prev, tag)
-      // When adding a tag, select all devices with that tag
-      // When removing a tag, deselect devices that are only selected by that tag
-      setManualSelectedDevices(prevDevices => {
-        const nextDevices = new Set(prevDevices)
-        if (next.has(tag)) {
-          // Add all devices with this tag
-          if (devicesByTag[tag]) {
-            for (const deviceId of devicesByTag[tag]) {
-              nextDevices.add(deviceId)
-            }
-          }
-        } else {
-          // Remove devices that are only selected by this tag
-          if (devicesByTag[tag]) {
-            for (const deviceId of devicesByTag[tag]) {
-              // Check if device is selected by any other tag
-              const isSelectedByOtherTag = [...next].some(otherTag => 
-                otherTag !== tag && devicesByTag[otherTag]?.has(deviceId)
-              )
-              if (!isSelectedByOtherTag) {
-                nextDevices.delete(deviceId)
-              }
-            }
-          }
-        }
-        return nextDevices
-      })
-      return next
-    })
-  }, [devicesByTag])
+    setSelectedTags(prev => toggle(prev, tag))
+  }, [])
   
   // Cancella tutti i tags selezionati
   const clearAllTags = useCallback(() => {
@@ -383,9 +342,7 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
       setManualSelectedDevices(prev => {
         const next = new Set(prev)
         for (const id of visibleIds) {
-          if (next.has(id) && !autoSelectedFromTags.has(id)) {
-            next.delete(id)
-          }
+          if (next.has(id)) next.delete(id)
         }
         return next
       })
@@ -396,7 +353,7 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
         return new Set([...prev, ...visibleIds])
       })
     }
-  }, [allRowsSelected, filteredDevices, autoSelectedFromTags])
+  }, [allRowsSelected, filteredDevices])
   
   // Toggle selezione di tutti i KPI
   const handleToggleAllKpis = useCallback(() => {
@@ -594,9 +551,10 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
     defaultTimeSlot, intervalDays, startDate, monthsToRepeat,
     isDeviceSheetOpen, isKpiSheetOpen, isDateSheetOpen,
     deviceSearchTerm, kpiSearchTerm, errors, selectedDates,
+    tagFilterMode,
     
     // Dati derivati
-    devicesByTag, availableTags, tagCounts, autoSelectedFromTags,
+    devicesByTag, availableTags, tagCounts,
     selectedDevices, filteredDevices, filteredKpis, deviceKpis,
     selectedDevicesArray, selectedKpisArray, totalTodolistCount,
     allRowsSelected, someRowsSelected, allKpiSelected, someKpiSelected,
@@ -607,6 +565,7 @@ export function TodolistProvider({ children }: { children: ReactNode }) {
     setManualSelectedDevices, setSelectedKpis, setDateEntries,
     setDefaultTimeSlot, setIntervalDays, setStartDate, setMonthsToRepeat,
     setSelectedDates, setErrors, setIsSubmitting,
+    setTagFilterMode,
     
     // Handlers
     handleTagClick, clearAllTags, handleToggleAllDevices, handleToggleAllKpis,

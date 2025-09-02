@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   Sheet,
@@ -32,6 +33,8 @@ export function DeviceSelectionSheet() {
     clearAllTags,
     filteredDevices,
     selectedDevices,
+    tagFilterMode,
+    setTagFilterMode,
     manualSelectedDevices,
     setManualSelectedDevices,
     allRowsSelected,
@@ -72,7 +75,17 @@ export function DeviceSelectionSheet() {
           {/* Tag Chips */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">Tags</label>
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-medium">Tags</label>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>{tagFilterMode === "and" ? "Intersezione" : "Aggregazione"}</span>
+                  <Switch
+                    checked={tagFilterMode === "or"}
+                    onCheckedChange={(checked) => setTagFilterMode(checked ? "or" : "and")}
+                    aria-label="Cambia modalità filtro tag"
+                  />
+                </div>
+              </div>
               <Button 
                 variant="ghost" 
                 size="sm" 
@@ -109,12 +122,24 @@ export function DeviceSelectionSheet() {
             />
           </div>
 
+          {/* Count shown/selected */}
+          <div className="flex justify-end gap-3">
+            <span className="text-xs text-muted-foreground">Mostrati {filteredDevices.length}</span>
+            <span className="text-xs text-muted-foreground">Selezionati {selectedDevices.size}</span>
+          </div>
+
           {/* Device Table */}
           <div className="border rounded-md overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10"></TableHead>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={allRowsSelected ? true : (someRowsSelected ? "indeterminate" : false)}
+                      onCheckedChange={handleToggleAllDevices}
+                      aria-label="Seleziona tutti i visibili"
+                    />
+                  </TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead className="hidden md:table-cell">Posizione</TableHead>
                   <TableHead className="hidden lg:table-cell">Tag</TableHead>
