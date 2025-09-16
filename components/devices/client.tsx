@@ -7,6 +7,8 @@ import { QrCode, Edit, Plus, MapPin, Info, Trash2, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { QRCodeModal } from "@/components/qr-code-modal"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 import { format } from "date-fns"
 import { it } from "date-fns/locale"
 import type { Device } from "@/lib/validation/device-schemas"
@@ -24,6 +26,7 @@ export default function DeviceList({ initialDevices, allTags }: Props) {
   const router = useRouter()
   const [search, setSearch] = useState("")
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [tagFilterMode, setTagFilterMode] = useState<'OR' | 'AND'>('OR')
   const deferred = useDeferredValue(search)
   const [qr, setQr] = useState<{ open: boolean; device?: Device }>({ open: false })
   const [qrFilterDialog, setQrFilterDialog] = useState(false)
@@ -75,7 +78,7 @@ export default function DeviceList({ initialDevices, allTags }: Props) {
 
       setTagLoading(true)
       try {
-        const filtered = await getDevicesByTags(selectedTags)
+        const filtered = await getDevicesByTags(selectedTags, tagFilterMode)
         setFilteredDevices(filtered)
       } catch (error) {
         console.error('Error filtering devices by tags:', error)
@@ -86,7 +89,7 @@ export default function DeviceList({ initialDevices, allTags }: Props) {
     }
 
     filterByTags()
-  }, [selectedTags])
+  }, [selectedTags, tagFilterMode])
 
   const loadMore = async () => {
     if (loading || !hasMore) return
@@ -195,6 +198,23 @@ export default function DeviceList({ initialDevices, allTags }: Props) {
               </Button>
             )}
           </div>
+          
+          {/* Toggle OR/AND Mode */}
+          {selectedTags.length > 1 && (
+            <div className="flex items-center space-x-2 text-sm">
+              <Label htmlFor="tag-mode-toggle" className="text-gray-600">
+                Modalità: {tagFilterMode === 'OR' ? 'Almeno uno' : 'Tutti i tag'}
+              </Label>
+              <Switch
+                id="tag-mode-toggle"
+                checked={tagFilterMode === 'AND'}
+                onCheckedChange={(checked) => setTagFilterMode(checked ? 'AND' : 'OR')}
+              />
+              <span className="text-xs text-gray-500">
+                {tagFilterMode === 'OR' ? 'OR' : 'AND'}
+              </span>
+            </div>
+          )}
           <div className="flex flex-wrap gap-2">
             {allTags.map((tag) => (
               <Badge
@@ -225,7 +245,7 @@ export default function DeviceList({ initialDevices, allTags }: Props) {
                 Mostrando {list.length} di {currentDevices.length} dispositivi
                 {selectedTags.length > 0 && (
                   <span className="ml-2 text-xs text-green-600">
-                    (tutti i dispositivi con questi tag)
+                    ({tagFilterMode === 'OR' ? 'dispositivi con almeno uno di questi tag' : 'dispositivi con tutti questi tag'})
                   </span>
                 )}
               </>
@@ -235,7 +255,7 @@ export default function DeviceList({ initialDevices, allTags }: Props) {
                 {search && <span className="inline-block bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs mr-2">Ricerca: "{search}"</span>}
                 {selectedTags.length > 0 && (
                   <span className="inline-block bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs">
-                    Tag: {selectedTags.join(", ")}
+                    Tag ({tagFilterMode}): {selectedTags.join(", ")}
                   </span>
                 )}
               </span>

@@ -728,7 +728,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
               <div className="text-sm text-muted-foreground">
                 Mostrati {todolists.length} di {filteredCount} risultati
               </div>
-              <DialogContent className="max-w-md">
+              <DialogContent className="min-w-[60vw]">
                 <DialogHeader>
                   <DialogTitle>Filtri</DialogTitle>
                   <DialogDescription>

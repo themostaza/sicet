@@ -251,19 +251,34 @@ export async function getDeviceTags(): Promise<string[]> {
   return Array.from(allTags).sort();
 }
 
-export async function getDevicesByTags(tags: string[]): Promise<Device[]> {
+export async function getDevicesByTags(tags: string[], mode: 'OR' | 'AND' = 'OR'): Promise<Device[]> {
   if (tags.length === 0) {
     return [];
   }
 
-  const { data, error } = await (await supabase())
-    .from("devices")
-    .select("*")
-    .eq("deleted", false)
-    .overlaps("tags", tags)
-    .order("created_at", { ascending: false });
+  if (mode === 'OR') {
+    // Modalità OR: dispositivi con almeno uno dei tag (comportamento originale)
+    const { data, error } = await (await supabase())
+      .from("devices")
+      .select("*")
+      .eq("deleted", false)
+      .overlaps("tags", tags)
+      .order("created_at", { ascending: false });
 
-  if (error) handlePostgrestError(error);
+    if (error) handlePostgrestError(error);
 
-  return (data ?? []).map(toDevice);
+    return (data ?? []).map(toDevice);
+  } else {
+    // Modalità AND: dispositivi che hanno tutti i tag selezionati
+    const { data, error } = await (await supabase())
+      .from("devices")
+      .select("*")
+      .eq("deleted", false)
+      .contains("tags", tags)
+      .order("created_at", { ascending: false });
+
+    if (error) handlePostgrestError(error);
+
+    return (data ?? []).map(toDevice);
+  }
 }
