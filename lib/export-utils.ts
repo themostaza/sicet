@@ -11,6 +11,7 @@ export interface ExportConfig {
   endDate: string
   deviceIds?: string[]
   kpiIds?: string[]
+  todolistIds?: string[]
 }
 
 // Define a type for the KPI map entries
@@ -26,6 +27,7 @@ export type TaskWithTodolist = {
   status: string
   value: any
   todolist: {
+    id: string
     device_id: string
     scheduled_execution: string
   }
@@ -55,6 +57,7 @@ export async function exportTodolistData(config: ExportConfig): Promise<Blob> {
       status,
       value,
       todolist:todolist_id (
+        id,
         device_id,
         scheduled_execution
       )
@@ -62,9 +65,14 @@ export async function exportTodolistData(config: ExportConfig): Promise<Blob> {
     .gte('todolist.scheduled_execution', `${config.startDate}T00:00:00`)
     .lte('todolist.scheduled_execution', `${config.endDate}T23:59:59`)
   
-  // Filter by device if specified
-  if (config.deviceIds && config.deviceIds.length > 0) {
-    query = query.in('todolist.device_id', config.deviceIds)
+  // Filter by specific todolist IDs if specified (takes precedence over other filters)
+  if (config.todolistIds && config.todolistIds.length > 0) {
+    query = query.in('todolist_id', config.todolistIds)
+  } else {
+    // Filter by device if specified (only if not filtering by specific todolists)
+    if (config.deviceIds && config.deviceIds.length > 0) {
+      query = query.in('todolist.device_id', config.deviceIds)
+    }
   }
   
   // Filter by KPI if specified  

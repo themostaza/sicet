@@ -1,19 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { exportTodolistData } from '@/lib/export-utils'
 
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
+    const body = await request.json()
     
-    // Extract query parameters
-    const startDate = searchParams.get('startDate')
-    const endDate = searchParams.get('endDate')
-    const deviceIds = searchParams.get('deviceIds')?.split(',').filter(Boolean) || undefined
-    const kpiIds = searchParams.get('kpiIds')?.split(',').filter(Boolean) || undefined
-    const filename = searchParams.get('filename') || 'todolist-export'
-    
-    // Se ci sono todolist specifiche selezionate, usiamo un parametro diverso
-    const hasSelectedTodolists = searchParams.get('hasSelectedTodolists') === 'true'
+    // Extract parameters from body
+    const { startDate, endDate, todolistIds, filename = 'todolist-export' } = body
     
     // Validate required parameters
     if (!startDate || !endDate) {
@@ -40,12 +33,11 @@ export async function GET(request: NextRequest) {
       )
     }
     
-    // Call the export function - senza todolistIds per evitare URL troppo lunghi
+    // Call the export function
     const blob = await exportTodolistData({
       startDate,
       endDate,
-      deviceIds,
-      kpiIds
+      todolistIds: todolistIds || undefined
     })
     
     // Convert blob to array buffer
@@ -68,7 +60,7 @@ export async function GET(request: NextRequest) {
     })
     
   } catch (error) {
-    console.error('CSV Export API error:', error)
+    console.error('CSV Filtered Export API error:', error)
     
     if (error instanceof Error) {
       return NextResponse.json(
@@ -82,4 +74,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     )
   }
-} 
+}
