@@ -53,7 +53,7 @@ const menuItemsByRole: Record<Role, Array<{
       label: "Todolist"
     },
     {
-      href: "matrix",
+      href: "/matrix",
       icon: <Table size={20} />,
       label: "Matrice Todolist"
     },
