@@ -408,6 +408,19 @@ export default function MatriceTodolist() {
 
     // Ottieni il valore di un controllo per una todolist
   const getControlValue = (todolist: TodolistData, controlId: string): string => {
+    // Prima verifica se questo controllo è pertinente per questa todolist
+    const controlExists = todolist.tasks.some(task => {
+      if (task.value && Array.isArray(task.value)) {
+        return task.value.some(item => item.id === controlId)
+      }
+      return false
+    })
+    
+    // Se il controllo non è pertinente per questa todolist, restituisci -
+    if (!controlExists) {
+      return '-'
+    }
+    
     // Cerca in tutti i tasks della todolist per trovare il campo JSONB
     for (const task of todolist.tasks) {
       if (task.status === 'completed' && task.value && Array.isArray(task.value)) {
@@ -423,7 +436,7 @@ export default function MatriceTodolist() {
           if (typeof jsonbField.value === 'string') {
             return jsonbField.value
           }
-          return jsonbField.value?.toString() || '-'
+          return jsonbField.value?.toString() || ''
         }
       }
     }
@@ -433,8 +446,8 @@ export default function MatriceTodolist() {
       return 'na'
     }
     
-    // Se non trova il campo, restituisci -
-    return '-'
+    // Se non trova il campo ma il controllo esiste, restituisci vuoto (valore non compilato)
+    return ''
   }
 
   // Formatta la data della todolist
