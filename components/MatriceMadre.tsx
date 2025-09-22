@@ -5,10 +5,20 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
-import { Calendar as CalendarIcon, Download, Loader2, Settings } from "lucide-react"
+import { Calendar as CalendarIcon, Download, Loader2, Settings, Trash2 } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import { toast } from "@/components/ui/use-toast"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 type GroupRow = {
   device_id: string
@@ -102,6 +112,9 @@ export default function MatriceMadre() {
   const [showFromCalendar, setShowFromCalendar] = useState(false)
   const [showToCalendar, setShowToCalendar] = useState(false)
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [groupToDelete, setGroupToDelete] = useState<AggregatedRow | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const loadData = async () => {
     setIsLoading(true)
@@ -296,8 +309,107 @@ export default function MatriceMadre() {
     setExpandedKeys(s)
   }
 
+  const handleDeleteGroup = (group: AggregatedRow) => {
+    setGroupToDelete(group)
+    setDeleteDialogOpen(true)
+  }
+
+  const confirmDeleteGroup = async () => {
+    if (!groupToDelete) return
+
+    setIsDeleting(true)
+    try {
+      // Get all todolist IDs for this group
+      const todolistIds: string[] = []
+      
+      // Find all todolists that match this group's criteria
+      const matchingTodolists = sortedGroups.filter(g => {
+        if (groupToDelete.baseKey.startsWith("single|")) {
+          const kpiId = groupToDelete.baseKey.replace("single|", "")
+          return g.groupType === "single" && g.kpi_id === kpiId
+        } else if (groupToDelete.baseKey.startsWith("composite|")) {
+          const compositeKey = groupToDelete.baseKey.replace("composite|", "")
+          return g.groupType === "composite" && g.compositeKey === compositeKey
+        }
+        return false
+      })
+
+      // Call the batch delete API
+      const params = new URLSearchParams({
+        dateFrom: format(dateFrom, "yyyy-MM-dd"),
+        dateTo: format(dateTo, "yyyy-MM-dd"),
+        groupType: groupToDelete.baseKey.startsWith("single|") ? "single" : "composite",
+        groupKey: groupToDelete.baseKey.startsWith("single|") 
+          ? groupToDelete.baseKey.replace("single|", "")
+          : groupToDelete.baseKey.replace("composite|", ""),
+      })
+
+      const response = await fetch(`/api/matrix/madre/delete-group?${params.toString()}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to delete group')
+      }
+
+      const result = await response.json()
+      
+      toast({
+        title: "Gruppo eliminato",
+        description: `${result.deletedCount} todolist eliminate con successo.`,
+      })
+
+      // Reload data to reflect changes
+      await loadData()
+    } catch (error) {
+      console.error("Error deleting group:", error)
+      toast({
+        title: "Errore",
+        description: error instanceof Error ? error.message : "Impossibile eliminare il gruppo. Riprova più tardi.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsDeleting(false)
+      setDeleteDialogOpen(false)
+      setGroupToDelete(null)
+    }
+  }
+
   return (
-    <div className="w-full">
+    <>
+      <style jsx>{`
+        .matrix-table-container::-webkit-scrollbar {
+          height: 12px;
+          width: 12px;
+        }
+        
+        .matrix-table-container::-webkit-scrollbar-track {
+          background: #f1f5f9;
+          border-radius: 6px;
+        }
+        
+        .matrix-table-container::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 6px;
+          border: 2px solid #f1f5f9;
+        }
+        
+        .matrix-table-container::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8;
+        }
+        
+        .matrix-table-container::-webkit-scrollbar-corner {
+          background: #f1f5f9;
+        }
+        
+        /* Per Firefox */
+        .matrix-table-container {
+          scrollbar-width: thin;
+          scrollbar-color: #cbd5e1 #f1f5f9;
+        }
+      `}</style>
+      <div className="w-full">
       <div className="flex gap-2 mb-4 items-center">
         <Popover open={showFromCalendar} onOpenChange={setShowFromCalendar}>
           <PopoverTrigger asChild>
@@ -353,8 +465,14 @@ export default function MatriceMadre() {
           <p>Nessun gruppo trovato nel periodo selezionato</p>
         </div>
       ) : (
-        <div className="overflow-x-auto overflow-y-auto">
-          <Table className="w-auto border-separate border-spacing-0">
+        <div 
+          className="overflow-x-auto overflow-y-auto border rounded-md matrix-table-container"
+          style={{ 
+            scrollbarWidth: "thin",
+            scrollbarColor: "rgb(156 163 175) transparent"
+          }}
+        >
+          <Table className="w-auto border-separate border-spacing-0" style={{ minWidth: "1200px" }}>
             <TableHeader>
               <TableRow>
                 <TableHead className="min-w-[240px] border-r border-b">Punti di Controllo / Gruppo</TableHead>
@@ -363,7 +481,7 @@ export default function MatriceMadre() {
                 <TableHead className="min-w-[180px] border-r border-b">Frequenza media (giorni)</TableHead>
                 <TableHead className="min-w-[180px] border-r border-b">Ultima programmata</TableHead>
                 <TableHead className="min-w-[200px] border-r border-b">Ultimo end_day_time</TableHead>
-                <TableHead className="min-w-[200px] border-b"></TableHead>
+                <TableHead className="min-w-[100px] border-b">Azioni</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -387,7 +505,8 @@ export default function MatriceMadre() {
                       <TableCell className="border-r border-b">{g.customTimeSlot.minStart ?? "-"}</TableCell>
                       <TableCell className="border-r border-b">{g.customTimeSlot.maxEnd ?? "-"}</TableCell>
                       <TableCell className="border-r border-b">{formatUTC(g.lastEndOfDayTime, "dd/MM/yyyy HH:mm")}</TableCell>
-                      <TableCell className="border-b">{g.categories.join(", ") || "-"}</TableCell>
+                      <TableCell className="border-r border-b">{g.categories.join(", ") || "-"}</TableCell>
+                      <TableCell className="border-b"></TableCell>
                     </TableRow>
                   )
                 } else {
@@ -407,7 +526,17 @@ export default function MatriceMadre() {
                         <TableCell className="border-r border-b">{g.frequencyDays !== null ? g.frequencyDays.toFixed(2) : "-"}</TableCell>
                         <TableCell className="border-r border-b">{formatUTC(g.lastScheduledExecution, "dd/MM/yyyy HH:mm")}</TableCell>
                         <TableCell className="border-r border-b">{formatUTC(g.lastEndOfDayTime, "dd/MM/yyyy HH:mm")}</TableCell>
-                        <TableCell className="border-b"></TableCell>
+                        <TableCell className="border-b">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteGroup(g)}
+                            disabled={isDeleting}
+                            className="h-8 w-8 p-0"
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </TableCell>
                       </TableRow>
                       {isOpen && g.deviceBreakdown.map((d, j) => {
                         const kpiLabel = d.groupType === "single" ? `${d.kpi_name ?? d.kpi_id}` : `${d.kpi_names?.join(", ") ?? d.compositeKey}`
@@ -432,7 +561,47 @@ export default function MatriceMadre() {
           </Table>
         </div>
       )}
-    </div>
+      
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Conferma eliminazione gruppo</AlertDialogTitle>
+            <AlertDialogDescription>
+              {groupToDelete && (
+                <>
+                  Sei sicuro di voler eliminare il gruppo <strong>"{groupToDelete.label}"</strong>?
+                  <br />
+                  Questa azione eliminerà <strong>{groupToDelete.futureRemainingCount} todolist</strong> da <strong>{groupToDelete.deviceCount} device</strong>.
+                  <br />
+                  <span className="text-red-600 font-medium">Questa azione non può essere annullata.</span>
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Annulla</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteGroup}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Eliminazione...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Elimina gruppo
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      </div>
+    </>
   )
 }
 
