@@ -60,7 +60,7 @@ const menuItemsByRole: Record<Role, Array<{
     {
       href: "/matrix/madre",
       icon: <Table2 size={20} />,
-      label: "Gestione Matrice Madre"
+      label: "Matrice Madre"
     },
     {
       href: "/export",

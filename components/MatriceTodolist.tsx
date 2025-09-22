@@ -66,9 +66,9 @@ function formatUTC(dateString: string, formatStr: string) {
 export default function MatriceTodolist() {
   const [dateFrom, setDateFrom] = useState<Date>(() => {
     const today = new Date()
-    const sevenDaysAgo = new Date(today)
-    sevenDaysAgo.setDate(today.getDate() - 7)
-    return sevenDaysAgo
+    const twoDaysAgo = new Date(today)
+    twoDaysAgo.setDate(today.getDate() - 2)
+    return twoDaysAgo
   })
   const [dateTo, setDateTo] = useState<Date>(() => new Date())
   const [showManageDialog, setShowManageDialog] = useState(false)
@@ -84,7 +84,7 @@ export default function MatriceTodolist() {
   const [visibleTodolists, setVisibleTodolists] = useState<Set<string>>(new Set())
   
   // Stato per ricordare se le todolist scadute devono essere nascoste
-  const [hideExpiredTodolists, setHideExpiredTodolists] = useState(false)
+  const [hideExpiredTodolists, setHideExpiredTodolists] = useState(true)
   
   // Stato per gestire la visibilità dei controlli per ogni todolist
   const [controlVisibility, setControlVisibility] = useState<TodolistControlVisibility>({})
@@ -428,9 +428,9 @@ export default function MatriceTodolist() {
       }
     }
     
-    // Se non trova il campo ma la todolist è scaduta, mostra che non è stato completato
+    // Se non trova il campo ma la todolist è scaduta, mostra na
     if (todolist.isExpired) {
-      return 'Non completato'
+      return 'na'
     }
     
     // Se non trova il campo, restituisci -
@@ -609,6 +609,23 @@ export default function MatriceTodolist() {
           ) : (
             "Ricarica"
           )}
+        </Button>
+        
+        {/* Pulsante mostra/nascondi scadute */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={toggleAllExpiredTodolists}
+          disabled={todolists.filter(t => t.isExpired).length === 0}
+          className="gap-2"
+        >
+          {(() => {
+            const expiredTodolists = todolists.filter(t => t.isExpired)
+            const expiredIds = expiredTodolists.map(t => t.id)
+            const allExpiredVisible = expiredIds.every(id => visibleTodolists.has(id))
+            const expiredCount = expiredTodolists.length
+            return allExpiredVisible ? `Nascondi scadute (${expiredCount})` : `Mostra scadute (${expiredCount})`
+          })()}
         </Button>
         
         {/* Pulsante Export Excel */}
@@ -818,7 +835,17 @@ export default function MatriceTodolist() {
               </div>
               
               <div className="space-y-4">
-                {todolists.map((todolist) => (
+                {todolists.filter(todolist => {
+                  // Se le scadute sono nascoste globalmente, non mostrarle nel dialog
+                  const expiredTodolists = todolists.filter(t => t.isExpired)
+                  const expiredIds = expiredTodolists.map(t => t.id)
+                  const allExpiredVisible = expiredIds.every(id => visibleTodolists.has(id))
+                  
+                  if (!allExpiredVisible && todolist.isExpired) {
+                    return false
+                  }
+                  return true
+                }).map((todolist) => (
                   <div key={todolist.id} className="border rounded-lg p-4 space-y-3">
                     {/* Checkbox per la todolist */}
                     <div className="flex items-center justify-between">
@@ -913,11 +940,9 @@ export default function MatriceTodolist() {
                                })
                              )
                              
-                             // Verifica se il controllo è condiviso
+                             // Verifica se il controllo è condiviso (solo tra todolist non scadute nel dataset corrente)
                              const isShared = todolists.filter(t => {
-                               if (t.isExpired) {
-                                 return controlExistsInCompleted
-                               } else {
+                               if (!t.isExpired) {
                                  return t.tasks.some(task => {
                                    if (task.value && Array.isArray(task.value)) {
                                      return task.value.some(item => item.id === control.id)
@@ -925,6 +950,7 @@ export default function MatriceTodolist() {
                                    return false
                                  })
                                }
+                               return false
                              }).length > 1
                              
                              return (
