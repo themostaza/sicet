@@ -96,32 +96,60 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch todolists in range with device name and embedded tasks (kpi_id)
-    const { data: todolists, error: todolistError } = await supabase
-      .from("todolist")
-      .select(`
-        id,
-        device_id,
-        scheduled_execution,
-        status,
-        time_slot_type,
-        time_slot_start,
-        time_slot_end,
-        end_day_time,
-        todolist_category,
-        devices!inner(name),
-        tasks(kpi_id)
-      `)
-      .gte("scheduled_execution", `${dateFrom}T00:00:00`)
-      .lte("scheduled_execution", `${dateTo}T23:59:59`)
-      .order("scheduled_execution", { ascending: true })
+    // Using pagination to overcome Supabase's 1000 record default limit
+    let allTodolists: any[] = []
+    let currentOffset = 0
+    const pageSize = 1000
+    let hasMoreData = true
 
-    if (todolistError) {
-      console.error("Error fetching todolists:", todolistError)
-      return NextResponse.json(
-        { error: "Failed to fetch todolists" },
-        { status: 500 }
-      )
+    console.log(`[MATRIX MADRE DEBUG] Starting pagination for date range: ${dateFrom} to ${dateTo}`)
+
+    while (hasMoreData) {
+      const { data: todolistsBatch, error: todolistError } = await supabase
+        .from("todolist")
+        .select(`
+          id,
+          device_id,
+          scheduled_execution,
+          status,
+          time_slot_type,
+          time_slot_start,
+          time_slot_end,
+          end_day_time,
+          todolist_category,
+          devices!inner(name),
+          tasks(kpi_id)
+        `)
+        .gte("scheduled_execution", `${dateFrom}T00:00:00`)
+        .lte("scheduled_execution", `${dateTo}T23:59:59`)
+        .order("scheduled_execution", { ascending: true })
+        .range(currentOffset, currentOffset + pageSize - 1)
+
+      if (todolistError) {
+        console.error("Error fetching todolists batch:", todolistError)
+        return NextResponse.json(
+          { error: "Failed to fetch todolists" },
+          { status: 500 }
+        )
+      }
+
+      const batchSize = todolistsBatch?.length || 0
+      console.log(`[MATRIX MADRE DEBUG] Fetched batch ${Math.floor(currentOffset / pageSize) + 1}: ${batchSize} records (offset: ${currentOffset})`)
+
+      if (batchSize > 0) {
+        allTodolists.push(...todolistsBatch)
+        currentOffset += pageSize
+        hasMoreData = batchSize === pageSize // Continue if we got a full page
+      } else {
+        hasMoreData = false
+      }
     }
+
+    const todolists = allTodolists
+
+    // Log per debug: quanti record sono stati recuperati in totale
+    console.log(`[MATRIX MADRE DEBUG] Total todolists fetched: ${todolists?.length || 0}`)
+    console.log(`[MATRIX MADRE DEBUG] First 3 todolist IDs:`, todolists?.slice(0, 3).map(t => ({ id: t.id, scheduled_execution: t.scheduled_execution, device_id: t.device_id })))
 
     const castTodolists = (todolists ?? []) as unknown as TodolistRow[]
     if (castTodolists.length === 0) {
@@ -155,6 +183,10 @@ export async function GET(request: NextRequest) {
         { status: 500 }
       )
     }
+
+    // Log per debug: quanti KPI sono stati recuperati
+    console.log(`[MATRIX MADRE DEBUG] Unique KPI IDs found: ${allKpiIds.size}`)
+    console.log(`[MATRIX MADRE DEBUG] KPIs fetched: ${kpis?.length || 0}`)
 
     const kpiIdToName = new Map<string, string>()
     for (const k of (kpis ?? []) as unknown as KpiRow[]) {
@@ -336,6 +368,16 @@ export async function GET(request: NextRequest) {
         })
       }
     }
+
+    // Log per debug: quanti gruppi sono stati creati
+    console.log(`[MATRIX MADRE DEBUG] Groups created: ${results.length}`)
+    console.log(`[MATRIX MADRE DEBUG] Sample groups:`, results.slice(0, 2).map(g => ({ 
+      device_name: g.device_name, 
+      groupType: g.groupType, 
+      kpi_name: g.kpi_name, 
+      compositeKey: g.compositeKey,
+      totalScheduledCount: g.totalScheduledCount 
+    })))
 
     return NextResponse.json({ groups: results })
   } catch (error) {

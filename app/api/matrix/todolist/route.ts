@@ -18,30 +18,56 @@ export async function GET(request: NextRequest) {
     }
 
     // Recupera le todolist nel periodo specificato
-    const { data: todolists, error: todolistError } = await supabase
-      .from("todolist")
-      .select(`
-        id,
-        device_id,
-        scheduled_execution,
-        status,
-        time_slot_type,
-        time_slot_start,
-        time_slot_end,
-        completion_date,
-        devices!inner(name)
-      `)
-      .gte("scheduled_execution", `${dateFrom}T00:00:00`)
-      .lte("scheduled_execution", `${dateTo}T23:59:59`)
-      .order("scheduled_execution", { ascending: true })
+    // Using pagination to overcome Supabase's 1000 record default limit
+    let allTodolists: any[] = []
+    let currentOffset = 0
+    const pageSize = 1000
+    let hasMoreData = true
 
-    if (todolistError) {
-      console.error("Error fetching todolists:", todolistError)
-      return NextResponse.json(
-        { error: "Failed to fetch todolists" },
-        { status: 500 }
-      )
+    console.log(`[MATRIX TODOLIST DEBUG] Starting pagination for date range: ${dateFrom} to ${dateTo}`)
+
+    while (hasMoreData) {
+      const { data: todolistsBatch, error: todolistError } = await supabase
+        .from("todolist")
+        .select(`
+          id,
+          device_id,
+          scheduled_execution,
+          status,
+          time_slot_type,
+          time_slot_start,
+          time_slot_end,
+          completion_date,
+          devices!inner(name)
+        `)
+        .gte("scheduled_execution", `${dateFrom}T00:00:00`)
+        .lte("scheduled_execution", `${dateTo}T23:59:59`)
+        .order("scheduled_execution", { ascending: true })
+        .range(currentOffset, currentOffset + pageSize - 1)
+
+      if (todolistError) {
+        console.error("Error fetching todolists batch:", todolistError)
+        return NextResponse.json(
+          { error: "Failed to fetch todolists" },
+          { status: 500 }
+        )
+      }
+
+      const batchSize = todolistsBatch?.length || 0
+      console.log(`[MATRIX TODOLIST DEBUG] Fetched batch ${Math.floor(currentOffset / pageSize) + 1}: ${batchSize} records (offset: ${currentOffset})`)
+
+      if (batchSize > 0) {
+        allTodolists.push(...todolistsBatch)
+        currentOffset += pageSize
+        hasMoreData = batchSize === pageSize // Continue if we got a full page
+      } else {
+        hasMoreData = false
+      }
     }
+
+    const todolists = allTodolists
+
+    console.log(`[MATRIX TODOLIST DEBUG] Total todolists fetched: ${todolists?.length || 0}`)
 
     // Filtra le todolist completate o scadute
     const filteredTodolists = todolists?.filter(todolist => {
@@ -78,6 +104,7 @@ export async function GET(request: NextRequest) {
         kpis!tasks_kpi_id_fkey(id, name)
       `)
       .in("todolist_id", todolistIds)
+      .limit(100000) // Set a high limit to avoid the default 1000 record limit
 
     if (tasksError) {
       console.error("Error fetching tasks:", tasksError)
