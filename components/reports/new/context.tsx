@@ -1,0 +1,161 @@
+"use client"
+
+import React, { createContext, useContext, useState, useEffect, ReactNode } from "react"
+import { toast } from "@/components/ui/use-toast"
+
+export interface Device {
+  id: string
+  name: string
+  location?: string
+}
+
+export interface KPI {
+  id: string
+  name: string
+  description?: string
+  value?: any
+}
+
+interface ReportContextType {
+  // Report basic info
+  reportName: string
+  setReportName: (name: string) => void
+  
+  // Devices
+  devices: Device[]
+  selectedDevices: Set<string>
+  setSelectedDevices: (devices: Set<string>) => void
+  selectedDevicesArray: Device[]
+  isDeviceSheetOpen: boolean
+  setIsDeviceSheetOpen: (open: boolean) => void
+  
+  // KPIs
+  kpis: KPI[]
+  selectedKpis: Set<string>
+  setSelectedKpis: (kpis: Set<string>) => void
+  selectedKpisArray: KPI[]
+  isKpiSheetOpen: boolean
+  setIsKpiSheetOpen: (open: boolean) => void
+  
+  // Excel mappings
+  mappings: {[key: string]: string} // key: "deviceId-kpiId", value: "cellPosition"
+  setMappings: (mappings: {[key: string]: string} | ((prev: {[key: string]: string}) => {[key: string]: string})) => void
+  
+  // Validation
+  errors: {[key: string]: string}
+  setErrors: (errors: {[key: string]: string}) => void
+  
+  // Computed values
+  totalControlPointsCount: number
+}
+
+const ReportContext = createContext<ReportContextType | undefined>(undefined)
+
+interface ReportProviderProps {
+  children: ReactNode
+}
+
+export function ReportProvider({ children }: ReportProviderProps) {
+  // Report basic info
+  const [reportName, setReportName] = useState("")
+  
+  // Data
+  const [devices, setDevices] = useState<Device[]>([])
+  const [kpis, setKpis] = useState<KPI[]>([])
+  
+  // Selections
+  const [selectedDevices, setSelectedDevices] = useState<Set<string>>(new Set())
+  const [selectedKpis, setSelectedKpis] = useState<Set<string>>(new Set())
+  
+  // UI state
+  const [isDeviceSheetOpen, setIsDeviceSheetOpen] = useState(false)
+  const [isKpiSheetOpen, setIsKpiSheetOpen] = useState(false)
+  
+  // Excel mappings
+  const [mappings, setMappings] = useState<{[key: string]: string}>({})
+  
+  // Validation
+  const [errors, setErrors] = useState<{[key: string]: string}>({})
+  
+  // Load data on mount
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        // Load devices
+        const devicesResponse = await fetch('/api/reports/devices')
+        if (devicesResponse.ok) {
+          const devicesData = await devicesResponse.json()
+          setDevices(devicesData.devices || [])
+        }
+        
+        // Load KPIs
+        const kpisResponse = await fetch('/api/templates/kpis')
+        if (kpisResponse.ok) {
+          const kpisData = await kpisResponse.json()
+          setKpis(kpisData.kpis || [])
+        }
+      } catch (error) {
+        console.error('Error loading data:', error)
+        toast({
+          title: "Errore",
+          description: "Impossibile caricare i dati.",
+          variant: "destructive"
+        })
+      }
+    }
+    
+    loadData()
+  }, [])
+  
+  // Computed values
+  const selectedDevicesArray = devices.filter(device => selectedDevices.has(device.id))
+  const selectedKpisArray = kpis.filter(kpi => selectedKpis.has(kpi.id))
+  const totalControlPointsCount = selectedDevices.size > 0 && selectedKpis.size > 0 ? selectedDevices.size : 0
+  
+  const value: ReportContextType = {
+    // Report basic info
+    reportName,
+    setReportName,
+    
+    // Devices
+    devices,
+    selectedDevices,
+    setSelectedDevices,
+    selectedDevicesArray,
+    isDeviceSheetOpen,
+    setIsDeviceSheetOpen,
+    
+    // KPIs
+    kpis,
+    selectedKpis,
+    setSelectedKpis,
+    selectedKpisArray,
+    isKpiSheetOpen,
+    setIsKpiSheetOpen,
+    
+    // Excel mappings
+    mappings,
+    setMappings,
+    
+    // Validation
+    errors,
+    setErrors,
+    
+    // Computed values
+    totalControlPointsCount
+  }
+  
+  return (
+    <ReportContext.Provider value={value}>
+      {children}
+    </ReportContext.Provider>
+  )
+}
+
+export function useReport() {
+  const context = useContext(ReportContext)
+  if (context === undefined) {
+    throw new Error('useReport must be used within a ReportProvider')
+  }
+  return context
+}

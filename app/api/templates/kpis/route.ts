@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
       name: kpi.name,
       description: kpi.description,
       created_at: kpi.created_at,
+      value: kpi.value, // Include the original value field for matrix processing
       // Estrai i nomi dei campi dal jsonb value
       fields: Array.isArray(kpi.value) ? kpi.value.map((field: any) => ({
         name: field.name,

@@ -448,6 +448,33 @@ export type Database = {
           },
         ]
       }
+      report_to_excel: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          mapping_excel: Json | null
+          name: string | null
+          todolist_params_linked: Json | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          mapping_excel?: Json | null
+          name?: string | null
+          todolist_params_linked?: Json | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          mapping_excel?: Json | null
+          name?: string | null
+          todolist_params_linked?: Json | null
+        }
+        Relationships: []
+      }
       user_activities: {
         Row: {
           action_type: Database["public"]["Enums"]["user_action_type"]

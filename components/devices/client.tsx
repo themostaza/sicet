@@ -143,13 +143,15 @@ export default function DeviceList({ initialDevices, allTags }: Props) {
             <Button className="bg-black hover:bg-gray-800" onClick={() => router.push("/device/new")}>        
               <Plus className="mr-2 h-4 w-4" /> Nuovo Punto di Controllo
             </Button>
-            <Button
-              variant="outline"
-              className="border-gray-400"
-              onClick={() => setQrFilterDialog(true)}
-            >
-              <QrCode className="mr-2 h-4 w-4" /> Scarica QRcode
-            </Button>
+            {role !== 'referrer' && (
+              <Button
+                variant="outline"
+                className="border-gray-400"
+                onClick={() => setQrFilterDialog(true)}
+              >
+                <QrCode className="mr-2 h-4 w-4" /> Scarica QRcode
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -347,9 +349,11 @@ export default function DeviceList({ initialDevices, allTags }: Props) {
                 >
                   <Edit className="w-4 h-4 mr-2" /> Modifica
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => openQr(d)}>
-                  <QrCode className="w-4 h-4 mr-2" /> QR Code
-                </Button>
+                {role !== 'referrer' && (
+                  <Button variant="outline" size="sm" onClick={() => openQr(d)}>
+                    <QrCode className="w-4 h-4 mr-2" /> QR Code
+                  </Button>
+                )}
                 {role === "admin" && (
                   <DeviceDeleteDialog
                     onDelete={async () => {
