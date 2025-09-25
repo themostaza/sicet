@@ -70,7 +70,7 @@ export function DeviceSelection() {
             </p>
             <Button type="button" onClick={() => setIsDeviceSheetOpen(true)} variant="outline">
               <Plus className="h-4 w-4 mr-2" />
-              Seleziona dispositivi
+              Seleziona Punti di Controllo
             </Button>
           </div>
         )}

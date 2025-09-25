@@ -2,11 +2,13 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react"
 import { toast } from "@/components/ui/use-toast"
+import { getDeviceTags, getDevicesByTags } from "@/app/actions/actions-device"
 
 export interface Device {
   id: string
   name: string
   location?: string
+  tags?: string[]
 }
 
 export interface KPI {
@@ -28,6 +30,15 @@ interface ReportContextType {
   selectedDevicesArray: Device[]
   isDeviceSheetOpen: boolean
   setIsDeviceSheetOpen: (open: boolean) => void
+  
+  // Device tags
+  allTags: string[]
+  selectedTags: string[]
+  setSelectedTags: (tags: string[]) => void
+  tagFilterMode: 'OR' | 'AND'
+  setTagFilterMode: (mode: 'OR' | 'AND') => void
+  filteredDevices: Device[]
+  tagLoading: boolean
   
   // KPIs
   kpis: KPI[]
@@ -67,6 +78,13 @@ export function ReportProvider({ children }: ReportProviderProps) {
   const [selectedDevices, setSelectedDevices] = useState<Set<string>>(new Set())
   const [selectedKpis, setSelectedKpis] = useState<Set<string>>(new Set())
   
+  // Device tags
+  const [allTags, setAllTags] = useState<string[]>([])
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [tagFilterMode, setTagFilterMode] = useState<'OR' | 'AND'>('OR')
+  const [filteredDevices, setFilteredDevices] = useState<Device[]>([])
+  const [tagLoading, setTagLoading] = useState(false)
+  
   // UI state
   const [isDeviceSheetOpen, setIsDeviceSheetOpen] = useState(false)
   const [isKpiSheetOpen, setIsKpiSheetOpen] = useState(false)
@@ -94,6 +112,10 @@ export function ReportProvider({ children }: ReportProviderProps) {
           const kpisData = await kpisResponse.json()
           setKpis(kpisData.kpis || [])
         }
+
+        // Load device tags
+        const tags = await getDeviceTags()
+        setAllTags(tags)
       } catch (error) {
         console.error('Error loading data:', error)
         toast({
@@ -106,6 +128,29 @@ export function ReportProvider({ children }: ReportProviderProps) {
     
     loadData()
   }, [])
+
+  // Effect to handle tag filtering
+  useEffect(() => {
+    const filterByTags = async () => {
+      if (selectedTags.length === 0) {
+        setFilteredDevices([])
+        return
+      }
+
+      setTagLoading(true)
+      try {
+        const filtered = await getDevicesByTags(selectedTags, tagFilterMode)
+        setFilteredDevices(filtered)
+      } catch (error) {
+        console.error('Error filtering devices by tags:', error)
+        setFilteredDevices([])
+      } finally {
+        setTagLoading(false)
+      }
+    }
+
+    filterByTags()
+  }, [selectedTags, tagFilterMode])
   
   // Computed values
   const selectedDevicesArray = devices.filter(device => selectedDevices.has(device.id))
@@ -124,6 +169,15 @@ export function ReportProvider({ children }: ReportProviderProps) {
     selectedDevicesArray,
     isDeviceSheetOpen,
     setIsDeviceSheetOpen,
+    
+    // Device tags
+    allTags,
+    selectedTags,
+    setSelectedTags,
+    tagFilterMode,
+    setTagFilterMode,
+    filteredDevices,
+    tagLoading,
     
     // KPIs
     kpis,

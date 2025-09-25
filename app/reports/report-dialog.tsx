@@ -294,10 +294,10 @@ export default function ReportDialog({ open, onOpenChange, report, onSave }: Rep
                       <div className="grid grid-cols-2 gap-6">
                         {/* Colonna Dispositivi */}
                         <div>
-                          <Label className="text-base font-medium">Seleziona Dispositivo * (Disponibili: {devices.length}) - Current: {controlPoint.deviceId || 'none'}</Label>
+                          <Label className="text-base font-medium">Seleziona Punto di Controllo * (Disponibili: {devices.length}) - Current: {controlPoint.deviceId || 'none'}</Label>
                           <div className="mt-2 border rounded-lg p-3 bg-gray-50 max-h-[70vh] overflow-y-auto" style={{pointerEvents: 'auto'}}>
                             {devices.length === 0 ? (
-                              <p className="text-gray-500 text-sm">Nessun dispositivo disponibile (Totale: {devices.length})</p>
+                              <p className="text-gray-500 text-sm">Nessun punto di controllo disponibile (Totale: {devices.length})</p>
                             ) : (
                               <div className="space-y-2">
                                 {devices.map((device) => (

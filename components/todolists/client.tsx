@@ -778,10 +778,10 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
 
                   {/* Device Filter */}
                   <div className="space-y-3">
-                    <h3 className="text-sm font-medium">Dispositivo</h3>
+                    <h3 className="text-sm font-medium">Punto di Controllo</h3>
                     <Select value={selectedDevice} onValueChange={setSelectedDevice}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Seleziona dispositivo" />
+                        <SelectValue placeholder="Seleziona punto di controllo" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Tutti i dispositivi</SelectItem>

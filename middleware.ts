@@ -82,6 +82,12 @@ export async function middleware(req: NextRequest) {
     return res
   }
 
+  // Redirect root path to /todolist
+  if (path === '/') {
+    const redirectUrl = new URL('/todolist', req.url)
+    return NextResponse.redirect(redirectUrl)
+  }
+
   // Define public routes that don't require authentication
   const publicRoutes = [
     '/auth/login', 

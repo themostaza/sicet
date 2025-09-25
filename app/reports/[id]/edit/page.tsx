@@ -34,6 +34,7 @@ function ReportEditForm() {
     reportName,
     selectedDevices,
     selectedKpis,
+    selectedKpisArray,
     devices,
     kpis,
     mappings,
@@ -89,6 +90,63 @@ function ReportEditForm() {
     }
   }
 
+  // Helper function per replicare la logica di getAllKpiFields
+  const getAllKpiFields = () => {
+    const fields: Array<{
+      kpiId: string
+      kpiName: string
+      fieldId: string
+      fieldName: string
+      fieldType: string
+      fieldDescription?: string
+      fieldRequired: boolean
+    }> = []
+
+    selectedKpisArray.forEach((kpi: any) => {
+      // Gestisci il caso in cui kpi.value è un array con campi multipli
+      if (kpi.value && Array.isArray(kpi.value) && kpi.value.length > 0) {
+        kpi.value.forEach((field: any, index: number) => {
+          fields.push({
+            kpiId: kpi.id,
+            kpiName: kpi.name,
+            fieldId: field.id || `${kpi.id}-${String(field.name || '').toLowerCase().replace(/\s+/g, '_')}`,
+            fieldName: field.name || `Campo ${index + 1}`,
+            fieldType: field.type || 'text',
+            fieldDescription: field.description,
+            fieldRequired: field.required || false
+          })
+        })
+      } 
+      // Gestisci il caso in cui kpi.value è un singolo oggetto
+      else if (kpi.value && typeof kpi.value === 'object' && kpi.value !== null && !Array.isArray(kpi.value)) {
+        const valueObj = kpi.value as any
+        fields.push({
+          kpiId: kpi.id,
+          kpiName: kpi.name,
+          fieldId: valueObj.id || `${kpi.id}-${String(valueObj.name || 'value').toLowerCase().replace(/\s+/g, '_')}`,
+          fieldName: valueObj.name || kpi.name,
+          fieldType: valueObj.type || 'text',
+          fieldDescription: valueObj.description || kpi.description,
+          fieldRequired: valueObj.required || false
+        })
+      }
+      // Se non ha campi specifici o value è null/undefined, crea un campo default
+      else {
+        fields.push({
+          kpiId: kpi.id,
+          kpiName: kpi.name,
+          fieldId: `${kpi.id}-value`,
+          fieldName: kpi.name, // Usa il nome del KPI come fallback
+          fieldType: 'text',
+          fieldDescription: kpi.description,
+          fieldRequired: true
+        })
+      }
+    })
+
+    return fields
+  }
+
   const updateReport = async () => {
     // Costruisci i control points dal formato richiesto
     const controlPoints = Array.from(selectedDevices).map((deviceId, index) => ({
@@ -105,42 +163,48 @@ function ReportEditForm() {
     }
 
     // Costruisci il mapping_excel dal formato richiesto
+    // Filtra solo le mappature che hanno effettivamente un valore
+    const allKpiFields = getAllKpiFields()
+    
     const mappingExcel = {
-      mappings: Object.entries(mappings).map(([key, cellPosition]) => {
-        const [deviceId, fieldId] = key.split('-', 2) // Usa split con limit per gestire fieldId con trattini
+      mappings: Object.entries(mappings)
+        .filter(([key, cellPosition]) => cellPosition && cellPosition.trim())
+        .map(([key, cellPosition]) => {
+        // Il key è nel formato: deviceId-kpiId-fieldName
+        // Dividiamo solo sul primo trattino per separare deviceId dal resto
+        const firstDashIndex = key.indexOf('-')
+        const deviceId = key.substring(0, firstDashIndex)
+        const fieldId = key.substring(firstDashIndex + 1) // Questo conterrà "kpiId-fieldName"
         const device = devices.find(d => d.id === deviceId)
         
-        // Trova il KPI e il campo corrispondente
-        let kpiName = 'Unknown KPI'
-        let fieldName = 'Unknown Field'
+        // Trova il campo corrispondente usando la lista generata da getAllKpiFields
+        const matchingField = allKpiFields.find(field => field.fieldId === fieldId)
         
-        for (const kpi of kpis) {
-          if (kpi.value && Array.isArray(kpi.value)) {
-            const field = kpi.value.find((f: any) => {
-              const fId = f.id || `${kpi.id}-${String(f.name || '').toLowerCase().replace(/\s+/g, '_')}`
-              return fId === fieldId
-            })
-            if (field) {
-              kpiName = kpi.name
-              fieldName = field.name || 'Campo'
-              break
-            }
-          } else if (fieldId === `${kpi.id}-value`) {
-            kpiName = kpi.name
-            fieldName = 'Valore'
-            break
+        if (matchingField) {
+          return {
+            controlId: fieldId,
+            cellPosition: cellPosition,
+            label: `${device?.name || deviceId} - ${matchingField.kpiName} - ${matchingField.fieldName}`,
+            deviceId: deviceId,
+            deviceName: device?.name || deviceId,
+            kpiName: matchingField.kpiName,
+            kpiId: matchingField.kpiId,
+            fieldName: matchingField.fieldName,
+            fieldId: fieldId
           }
-        }
-        
-        return {
-          controlId: fieldId,
-          cellPosition: cellPosition,
-          label: `${device?.name || deviceId} - ${kpiName} - ${fieldName}`,
-          deviceId: deviceId,
-          deviceName: device?.name || deviceId,
-          kpiName: kpiName,
-          fieldName: fieldName,
-          fieldId: fieldId
+        } else {
+          // Fallback per campi non trovati
+          return {
+            controlId: fieldId,
+            cellPosition: cellPosition,
+            label: `${device?.name || deviceId} - Unknown KPI - Unknown Field`,
+            deviceId: deviceId,
+            deviceName: device?.name || deviceId,
+            kpiName: 'Unknown KPI',
+            kpiId: 'Unknown KPI ID',
+            fieldName: 'Unknown Field',
+            fieldId: fieldId
+          }
         }
       })
     }

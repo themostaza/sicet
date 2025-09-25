@@ -53,7 +53,7 @@ export function KpiSelectionSheet() {
     <Sheet open={isKpiSheetOpen} onOpenChange={setIsKpiSheetOpen}>
       <SheetContent className="sm:max-w-lg overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>Seleziona KPI</SheetTitle>
+          <SheetTitle>Seleziona Controlli</SheetTitle>
         </SheetHeader>
         
         <div className="space-y-4 py-4">
@@ -61,7 +61,7 @@ export function KpiSelectionSheet() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
-              placeholder="Cerca KPI..."
+              placeholder="Cerca controlli..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -95,7 +95,7 @@ export function KpiSelectionSheet() {
                 <Badge variant="secondary" className="mr-2">
                   {selectedKpis.size}
                 </Badge>
-                KPI selezionati
+                controlli selezionati
               </div>
             </div>
           )}
@@ -104,7 +104,7 @@ export function KpiSelectionSheet() {
           <div className="space-y-2">
             {filteredKpis.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
-                {searchTerm ? "Nessun KPI trovato" : "Nessun KPI disponibile"}
+                {searchTerm ? "Nessun controllo trovato" : "Nessun controllo disponibile"}
               </div>
             ) : (
               filteredKpis.map((kpi) => {

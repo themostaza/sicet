@@ -27,6 +27,7 @@ interface Report {
   todolist_params_linked: any
   mapping_excel: any
   created_at: string
+  hasDataAvailable?: boolean
 }
 
 export default function ReportsPage() {
@@ -36,21 +37,20 @@ export default function ReportsPage() {
   const [reportToDelete, setReportToDelete] = useState<Report | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   
-  // Date per export
-  const [dateFrom, setDateFrom] = useState<Date>(() => {
+  // Data per export
+  const [selectedDate, setSelectedDate] = useState<Date>(() => {
     const d = new Date()
-    d.setDate(d.getDate() - 7) // una settimana fa
+    d.setDate(d.getDate() - 1) // giorno precedente
     return d
   })
-  const [dateTo, setDateTo] = useState<Date>(() => new Date())
-  const [showFromCalendar, setShowFromCalendar] = useState(false)
-  const [showToCalendar, setShowToCalendar] = useState(false)
+  const [showCalendar, setShowCalendar] = useState(false)
   const [exportingReports, setExportingReports] = useState<Set<string>>(new Set())
 
   const loadReports = async () => {
     setIsLoading(true)
     try {
-      const response = await fetch('/api/reports')
+      const dateParam = format(selectedDate, 'yyyy-MM-dd')
+      const response = await fetch(`/api/reports?date=${dateParam}`)
       if (!response.ok) {
         throw new Error('Failed to fetch reports')
       }
@@ -70,7 +70,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     loadReports()
-  }, [])
+  }, [selectedDate])
 
   const handleCreateReport = () => {
     // Redirect to the new report creation page
@@ -132,8 +132,7 @@ export default function ReportsPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          dateFrom: format(dateFrom, 'yyyy-MM-dd'),
-          dateTo: format(dateTo, 'yyyy-MM-dd'),
+          selectedDate: format(selectedDate, 'yyyy-MM-dd'),
         }),
       })
 
@@ -148,7 +147,7 @@ export default function ReportsPage() {
       const a = document.createElement('a')
       a.style.display = 'none'
       a.href = url
-      a.download = `${report.name}_${format(dateFrom, 'dd-MM-yyyy')}_${format(dateTo, 'dd-MM-yyyy')}.xlsx`
+      a.download = `${report.name}_${format(selectedDate, 'dd-MM-yyyy')}.xlsx`
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
@@ -214,36 +213,19 @@ export default function ReportsPage() {
       `}</style>
       <div className="w-full">
         <div className="flex gap-2 mb-4 items-center">
-          {/* Filtri data per export */}
-          <Popover open={showFromCalendar} onOpenChange={setShowFromCalendar}>
+          {/* Filtro data per export */}
+          <Popover open={showCalendar} onOpenChange={setShowCalendar}>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className={cn("w-fit min-w-[120px] justify-start text-left font-normal max-w-[180px]")}>
                 <CalendarIcon className="mr-2 h-4 w-4" />
-                {format(dateFrom, "dd/MM/yyyy")}
+                {format(selectedDate, "dd/MM/yyyy")}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0">
               <Calendar
                 mode="single"
-                selected={dateFrom}
-                onSelect={(d) => { if (d) setDateFrom(d); setShowFromCalendar(false) }}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
-          
-          <Popover open={showToCalendar} onOpenChange={setShowToCalendar}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className={cn("w-fit min-w-[120px] justify-start text-left font-normal max-w-[180px]")}>
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {format(dateTo, "dd/MM/yyyy")}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={dateTo}
-                onSelect={(d) => { if (d) setDateTo(d); setShowToCalendar(false) }}
+                selected={selectedDate}
+                onSelect={(d) => { if (d) setSelectedDate(d); setShowCalendar(false) }}
                 initialFocus
               />
             </PopoverContent>
@@ -256,6 +238,18 @@ export default function ReportsPage() {
           <Button variant="outline" size="sm" onClick={handleCreateReport} className="gap-2 ml-auto">
             <Plus className="h-4 w-4" /> Nuovo Report
           </Button>
+        </div>
+
+        {/* Legenda */}
+        <div className="flex items-center gap-6 mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-green-500"></div>
+            <span className="text-sm text-gray-700">Dati disponibili per il {format(selectedDate, 'dd/MM/yyyy')}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-gray-400"></div>
+            <span className="text-sm text-gray-700">Nessun dato disponibile per il {format(selectedDate, 'dd/MM/yyyy')}</span>
+          </div>
         </div>
 
         {isLoading ? (
@@ -280,23 +274,29 @@ export default function ReportsPage() {
               scrollbarColor: "rgb(156 163 175) transparent"
             }}
           >
-            <Table className="w-auto border-separate border-spacing-0" style={{ minWidth: "800px" }}>
+            <Table className="w-auto border-separate border-spacing-0" style={{ minWidth: "600px" }}>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="min-w-[200px] border-r border-b">Nome Report</TableHead>
-                  <TableHead className="min-w-[300px] border-r border-b">Descrizione</TableHead>
+                  <TableHead className="min-w-[250px] border-r border-b">Nome Report</TableHead>
                   <TableHead className="min-w-[150px] border-r border-b">Creato il</TableHead>
                   <TableHead className="min-w-[200px] border-b">Azioni</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {reports.map((report) => (
-                  <TableRow key={report.id}>
+                  <TableRow 
+                    key={report.id}
+                    className={report.hasDataAvailable ? "bg-green-50 hover:bg-green-100" : "bg-gray-50 hover:bg-gray-100"}
+                  >
                     <TableCell className="border-r border-b font-medium">
-                      {report.name}
-                    </TableCell>
-                    <TableCell className="border-r border-b">
-                      {report.description || "-"}
+                      <div className="flex items-center gap-2">
+                        <div 
+                          className={`w-3 h-3 rounded-full ${
+                            report.hasDataAvailable ? 'bg-green-500' : 'bg-gray-400'
+                          }`} 
+                        />
+                        {report.name}
+                      </div>
                     </TableCell>
                     <TableCell className="border-r border-b">
                       {formatDate(report.created_at)}
@@ -307,13 +307,22 @@ export default function ReportsPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleExportReport(report)}
-                          disabled={exportingReports.has(report.id)}
-                          className="h-8 px-2"
+                          disabled={exportingReports.has(report.id) || !report.hasDataAvailable}
+                          className={`h-8 px-2 ${
+                            !report.hasDataAvailable 
+                              ? 'opacity-50 cursor-not-allowed' 
+                              : ''
+                          }`}
+                          title={
+                            !report.hasDataAvailable 
+                              ? `Nessun dato disponibile per il ${format(selectedDate, 'dd/MM/yyyy')}`
+                              : 'Scarica report'
+                          }
                         >
                           {exportingReports.has(report.id) ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
-                            <Download className="h-4 w-4" />
+                            <Download className={`h-4 w-4 ${!report.hasDataAvailable ? 'text-gray-400' : ''}`} />
                           )}
                         </Button>
                         <Button

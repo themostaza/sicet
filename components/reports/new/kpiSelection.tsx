@@ -21,7 +21,7 @@ export function KpiSelection() {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold flex items-center">
-            KPI da Monitorare
+            Controlli
             {errors.kpis && (
               <div className="ml-2 text-red-500 flex items-center">
                 <AlertCircle className="h-4 w-4 mr-1" />
@@ -45,14 +45,12 @@ export function KpiSelection() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
-                  <TableHead className="hidden md:table-cell">Descrizione</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {selectedKpisArray.map((kpi: KPI) => (
                   <TableRow key={kpi.id}>
                     <TableCell className="font-medium">{kpi.name}</TableCell>
-                    <TableCell className="hidden md:table-cell">{kpi.description || "-"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -61,13 +59,13 @@ export function KpiSelection() {
         ) : (
           <div className="flex flex-col items-center justify-center border rounded-md p-8 text-center">
             <Settings className="h-12 w-12 text-gray-300 mb-4" />
-            <h3 className="text-lg font-medium mb-2">Nessun KPI selezionato</h3>
+            <h3 className="text-lg font-medium mb-2">Nessun controllo selezionato</h3>
             <p className="text-sm text-gray-500 mb-4">
-              Clicca sul pulsante "Seleziona" per aggiungere KPI al report
+              Clicca sul pulsante "Seleziona" per aggiungere controlli al report
             </p>
             <Button type="button" onClick={() => setIsKpiSheetOpen(true)} variant="outline">
               <Plus className="h-4 w-4 mr-2" />
-              Seleziona KPI
+              Seleziona Controlli
             </Button>
           </div>
         )}

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { BarChart3, Trash2, Check, X } from "lucide-react"
 import { useReport } from "./context"
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
 
 export function ReportSummary() {
@@ -17,12 +17,70 @@ export function ReportSummary() {
     setMappings
   } = useReport()
 
+  // Debug per verificare i mappings
+  useEffect(() => {
+    console.log('ReportSummary - mappings changed:', mappings)
+  }, [mappings])
+
   const [editingCell, setEditingCell] = useState<string | null>(null) // "deviceId-kpiId"
   const [editValue, setEditValue] = useState("")
   const [hoveredRow, setHoveredRow] = useState<string | null>(null)
   const [hoveredColumn, setHoveredColumn] = useState<string | null>(null)
+  const [focusedCell, setFocusedCell] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const getMappingKey = (deviceId: string, fieldId: string) => `${deviceId}-${fieldId}`
+
+  // Ottieni tutte le celle in ordine per la navigazione
+  const getAllCells = () => {
+    const cells: Array<{deviceId: string, fieldId: string, mappingKey: string}> = []
+    const allFields = getAllKpiFields()
+    
+    allFields.forEach(field => {
+      selectedDevicesArray.forEach(device => {
+        cells.push({
+          deviceId: device.id,
+          fieldId: field.fieldId,
+          mappingKey: getMappingKey(device.id, field.fieldId)
+        })
+      })
+    })
+    return cells
+  }
+
+  // Naviga alla cella successiva o precedente
+  const navigateToCell = (direction: 'next' | 'prev' | 'up' | 'down') => {
+    const allCells = getAllCells()
+    if (allCells.length === 0) return
+
+    const currentIndex = allCells.findIndex(cell => cell.mappingKey === focusedCell)
+    let newIndex = currentIndex
+
+    if (direction === 'next') {
+      newIndex = currentIndex < allCells.length - 1 ? currentIndex + 1 : 0
+    } else if (direction === 'prev') {
+      newIndex = currentIndex > 0 ? currentIndex - 1 : allCells.length - 1
+    } else if (direction === 'down') {
+      const devicesCount = selectedDevicesArray.length
+      newIndex = currentIndex + devicesCount < allCells.length ? currentIndex + devicesCount : currentIndex
+    } else if (direction === 'up') {
+      const devicesCount = selectedDevicesArray.length
+      newIndex = currentIndex - devicesCount >= 0 ? currentIndex - devicesCount : currentIndex
+    }
+
+    if (newIndex !== currentIndex && allCells[newIndex]) {
+      const newCell = allCells[newIndex]
+      setFocusedCell(newCell.mappingKey)
+      
+      // Trova l'elemento DOM e dagli il focus
+      setTimeout(() => {
+        const cellElement = document.querySelector(`[data-cell-id="${newCell.mappingKey}"]`) as HTMLElement
+        if (cellElement) {
+          cellElement.focus()
+        }
+      }, 0)
+    }
+  }
 
   // Estrai i campi da tutti i KPI selezionati
   const getAllKpiFields = () => {
@@ -83,9 +141,28 @@ export function ReportSummary() {
 
   const handleCellClick = (deviceId: string, fieldId: string) => {
     const mappingKey = getMappingKey(deviceId, fieldId)
+    setFocusedCell(mappingKey)
+  }
+
+  const handleCellDoubleClick = (deviceId: string, fieldId: string) => {
+    const mappingKey = getMappingKey(deviceId, fieldId)
     setEditingCell(mappingKey)
     setEditValue(mappings[mappingKey] || "")
+    setFocusedCell(mappingKey)
   }
+
+  const startEditing = (mappingKey: string) => {
+    setEditingCell(mappingKey)
+    setEditValue(mappings[mappingKey] || "")
+    setFocusedCell(mappingKey)
+  }
+
+  // Effetto per focalizzare l'input quando iniziamo l'editing
+  useEffect(() => {
+    if (editingCell && inputRef.current) {
+      inputRef.current.focus()
+    }
+  }, [editingCell])
 
   const handleSaveMapping = (value: string) => {
     if (editingCell && value.trim()) {
@@ -128,6 +205,58 @@ export function ReportSummary() {
     } else if (e.key === 'Escape') {
       setEditingCell(null)
       setEditValue("")
+    } else if (e.key === 'Tab') {
+      e.preventDefault()
+      handleSaveMapping(editValue)
+      navigateToCell(e.shiftKey ? 'prev' : 'next')
+    }
+  }
+
+  const handleCellKeyDown = (e: React.KeyboardEvent, mappingKey: string) => {
+    if (editingCell === mappingKey) return // Se stiamo editando, lascia che handleKeyPress gestisca
+
+    switch (e.key) {
+      case 'Enter':
+      case ' ':
+        e.preventDefault()
+        startEditing(mappingKey)
+        break
+      case 'Tab':
+        e.preventDefault()
+        navigateToCell(e.shiftKey ? 'prev' : 'next')
+        break
+      case 'ArrowRight':
+        e.preventDefault()
+        navigateToCell('next')
+        break
+      case 'ArrowLeft':
+        e.preventDefault()
+        navigateToCell('prev')
+        break
+      case 'ArrowDown':
+        e.preventDefault()
+        navigateToCell('down')
+        break
+      case 'ArrowUp':
+        e.preventDefault()
+        navigateToCell('up')
+        break
+      case 'Delete':
+      case 'Backspace':
+        e.preventDefault()
+        const [deviceId, fieldId] = mappingKey.split('-', 2)
+        handleRemoveMapping(deviceId, fieldId)
+        break
+      default:
+        // Se è un carattere stampabile, inizia l'editing
+        if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+          e.preventDefault()
+          // Assicurati che stiamo editando la cella corretta
+          setFocusedCell(mappingKey)
+          setEditingCell(mappingKey)
+          setEditValue(e.key.toUpperCase()) // Inizia con il carattere digitato
+        }
+        break
     }
   }
 
@@ -140,7 +269,7 @@ export function ReportSummary() {
           <BarChart3 className="h-12 w-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium mb-2">Matrice di Mappatura</h3>
           <p className="text-sm text-gray-500">
-            Seleziona dispositivi e KPI per configurare la mappatura Excel
+            Seleziona punti di controllo e controlli per configurare la mappatura Excel
           </p>
         </div>
       </div>
@@ -170,7 +299,7 @@ export function ReportSummary() {
                   "min-w-[200px] max-w-[200px] w-[200px] border-r border-b border-gray-200 transition-colors",
                   hoveredColumn === "fields" && "bg-blue-50"
                 )}>
-                  Campi KPI
+                  Campi Controlli
                 </TableHead>
                 {selectedDevicesArray.map((device) => (
                   <TableHead 
@@ -222,19 +351,25 @@ export function ReportSummary() {
                     return (
                       <TableCell 
                         key={device.id}
+                        data-cell-id={mappingKey}
                         className={cn(
                           "min-w-[150px] max-w-[200px] w-fit p-1 border-r border-b border-gray-200 transition-colors",
                           (hoveredRow === field.fieldId || hoveredColumn === device.id) && "bg-blue-50",
                           (hoveredRow === field.fieldId && hoveredColumn === device.id) && "bg-blue-100",
-                          editingCell === mappingKey && "bg-blue-100"
+                          editingCell === mappingKey && "bg-blue-100",
+                          focusedCell === mappingKey && "ring-2 ring-blue-500 ring-inset"
                         )}
                         onMouseEnter={() => handleCellMouseEnter(field.fieldId, device.id)}
                         onMouseLeave={handleCellMouseLeave}
+                        tabIndex={0}
+                        onKeyDown={(e) => handleCellKeyDown(e, mappingKey)}
+                        onFocus={() => setFocusedCell(mappingKey)}
                       >
                         <div className="min-h-[60px] flex items-center justify-center p-1 relative group">
                           {editingCell === mappingKey ? (
                             // Modalità editing
                             <Input
+                              ref={inputRef}
                               value={editValue}
                               onChange={(e) => handleInputChange(e.target.value)}
                               onKeyDown={handleKeyPress}
@@ -253,7 +388,11 @@ export function ReportSummary() {
                             />
                           ) : cellMapping ? (
                             // Modalità visualizzazione con valore
-                            <div className="text-center cursor-pointer w-full" onClick={() => handleCellClick(device.id, field.fieldId)}>
+                            <div 
+                              className="text-center cursor-pointer w-full" 
+                              onClick={() => handleCellClick(device.id, field.fieldId)}
+                              onDoubleClick={() => handleCellDoubleClick(device.id, field.fieldId)}
+                            >
                               <div className="text-sm font-mono font-semibold text-blue-700">
                                 {cellMapping}
                               </div>
@@ -268,15 +407,24 @@ export function ReportSummary() {
                                   e.stopPropagation()
                                   handleRemoveMapping(device.id, field.fieldId)
                                 }}
+                                tabIndex={-1}
                               >
                                 <Trash2 className="h-3 w-3 text-red-500" />
                               </Button>
                             </div>
                           ) : (
                             // Modalità vuota
-                            <div className="text-center text-gray-400 cursor-pointer w-full" onClick={() => handleCellClick(device.id, field.fieldId)}>
-                              <div className="text-sm">Clicca per</div>
-                              <div className="text-xs">mappare</div>
+                            <div 
+                              className="text-center text-gray-400 cursor-pointer w-full" 
+                              onClick={() => handleCellClick(device.id, field.fieldId)}
+                              onDoubleClick={() => handleCellDoubleClick(device.id, field.fieldId)}
+                            >
+                              <div className="text-sm">
+                                {focusedCell === mappingKey ? "Inizia a scrivere" : "Clicca per mappare"}
+                              </div>
+                              <div className="text-xs">
+                                {focusedCell === mappingKey ? "o Tab per navigare" : ""}
+                              </div>
                             </div>
                           )}
                         </div>

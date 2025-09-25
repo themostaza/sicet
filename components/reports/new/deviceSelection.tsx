@@ -21,7 +21,7 @@ export function DeviceSelection() {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold flex items-center">
-            Dispositivi
+            Punti di Controllo
             {errors.devices && (
               <div className="ml-2 text-red-500 flex items-center">
                 <AlertCircle className="h-4 w-4 mr-1" />
@@ -46,7 +46,6 @@ export function DeviceSelection() {
                 <TableRow>
                   <TableHead>ID</TableHead>
                   <TableHead>Nome</TableHead>
-                  <TableHead className="hidden md:table-cell">Posizione</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -54,7 +53,6 @@ export function DeviceSelection() {
                   <TableRow key={device.id}>
                     <TableCell className="font-medium">{device.id}</TableCell>
                     <TableCell>{device.name}</TableCell>
-                    <TableCell className="hidden md:table-cell">{device.location || "-"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -63,13 +61,13 @@ export function DeviceSelection() {
         ) : (
           <div className="flex flex-col items-center justify-center border rounded-md p-8 text-center">
             <Settings className="h-12 w-12 text-gray-300 mb-4" />
-            <h3 className="text-lg font-medium mb-2">Nessun dispositivo selezionato</h3>
+            <h3 className="text-lg font-medium mb-2">Nessun punto di controllo selezionato</h3>
             <p className="text-sm text-gray-500 mb-4">
               Clicca sul pulsante "Seleziona" per aggiungere dispositivi al report
             </p>
             <Button type="button" onClick={() => setIsDeviceSheetOpen(true)} variant="outline">
               <Plus className="h-4 w-4 mr-2" />
-              Seleziona dispositivi
+              Seleziona Punti di Controllo
             </Button>
           </div>
         )}

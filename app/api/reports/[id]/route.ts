@@ -71,8 +71,7 @@ export async function PUT(
       .update({
         name: name.trim(),
         todolist_params_linked,
-        mapping_excel,
-        updated_at: new Date().toISOString()
+        mapping_excel
       })
       .eq('id', id)
       .select()
