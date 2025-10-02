@@ -87,28 +87,41 @@ export async function getTodolistCategories(): Promise<string[]> {
   try {
     const supabase = await createServerSupabaseClient()
     
-    // Use a much higher range to fetch all records (up to 100,000)
-    // This ensures we get all unique categories even with many todolist records
-    const { data, error } = await supabase
-      .from("todolist")
-      .select("todolist_category")
-      .not("todolist_category", "is", null)
-      .not("todolist_category", "eq", "")
-      .range(0, 99999)
+    // Fetch all categories with pagination (1000 at a time)
+    const categoriesSet = new Set<string>()
+    let offset = 0
+    const limit = 1000
+    let hasMore = true
     
-    if (error) {
-      console.error("Error fetching todolist categories:", error)
-      return []
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from("todolist")
+        .select("todolist_category")
+        .not("todolist_category", "is", null)
+        .not("todolist_category", "eq", "")
+        .range(offset, offset + limit - 1)
+      
+      if (error) {
+        console.error("Error fetching todolist categories:", error)
+        break
+      }
+      
+      // Add categories to set
+      if (data && data.length > 0) {
+        data.forEach(item => {
+          if (item.todolist_category && item.todolist_category.trim() !== "") {
+            categoriesSet.add(item.todolist_category.trim())
+          }
+        })
+      }
+      
+      // Check if we need to fetch more
+      hasMore = data && data.length === limit
+      offset += limit
     }
     
-    // Extract unique categories and filter out nulls/empty strings
-    const categories = [...new Set(
-      data
-        .map(item => item.todolist_category)
-        .filter((category): category is string => 
-          category !== null && category !== undefined && category.trim() !== ""
-        )
-    )].sort()
+    // Convert set to sorted array
+    const categories = [...categoriesSet].sort()
     
     return categories
   } catch (error) {
