@@ -87,11 +87,14 @@ export async function getTodolistCategories(): Promise<string[]> {
   try {
     const supabase = await createServerSupabaseClient()
     
+    // Use a much higher range to fetch all records (up to 100,000)
+    // This ensures we get all unique categories even with many todolist records
     const { data, error } = await supabase
       .from("todolist")
       .select("todolist_category")
       .not("todolist_category", "is", null)
       .not("todolist_category", "eq", "")
+      .range(0, 99999)
     
     if (error) {
       console.error("Error fetching todolist categories:", error)
