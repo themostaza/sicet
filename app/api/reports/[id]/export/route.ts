@@ -173,37 +173,180 @@ async function generateMappedExcel(report: any, excelData: ExcelData): Promise<B
 function generateDataSheet(report: any, mappings: MappingItem[], taskData: TaskData[]): any {
   const ws: any = {}
   
-  // Per ogni mapping, trova il valore corrispondente nei task data
+  // Raggruppa i mappings per riga originale
+  const rowMappings: Map<number, MappingItem[]> = new Map()
+  const columnHeaders: Map<string, { deviceName: string, deviceId: string }> = new Map()
+  
   for (const mapping of mappings) {
-    const { fieldId, cellPosition, deviceId, kpiId, label } = mapping
-    
-    // Trova il valore per questo fieldId nel device specifico
-    const value = findValueForMapping(taskData, fieldId, deviceId, kpiId)
-    
-    // Posiziona il valore nella cella specificata
-    if (value !== null && value !== undefined) {
-      // Formatta il valore appropriatamente
-      let formattedValue = value
-      if (typeof value === 'boolean') {
-        formattedValue = value ? 'Sì' : 'No'
-      } else if (value === '') {
-        formattedValue = '-'
-      }
+    const cellMatch = mapping.cellPosition.match(/^([A-Z]+)(\d+)$/)
+    if (cellMatch) {
+      const column = cellMatch[1]
+      const row = parseInt(cellMatch[2])
       
-      ws[cellPosition] = { 
-        t: typeof formattedValue === 'number' ? 'n' : 's', 
-        v: formattedValue 
+      // Raggruppa per riga
+      if (!rowMappings.has(row)) {
+        rowMappings.set(row, [])
       }
-    } else {
-      // Se non c'è valore, metti un placeholder
-      ws[cellPosition] = { t: 's', v: '-' }
+      rowMappings.get(row)!.push(mapping)
+      
+      // Header colonne
+      if (!columnHeaders.has(column)) {
+        columnHeaders.set(column, {
+          deviceName: mapping.deviceName || mapping.deviceId,
+          deviceId: mapping.deviceId
+        })
+      }
     }
   }
   
-  // Calcola il range necessario basato sulle celle utilizzate
+  // GENERA HEADER COLONNA (RIGA 1) - Nomi dei device con ID
+  for (const [column, headerInfo] of columnHeaders.entries()) {
+    const headerCell = `${column}1`
+    ws[headerCell] = { 
+      t: 's', 
+      v: `${headerInfo.deviceName} (${headerInfo.deviceId})`,
+      s: { 
+        font: { bold: true },
+        fill: { fgColor: { rgb: "E2EFDA" } },
+        alignment: { horizontal: 'center', vertical: 'center' }
+      }
+    }
+  }
+  
+  // Elabora le righe ordinandole
+  const sortedRows = Array.from(rowMappings.keys()).sort((a, b) => a - b)
+  let currentExcelRow = 2 // Inizia dalla riga 2 (dopo l'header)
+  
+  for (const originalRow of sortedRows) {
+    const rowMaps = rowMappings.get(originalRow)!
+    
+    // Trova tutte le todolist uniche per questa riga
+    const todolistsForRow: Map<string, { completion_date: string, tasks: TaskData[] }> = new Map()
+    
+    for (const mapping of rowMaps) {
+      const relevantTasks = taskData.filter((task: TaskData) => 
+        task.device_id === mapping.deviceId && task.kpi_id === mapping.kpiId
+      )
+      
+      for (const task of relevantTasks) {
+        if (!todolistsForRow.has(task.todolist_id)) {
+          todolistsForRow.set(task.todolist_id, {
+            completion_date: task.completion_date,
+            tasks: []
+          })
+        }
+        todolistsForRow.get(task.todolist_id)!.tasks.push(task)
+      }
+    }
+    
+    // Ordina le todolist cronologicamente (più vecchia prima)
+    const sortedTodolists = Array.from(todolistsForRow.entries())
+      .sort((a, b) => {
+        const dateA = new Date(a[1].completion_date).getTime()
+        const dateB = new Date(b[1].completion_date).getTime()
+        return dateA - dateB
+      })
+    
+    // Se non ci sono todolist, crea comunque una riga vuota
+    if (sortedTodolists.length === 0) {
+      const headerCell = `A${currentExcelRow}`
+      const firstMapping = rowMaps[0]
+      
+      ws[headerCell] = { 
+        t: 's',
+        r: [
+          { 
+            t: firstMapping.kpiName, 
+            s: { font: { bold: true, sz: 11 } } 
+          },
+          { 
+            t: ` - ${firstMapping.fieldName}\n(nessun dato)`, 
+            s: { font: { bold: false, sz: 10 } } 
+          }
+        ],
+        s: { 
+          fill: { fgColor: { rgb: "E2EFDA" } },
+          alignment: { horizontal: 'left', vertical: 'top', wrapText: true }
+        }
+      }
+      
+      // Celle vuote per questa riga
+      for (const mapping of rowMaps) {
+        const cellMatch = mapping.cellPosition.match(/^([A-Z]+)(\d+)$/)
+        if (cellMatch) {
+          const column = cellMatch[1]
+          ws[`${column}${currentExcelRow}`] = { t: 's', v: '-' }
+        }
+      }
+      
+      currentExcelRow++
+    } else {
+      // Crea una riga per ogni todolist
+      for (const [todolistId, todolistInfo] of sortedTodolists) {
+        const headerCell = `A${currentExcelRow}`
+        const firstMapping = rowMaps[0]
+        const date = new Date(todolistInfo.completion_date)
+        const dateStr = `${date.toLocaleDateString('it-IT')} ${date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`
+        
+        // Usa rich text per formattare solo il KPI in grassetto
+        ws[headerCell] = { 
+          t: 's',
+          r: [
+            { 
+              t: firstMapping.kpiName, 
+              s: { font: { bold: true, sz: 11 } } 
+            },
+            { 
+              t: ` - ${firstMapping.fieldName}\n(completata il ${dateStr} [ID: ${todolistId}])`, 
+              s: { font: { bold: false, sz: 10 } } 
+            }
+          ],
+          s: { 
+            fill: { fgColor: { rgb: "E2EFDA" } },
+            alignment: { horizontal: 'left', vertical: 'top', wrapText: true }
+          }
+        }
+        
+        // Popola i dati per questa todolist
+        for (const mapping of rowMaps) {
+          const cellMatch = mapping.cellPosition.match(/^([A-Z]+)(\d+)$/)
+          if (cellMatch) {
+            const column = cellMatch[1]
+            
+            // Trova il valore specifico per questa todolist
+            const value = findValueForMappingFromTodolist(
+              todolistInfo.tasks,
+              mapping.fieldId,
+              mapping.deviceId,
+              mapping.kpiId
+            )
+            
+            let formattedValue = value
+            if (value !== null && value !== undefined) {
+              if (typeof value === 'boolean') {
+                formattedValue = value ? 'Sì' : 'No'
+              } else if (value === '') {
+                formattedValue = '-'
+              }
+              
+              ws[`${column}${currentExcelRow}`] = { 
+                t: typeof formattedValue === 'number' ? 'n' : 's', 
+                v: formattedValue 
+              }
+            } else {
+              ws[`${column}${currentExcelRow}`] = { t: 's', v: '-' }
+            }
+          }
+        }
+        
+        currentExcelRow++
+      }
+    }
+  }
+  
+  // Calcola il range
   const usedCells = Object.keys(ws).filter(key => key !== '!ref' && key !== '!cols')
   if (usedCells.length > 0) {
-    // Trova il range effettivo delle celle utilizzate
     let maxCol = 'A', maxRow = 1
     for (const cell of usedCells) {
       const col = cell.match(/[A-Z]+/)?.[0]
@@ -214,10 +357,38 @@ function generateDataSheet(report: any, mappings: MappingItem[], taskData: TaskD
     ws['!ref'] = `A1:${maxCol}${maxRow}`
   }
   
-  // Applica alcuni stili di base
-  ws['!cols'] = Array(26).fill({ wch: 15 }) // 26 colonne con larghezza 15
+  ws['!cols'] = Array(26).fill({ wch: 25 })
   
   return ws
+}
+
+// Nuova funzione helper per trovare valori da una todolist specifica
+function findValueForMappingFromTodolist(tasks: TaskData[], fieldId: string, deviceId: string, kpiId: string): any {
+  const relevantTasks = tasks.filter((task: TaskData) => 
+    task.device_id === deviceId && task.kpi_id === kpiId
+  )
+  
+  if (relevantTasks.length === 0) {
+    return null
+  }
+  
+  // Ordina per data di completamento (più recente prima) nel caso ci siano più task
+  relevantTasks.sort((a: TaskData, b: TaskData) => {
+    const dateA = new Date(a.completed_at || a.completion_date)
+    const dateB = new Date(b.completed_at || b.completion_date)
+    return dateB.getTime() - dateA.getTime()
+  })
+  
+  for (const task of relevantTasks) {
+    if (task.value && Array.isArray(task.value)) {
+      const fieldValue = task.value.find((v: { id: string; value: any }) => v.id === fieldId)
+      if (fieldValue && fieldValue.value !== undefined) {
+        return fieldValue.value
+      }
+    }
+  }
+  
+  return null
 }
 
 function generateDocumentationSheet(report: any, excelData: ExcelData, taskData: TaskData[]): any {

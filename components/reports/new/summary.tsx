@@ -8,6 +8,7 @@ import { BarChart3, Trash2, Check, X } from "lucide-react"
 import { useReport } from "./context"
 import { useState, useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
+import { toast } from "@/components/ui/use-toast"
 
 export function ReportSummary() {
   const { 
@@ -165,12 +166,56 @@ export function ReportSummary() {
   }, [editingCell])
 
   const handleSaveMapping = (value: string) => {
-    if (editingCell && value.trim()) {
-      setMappings(prev => ({
-        ...prev,
-        [editingCell]: value.trim().toUpperCase()
-      }))
+    if (!editingCell || !value.trim()) {
+      setEditingCell(null)
+      setEditValue("")
+      return
     }
+    
+    const cellValue = value.trim().toUpperCase()
+    
+    // Validazione: non permettere celle nella riga 1 o colonna A
+    const cellMatch = cellValue.match(/^([A-Z]+)(\d+)$/)
+    if (cellMatch) {
+      const column = cellMatch[1]
+      const row = parseInt(cellMatch[2])
+      
+      if (column === 'A') {
+        // Non permettere colonna A
+        toast({
+          title: "Cella non valida",
+          description: "Non è possibile mappare celle nella colonna A. La colonna A è riservata per gli header.",
+          variant: "destructive"
+        })
+        setEditValue("")
+        return
+      }
+      
+      if (row === 1) {
+        // Non permettere riga 1
+        toast({
+          title: "Cella non valida",
+          description: "Non è possibile mappare celle nella riga 1. La riga 1 è riservata per gli header.",
+          variant: "destructive"
+        })
+        setEditValue("")
+        return
+      }
+    } else {
+      // Formato non valido
+      toast({
+        title: "Formato non valido",
+        description: "Usa il formato Excel (es. B2, C3, D5, ecc.). Le celle devono iniziare dalla colonna B e dalla riga 2.",
+        variant: "destructive"
+      })
+      setEditValue("")
+      return
+    }
+    
+    setMappings(prev => ({
+      ...prev,
+      [editingCell]: cellValue
+    }))
     setEditingCell(null)
     setEditValue("")
   }
@@ -290,6 +335,14 @@ export function ReportSummary() {
             </Badge>
           </div>
         </div>
+        
+        {/* Nota informativa sulle restrizioni */}
+        <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+          <p className="text-sm text-blue-800">
+            <strong>Nota:</strong> La colonna A e la riga 1 sono riservate per gli header nell'Excel esportato. 
+            Inserisci celle a partire da <strong>B2</strong> (es. B2, C3, D4, ecc.).
+          </p>
+        </div>
 
         <div className="overflow-x-auto overflow-y-auto border rounded-md">
           <Table className="w-auto border-separate border-spacing-0">
@@ -382,7 +435,7 @@ export function ReportSummary() {
                                   setEditValue("")
                                 }
                               }}
-                              placeholder="es. B5"
+                              placeholder="es. B2, C3"
                               className="h-8 text-center text-sm font-mono"
                               autoFocus
                             />
