@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { BarChart3, Trash2, Check, X } from "lucide-react"
+import { BarChart3, Trash2, Check, X, ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from "lucide-react"
 import { useReport } from "./context"
 import { useState, useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
@@ -15,7 +15,11 @@ export function ReportSummary() {
     selectedDevicesArray,
     selectedKpisArray,
     mappings,
-    setMappings
+    setMappings,
+    moveDevice,
+    moveField,
+    devicesOrder,
+    fieldsOrder
   } = useReport()
 
   // Debug per verificare i mappings
@@ -83,9 +87,10 @@ export function ReportSummary() {
     }
   }
 
-  // Estrai i campi da tutti i KPI selezionati
+  // Estrai i campi da tutti i KPI selezionati e ordinali secondo fieldsOrder
   const getAllKpiFields = () => {
-    const fields: Array<{
+    // Prima crea una mappa di tutti i campi
+    const fieldsMap = new Map<string, {
       kpiId: string
       kpiName: string
       fieldId: string
@@ -93,16 +98,17 @@ export function ReportSummary() {
       fieldType: string
       fieldDescription?: string
       fieldRequired: boolean
-    }> = []
+    }>()
 
     selectedKpisArray.forEach(kpi => {
       // Gestisci il caso in cui kpi.value è un array con campi multipli
       if (kpi.value && Array.isArray(kpi.value) && kpi.value.length > 0) {
         kpi.value.forEach((field: any, index: number) => {
-          fields.push({
+          const fieldId = field.id || `${kpi.id}-${String(field.name || '').toLowerCase().replace(/\s+/g, '_')}`
+          fieldsMap.set(fieldId, {
             kpiId: kpi.id,
             kpiName: kpi.name,
-            fieldId: field.id || `${kpi.id}-${String(field.name || '').toLowerCase().replace(/\s+/g, '_')}`,
+            fieldId,
             fieldName: field.name || `Campo ${index + 1}`,
             fieldType: field.type || 'text',
             fieldDescription: field.description,
@@ -113,10 +119,11 @@ export function ReportSummary() {
       // Gestisci il caso in cui kpi.value è un singolo oggetto
       else if (kpi.value && typeof kpi.value === 'object' && kpi.value !== null && !Array.isArray(kpi.value)) {
         const valueObj = kpi.value as any
-        fields.push({
+        const fieldId = valueObj.id || `${kpi.id}-${String(valueObj.name || 'value').toLowerCase().replace(/\s+/g, '_')}`
+        fieldsMap.set(fieldId, {
           kpiId: kpi.id,
           kpiName: kpi.name,
-          fieldId: valueObj.id || `${kpi.id}-${String(valueObj.name || 'value').toLowerCase().replace(/\s+/g, '_')}`,
+          fieldId,
           fieldName: valueObj.name || kpi.name,
           fieldType: valueObj.type || 'text',
           fieldDescription: valueObj.description || kpi.description,
@@ -125,10 +132,11 @@ export function ReportSummary() {
       }
       // Se non ha campi specifici o value è null/undefined, crea un campo default
       else {
-        fields.push({
+        const fieldId = `${kpi.id}-value`
+        fieldsMap.set(fieldId, {
           kpiId: kpi.id,
           kpiName: kpi.name,
-          fieldId: `${kpi.id}-value`,
+          fieldId,
           fieldName: kpi.name, // Usa il nome del KPI come fallback
           fieldType: 'text',
           fieldDescription: kpi.description,
@@ -137,7 +145,20 @@ export function ReportSummary() {
       }
     })
 
-    return fields
+    // Ordina i campi secondo fieldsOrder
+    const orderedFields = fieldsOrder
+      .map(fieldId => fieldsMap.get(fieldId))
+      .filter(field => field !== undefined)
+
+    return orderedFields as Array<{
+      kpiId: string
+      kpiName: string
+      fieldId: string
+      fieldName: string
+      fieldType: string
+      fieldDescription?: string
+      fieldRequired: boolean
+    }>
   }
 
   const handleCellClick = (deviceId: string, fieldId: string) => {
@@ -354,7 +375,7 @@ export function ReportSummary() {
                 )}>
                   Campi Controlli
                 </TableHead>
-                {selectedDevicesArray.map((device) => (
+                {selectedDevicesArray.map((device, index) => (
                   <TableHead 
                     key={device.id}
                     className={cn(
@@ -363,6 +384,28 @@ export function ReportSummary() {
                     )}
                   >
                     <div className="py-2">
+                      <div className="flex items-center justify-center gap-1 mb-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={() => moveDevice(device.id, 'left')}
+                          disabled={index === 0}
+                          title="Sposta a sinistra"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={() => moveDevice(device.id, 'right')}
+                          disabled={index === selectedDevicesArray.length - 1}
+                          title="Sposta a destra"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
                       <div className="font-medium text-sm">{device.name}</div>
                       <div className="text-xs text-gray-500">ID: {device.id}</div>
                     </div>
@@ -371,37 +414,66 @@ export function ReportSummary() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {allFields.map((field) => (
-                <TableRow 
-                  key={field.fieldId}
-                  className={cn(
-                    "transition-colors",
-                    hoveredRow === field.fieldId && "bg-blue-50"
-                  )}
-                >
-                  <TableCell 
+              {allFields.map((field, fieldIndex) => {
+                // Ogni campo può spostarsi su/giù
+                const isFirstField = fieldIndex === 0
+                const isLastField = fieldIndex === allFields.length - 1
+                
+                return (
+                  <TableRow 
+                    key={field.fieldId}
                     className={cn(
-                      "font-medium min-w-[200px] max-w-[200px] w-[200px] border-r border-b border-gray-200 transition-colors",
+                      "transition-colors",
                       hoveredRow === field.fieldId && "bg-blue-50"
                     )}
                   >
-                    <div className="py-1">
-                      <div className="font-medium text-sm">{field.fieldName}</div>
-                      <div className="text-xs text-blue-600 font-medium">{field.kpiName}</div>
-                      <div className="text-xs text-gray-500">
-                        {field.fieldType}
-                        {field.fieldRequired && <span className="text-red-500 ml-1">*</span>}
-                      </div>
-                      {field.fieldDescription && (
-                        <div className="text-xs text-gray-400 mt-1">{field.fieldDescription}</div>
+                    <TableCell 
+                      className={cn(
+                        "font-medium min-w-[200px] max-w-[200px] w-[200px] border-r border-b border-gray-200 transition-colors",
+                        hoveredRow === field.fieldId && "bg-blue-50"
                       )}
+                    >
+                      <div className="py-1 flex gap-2">
+                        <div className="flex flex-col gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-5 w-5 p-0"
+                            onClick={() => moveField(field.fieldId, 'up')}
+                            disabled={isFirstField}
+                            title="Sposta in alto"
+                          >
+                            <ChevronUp className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-5 w-5 p-0"
+                            onClick={() => moveField(field.fieldId, 'down')}
+                            disabled={isLastField}
+                            title="Sposta in basso"
+                          >
+                            <ChevronDown className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-medium text-sm">{field.fieldName}</div>
+                          <div className="text-xs text-blue-600 font-medium">{field.kpiName}</div>
+                          <div className="text-xs text-gray-500">
+                            {field.fieldType}
+                            {field.fieldRequired && <span className="text-red-500 ml-1">*</span>}
+                          </div>
+                          {field.fieldDescription && (
+                            <div className="text-xs text-gray-400 mt-1">{field.fieldDescription}</div>
+                          )}
+                        </div>
                     </div>
                   </TableCell>
-                  {selectedDevicesArray.map((device) => {
-                    const mappingKey = getMappingKey(device.id, field.fieldId)
-                    const cellMapping = mappings[mappingKey]
-                    
-                    return (
+                    {selectedDevicesArray.map((device) => {
+                      const mappingKey = getMappingKey(device.id, field.fieldId)
+                      const cellMapping = mappings[mappingKey]
+                      
+                      return (
                       <TableCell 
                         key={device.id}
                         data-cell-id={mappingKey}
@@ -482,10 +554,11 @@ export function ReportSummary() {
                           )}
                         </div>
                       </TableCell>
-                    )
-                  })}
-                </TableRow>
-              ))}
+                      )
+                    })}
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         </div>

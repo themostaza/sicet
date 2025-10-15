@@ -27,7 +27,11 @@ export function EditReportProvider({ children }: EditReportProviderProps) {
     setSelectedKpis,
     setMappings,
     devices,
-    kpis
+    kpis,
+    devicesOrder,
+    fieldsOrder,
+    setDevicesOrder,
+    setFieldsOrder
   } = useReport()
 
   // Load existing report data
@@ -73,6 +77,14 @@ export function EditReportProvider({ children }: EditReportProviderProps) {
           
           setSelectedDevices(deviceIds)
           setSelectedKpis(kpiIds)
+        }
+
+        // Load ordering from mapping_excel if available
+        if (report.mapping_excel?.devicesOrder && Array.isArray(report.mapping_excel.devicesOrder)) {
+          setDevicesOrder(report.mapping_excel.devicesOrder)
+        }
+        if (report.mapping_excel?.fieldsOrder && Array.isArray(report.mapping_excel.fieldsOrder)) {
+          setFieldsOrder(report.mapping_excel.fieldsOrder)
         }
 
         // Extract mappings from mapping_excel
@@ -167,7 +179,7 @@ export function EditReportProvider({ children }: EditReportProviderProps) {
     if (devices.length > 0 && kpis.length > 0) {
       loadReportData()
     }
-  }, [reportId, devices.length, kpis.length, setReportName, setSelectedDevices, setSelectedKpis, setMappings])
+  }, [reportId, devices.length, kpis.length, setReportName, setSelectedDevices, setSelectedKpis, setMappings, setDevicesOrder, setFieldsOrder])
 
   const value: EditReportContextType = {
     isLoading,

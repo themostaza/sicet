@@ -31,6 +31,11 @@ interface ReportContextType {
   isDeviceSheetOpen: boolean
   setIsDeviceSheetOpen: (open: boolean) => void
   
+  // Device ordering
+  devicesOrder: string[]
+  setDevicesOrder: (order: string[]) => void
+  moveDevice: (deviceId: string, direction: 'left' | 'right') => void
+  
   // Device tags
   allTags: string[]
   selectedTags: string[]
@@ -47,6 +52,11 @@ interface ReportContextType {
   selectedKpisArray: KPI[]
   isKpiSheetOpen: boolean
   setIsKpiSheetOpen: (open: boolean) => void
+  
+  // Field ordering (per singoli campi KPI)
+  fieldsOrder: string[]
+  setFieldsOrder: (order: string[]) => void
+  moveField: (fieldId: string, direction: 'up' | 'down') => void
   
   // Excel mappings
   mappings: {[key: string]: string} // key: "deviceId-kpiId", value: "cellPosition"
@@ -77,6 +87,10 @@ export function ReportProvider({ children }: ReportProviderProps) {
   // Selections
   const [selectedDevices, setSelectedDevices] = useState<Set<string>>(new Set())
   const [selectedKpis, setSelectedKpis] = useState<Set<string>>(new Set())
+  
+  // Ordering
+  const [devicesOrder, setDevicesOrder] = useState<string[]>([])
+  const [fieldsOrder, setFieldsOrder] = useState<string[]>([])
   
   // Device tags
   const [allTags, setAllTags] = useState<string[]>([])
@@ -152,9 +166,76 @@ export function ReportProvider({ children }: ReportProviderProps) {
     filterByTags()
   }, [selectedTags, tagFilterMode])
   
-  // Computed values
-  const selectedDevicesArray = devices.filter(device => selectedDevices.has(device.id))
+  // Update order when selections change
+  useEffect(() => {
+    const newDevices = Array.from(selectedDevices)
+    const newOrder = newDevices.filter(id => !devicesOrder.includes(id))
+    const validOrder = devicesOrder.filter(id => selectedDevices.has(id))
+    setDevicesOrder([...validOrder, ...newOrder])
+  }, [selectedDevices])
+  
+  // Update fields order when KPIs selection changes
+  useEffect(() => {
+    // Genera tutti i fieldId dai KPI selezionati
+    const allFieldIds: string[] = []
+    
+    selectedKpisArray.forEach(kpi => {
+      if (kpi.value && Array.isArray(kpi.value) && kpi.value.length > 0) {
+        kpi.value.forEach((field: any) => {
+          const fieldId = field.id || `${kpi.id}-${String(field.name || '').toLowerCase().replace(/\s+/g, '_')}`
+          allFieldIds.push(fieldId)
+        })
+      } else if (kpi.value && typeof kpi.value === 'object' && kpi.value !== null && !Array.isArray(kpi.value)) {
+        const valueObj = kpi.value as any
+        const fieldId = valueObj.id || `${kpi.id}-${String(valueObj.name || 'value').toLowerCase().replace(/\s+/g, '_')}`
+        allFieldIds.push(fieldId)
+      } else {
+        allFieldIds.push(`${kpi.id}-value`)
+      }
+    })
+    
+    // Aggiungi nuovi field che non sono nell'ordine
+    const newFields = allFieldIds.filter(id => !fieldsOrder.includes(id))
+    // Mantieni solo field ancora validi
+    const validOrder = fieldsOrder.filter(id => allFieldIds.includes(id))
+    setFieldsOrder([...validOrder, ...newFields])
+  }, [selectedKpis, kpis])
+  
+  // Move functions
+  const moveDevice = (deviceId: string, direction: 'left' | 'right') => {
+    const currentIndex = devicesOrder.indexOf(deviceId)
+    if (currentIndex === -1) return
+    
+    const newOrder = [...devicesOrder]
+    if (direction === 'left' && currentIndex > 0) {
+      [newOrder[currentIndex - 1], newOrder[currentIndex]] = [newOrder[currentIndex], newOrder[currentIndex - 1]]
+    } else if (direction === 'right' && currentIndex < devicesOrder.length - 1) {
+      [newOrder[currentIndex], newOrder[currentIndex + 1]] = [newOrder[currentIndex + 1], newOrder[currentIndex]]
+    }
+    setDevicesOrder(newOrder)
+  }
+  
+  const moveField = (fieldId: string, direction: 'up' | 'down') => {
+    const currentIndex = fieldsOrder.indexOf(fieldId)
+    if (currentIndex === -1) return
+    
+    const newOrder = [...fieldsOrder]
+    if (direction === 'up' && currentIndex > 0) {
+      [newOrder[currentIndex - 1], newOrder[currentIndex]] = [newOrder[currentIndex], newOrder[currentIndex - 1]]
+    } else if (direction === 'down' && currentIndex < fieldsOrder.length - 1) {
+      [newOrder[currentIndex], newOrder[currentIndex + 1]] = [newOrder[currentIndex + 1], newOrder[currentIndex]]
+    }
+    setFieldsOrder(newOrder)
+  }
+  
+  // Computed values with ordering
+  const selectedDevicesArray = devicesOrder
+    .map(id => devices.find(d => d.id === id))
+    .filter((d): d is Device => d !== undefined && selectedDevices.has(d.id))
+  
+  // selectedKpisArray rimane nell'ordine originale (usato per generare i campi)
   const selectedKpisArray = kpis.filter(kpi => selectedKpis.has(kpi.id))
+  
   const totalControlPointsCount = selectedDevices.size > 0 && selectedKpis.size > 0 ? selectedDevices.size : 0
   
   const value: ReportContextType = {
@@ -169,6 +250,11 @@ export function ReportProvider({ children }: ReportProviderProps) {
     selectedDevicesArray,
     isDeviceSheetOpen,
     setIsDeviceSheetOpen,
+    
+    // Device ordering
+    devicesOrder,
+    setDevicesOrder,
+    moveDevice,
     
     // Device tags
     allTags,
@@ -186,6 +272,11 @@ export function ReportProvider({ children }: ReportProviderProps) {
     selectedKpisArray,
     isKpiSheetOpen,
     setIsKpiSheetOpen,
+    
+    // Field ordering
+    fieldsOrder,
+    setFieldsOrder,
+    moveField,
     
     // Excel mappings
     mappings,

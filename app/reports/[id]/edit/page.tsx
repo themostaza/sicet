@@ -40,7 +40,9 @@ function ReportEditForm() {
     mappings,
     errors,
     setErrors,
-    totalControlPointsCount
+    totalControlPointsCount,
+    devicesOrder,
+    fieldsOrder
   } = useReport()
 
   const { isLoading, reportId } = useEditReport()
@@ -167,6 +169,8 @@ function ReportEditForm() {
     const allKpiFields = getAllKpiFields()
     
     const mappingExcel = {
+      devicesOrder: devicesOrder,
+      fieldsOrder: fieldsOrder,
       mappings: Object.entries(mappings)
         .filter(([key, cellPosition]) => cellPosition && cellPosition.trim())
         .map(([key, cellPosition]) => {
