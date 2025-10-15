@@ -77,8 +77,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // Ottieni i dati per l'export basati sul mapping del report
     const excelData = await getReportDataForExport(supabase, report, selectedDate)
 
-    // Genera l'Excel basato sul mapping del report
-    const excelBuffer = await generateMappedExcel(report, excelData)
+  // Genera l'Excel basato sul mapping del report
+  const excelBuffer = await generateMappedExcel(report, excelData, selectedDate)
 
     // Restituisci il file Excel
     const response = new NextResponse(new Uint8Array(excelBuffer), {
@@ -106,7 +106,7 @@ async function getReportDataForExport(supabase: any, report: any, selectedDate: 
   const deviceIds = [...new Set(mappingExcel.mappings.map((mapping: MappingItem) => mapping.deviceId))]
   
   // 2. Trova le todolist completate per questi device nella data selezionata
-  const { data: todolists, error: todolistError } = await supabase
+  const { data: completedTodolists, error: todolistError } = await supabase
       .from('todolist')
     .select('id, device_id, completion_date')
     .in('device_id', deviceIds)
@@ -119,12 +119,13 @@ async function getReportDataForExport(supabase: any, report: any, selectedDate: 
     throw new Error('Failed to fetch todolists')
   }
 
-  if (!todolists || todolists.length === 0) {
+  // Se non ci sono todolist completate per NESSUN device, blocca il download
+  if (!completedTodolists || completedTodolists.length === 0) {
     return { mappings: mappingExcel.mappings, taskData: [] }
   }
 
-  // 3. Ottieni tutti i task per queste todolist
-  const todolistIds = todolists.map((t: any) => t.id)
+  // 3. Ottieni tutti i task per le todolist completate
+  const todolistIds = completedTodolists.map((t: any) => t.id)
   const { data: tasks, error: tasksError } = await supabase
     .from('tasks')
     .select('id, kpi_id, value, todolist_id, completed_at')
@@ -138,7 +139,7 @@ async function getReportDataForExport(supabase: any, report: any, selectedDate: 
 
   // 4. Combina i dati per facilitare il mapping
   const enrichedTasks: TaskData[] = (tasks || []).map((task: any) => {
-    const todolist = todolists.find((tl: any) => tl.id === task.todolist_id)
+    const todolist = completedTodolists.find((tl: any) => tl.id === task.todolist_id)
     return {
       ...task,
       device_id: todolist?.device_id || '',
@@ -146,19 +147,41 @@ async function getReportDataForExport(supabase: any, report: any, selectedDate: 
     } as TaskData
   })
 
+  // 5. Crea task "placeholder" per i device che non hanno completato la todolist
+  const completedDeviceIds = new Set(completedTodolists.map((tl: any) => tl.device_id))
+  const missingDeviceIds = deviceIds.filter(deviceId => !completedDeviceIds.has(deviceId))
+  
+  // Per ogni device mancante, crea task placeholder per ogni KPI nel mapping
+  const uniqueKpiIds = [...new Set(mappingExcel.mappings.map((mapping: MappingItem) => mapping.kpiId))]
+  
+  for (const deviceId of missingDeviceIds) {
+    for (const kpiId of uniqueKpiIds) {
+      // Crea un task placeholder che indica che la todolist non è stata completata
+      enrichedTasks.push({
+        id: `placeholder-${deviceId}-${kpiId}`,
+        kpi_id: kpiId,
+        value: [], // Valore vuoto
+        todolist_id: `missing-${deviceId}`,
+        completed_at: '',
+        device_id: deviceId,
+        completion_date: '' // Nessuna data di completamento
+      } as TaskData)
+    }
+  }
+
   return {
     mappings: mappingExcel.mappings,
     taskData: enrichedTasks
   }
 }
 
-async function generateMappedExcel(report: any, excelData: ExcelData): Promise<Buffer> {
+async function generateMappedExcel(report: any, excelData: ExcelData, selectedDate: string): Promise<Buffer> {
   const wb = XLSX.utils.book_new()
   
   const { mappings, taskData } = excelData
   
   // PRIMO FOGLIO: Dati del Report
-  const dataWs = generateDataSheet(report, mappings, taskData)
+  const dataWs = generateDataSheet(report, mappings, taskData, selectedDate)
   XLSX.utils.book_append_sheet(wb, dataWs, 'Dati Report')
   
   // SECONDO FOGLIO: Documentazione e Tracciabilità
@@ -170,7 +193,7 @@ async function generateMappedExcel(report: any, excelData: ExcelData): Promise<B
   return buffer
 }
 
-function generateDataSheet(report: any, mappings: MappingItem[], taskData: TaskData[]): any {
+function generateDataSheet(report: any, mappings: MappingItem[], taskData: TaskData[], selectedDate: string): any {
   const ws: any = {}
   
   // Raggruppa i mappings per riga originale
@@ -221,7 +244,7 @@ function generateDataSheet(report: any, mappings: MappingItem[], taskData: TaskD
     const rowMaps = rowMappings.get(originalRow)!
     
     // Trova tutte le todolist uniche per questa riga
-    const todolistsForRow: Map<string, { completion_date: string, tasks: TaskData[] }> = new Map()
+    const todolistsForRow: Map<string, { completion_date: string, tasks: TaskData[], isMissing: boolean }> = new Map()
     
     for (const mapping of rowMaps) {
       const relevantTasks = taskData.filter((task: TaskData) => 
@@ -229,22 +252,34 @@ function generateDataSheet(report: any, mappings: MappingItem[], taskData: TaskD
       )
       
       for (const task of relevantTasks) {
+        const isMissingTodolist = task.todolist_id.startsWith('missing-')
         if (!todolistsForRow.has(task.todolist_id)) {
           todolistsForRow.set(task.todolist_id, {
             completion_date: task.completion_date,
-            tasks: []
+            tasks: [],
+            isMissing: isMissingTodolist
           })
         }
         todolistsForRow.get(task.todolist_id)!.tasks.push(task)
       }
     }
     
-    // Ordina le todolist cronologicamente (più vecchia prima)
+    // Ordina le todolist: prima quelle completate (cronologicamente), poi quelle mancanti
     const sortedTodolists = Array.from(todolistsForRow.entries())
       .sort((a, b) => {
-        const dateA = new Date(a[1].completion_date).getTime()
-        const dateB = new Date(b[1].completion_date).getTime()
-        return dateA - dateB
+        // Se una è mancante e l'altra no, quella mancante viene dopo
+        if (a[1].isMissing && !b[1].isMissing) return 1
+        if (!a[1].isMissing && b[1].isMissing) return -1
+        
+        // Se entrambe sono completate, ordina per data
+        if (!a[1].isMissing && !b[1].isMissing) {
+          const dateA = new Date(a[1].completion_date).getTime()
+          const dateB = new Date(b[1].completion_date).getTime()
+          return dateA - dateB
+        }
+        
+        // Se entrambe sono mancanti, ordina per todolist_id per coerenza
+        return a[0].localeCompare(b[0])
       })
     
     // Se non ci sono todolist, crea comunque una riga vuota
@@ -285,8 +320,21 @@ function generateDataSheet(report: any, mappings: MappingItem[], taskData: TaskD
       for (const [todolistId, todolistInfo] of sortedTodolists) {
         const headerCell = `A${currentExcelRow}`
         const firstMapping = rowMaps[0]
-        const date = new Date(todolistInfo.completion_date)
-        const dateStr = `${date.toLocaleDateString('it-IT')} ${date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`
+        
+        let statusText: string
+        let fillColor: string
+        
+        if (todolistInfo.isMissing) {
+          // Todolist non completata
+          statusText = `\n(todolist NON completata il ${selectedDate})`
+          fillColor = "FFEEEE" // Rosso chiaro per indicare mancanza
+        } else {
+          // Todolist completata
+          const date = new Date(todolistInfo.completion_date)
+          const dateStr = `${date.toLocaleDateString('it-IT')} ${date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`
+          statusText = `\n(completata il ${dateStr} [ID: ${todolistId}])`
+          fillColor = "E2EFDA" // Verde chiaro per todolist completate
+        }
         
         // Usa rich text per formattare solo il KPI in grassetto
         ws[headerCell] = { 
@@ -297,12 +345,12 @@ function generateDataSheet(report: any, mappings: MappingItem[], taskData: TaskD
               s: { font: { bold: true, sz: 11 } } 
             },
             { 
-              t: ` - ${firstMapping.fieldName}\n(completata il ${dateStr} [ID: ${todolistId}])`, 
+              t: ` - ${firstMapping.fieldName}${statusText}`, 
               s: { font: { bold: false, sz: 10 } } 
             }
           ],
           s: { 
-            fill: { fgColor: { rgb: "E2EFDA" } },
+            fill: { fgColor: { rgb: fillColor } },
             alignment: { horizontal: 'left', vertical: 'top', wrapText: true }
           }
         }
@@ -331,10 +379,20 @@ function generateDataSheet(report: any, mappings: MappingItem[], taskData: TaskD
               
               ws[`${column}${currentExcelRow}`] = { 
                 t: typeof formattedValue === 'number' ? 'n' : 's', 
-                v: formattedValue 
+                v: formattedValue,
+                s: todolistInfo.isMissing ? { fill: { fgColor: { rgb: "FFEEEE" } } } : undefined
               }
             } else {
-              ws[`${column}${currentExcelRow}`] = { t: 's', v: '-' }
+              // Se è una todolist mancante, mostra chiaramente che non è completata
+              const displayValue = todolistInfo.isMissing ? 'Non completata' : '-'
+              ws[`${column}${currentExcelRow}`] = { 
+                t: 's', 
+                v: displayValue,
+                s: todolistInfo.isMissing ? { 
+                  fill: { fgColor: { rgb: "FFEEEE" } },
+                  font: { italic: true, color: { rgb: "CC0000" } }
+                } : undefined
+              }
             }
           }
         }
