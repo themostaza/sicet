@@ -7,6 +7,7 @@ import TodolistClient from "@/components/todolist/todolist-client"
 import { getKpis } from "@/app/actions/actions-kpi"
 import { getDevice } from "@/app/actions/actions-device"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { createServerSupabaseClient } from "@/lib/supabase-server"
 
 // Componente di loading
 function TodolistLoading() {
@@ -66,6 +67,20 @@ export default async function Page(
   // Awaiting params to ensure they're fully available
   const { todolistId, deviceId, date, timeSlot } = await Promise.resolve(params);
 
+  // Recupera il ruolo dell'utente corrente
+  const supabase = await createServerSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  let userRole: 'admin' | 'operator' | 'referrer' | null = null
+  if (user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('auth_id', user.id)
+      .single()
+    userRole = (profile?.role as 'admin' | 'operator' | 'referrer') || null
+  }
+
   // Carica in parallelo tutti i dati necessari
   const [initialData, kpisData, device, todolist, completionUserEmail] = await Promise.all([
     getTodolistTasksById({
@@ -102,6 +117,7 @@ export default async function Page(
         deviceInfo={device ? { name: device.name, location: device.location } : null}
         todolistData={safeTodolist}
         completionUserEmail={completionUserEmail}
+        userRole={userRole}
       />
     </Suspense>
   )

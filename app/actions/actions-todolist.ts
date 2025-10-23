@@ -772,6 +772,13 @@ export async function completeTodolist(todolistId: string): Promise<void> {
   if (todolistError) handleError(todolistError)
   if (!todolist) throw new Error("Todolist non trovata")
   
+  // Ottieni l'ID dell'utente corrente
+  const supabase = await getSupabaseClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    throw new Error("Utente non autenticato")
+  }
+  
   // Verifica se la todolist è scaduta e non è già completata
   if (todolist.status !== "completed" && isTodolistExpired(
     todolist.scheduled_execution, 
@@ -779,13 +786,17 @@ export async function completeTodolist(todolistId: string): Promise<void> {
     todolist.time_slot_end,
     todolist.time_slot_start
   )) {
-    throw new Error("Non è possibile completare una todolist scaduta")
-  }
-
-  // Ottieni l'ID dell'utente corrente
-  const { data: { user }, error: authError } = await (await getSupabaseClient()).auth.getUser()
-  if (authError || !user) {
-    throw new Error("Utente non autenticato")
+    // Se scaduta, verifica se l'utente è admin
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('auth_id', user.id)
+      .single()
+    
+    // Solo gli admin possono completare todolist scadute
+    if (profile?.role !== 'admin') {
+      throw new Error("Non è possibile completare una todolist scaduta. Solo gli amministratori possono farlo.")
+    }
   }
   
   // Update all tasks to completed

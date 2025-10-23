@@ -62,6 +62,7 @@ interface Props {
     completion_date?: string | null
   } | null
   completionUserEmail?: string | null
+  userRole?: 'admin' | 'operator' | 'referrer' | null
 }
 
 // Define types for KPI field
@@ -210,6 +211,7 @@ export default function TodolistClient({
   deviceInfo: initialDeviceInfo = null,
   todolistData,
   completionUserEmail,
+  userRole = null,
 }: Props) {
   const router = useRouter()
   const supabase = createClientSupabaseClient()
@@ -503,7 +505,7 @@ export default function TodolistClient({
         <Input
           value={localValues[fieldKey] ?? (Array.isArray(current) ? current[idx]?.value : current?.value ?? current) ?? ""}
           onChange={(e) => setLocalValue(fieldKey, e.target.value)}
-          disabled={isPending || isReadOnly}
+          disabled={isPending || isFieldsDisabled}
           placeholder="Inserisci il valore"
         />
       </div>
@@ -548,7 +550,7 @@ export default function TodolistClient({
                 setLocalValue(fieldKey, value === '' ? '' : parseInt(value))
               }
             }}
-            disabled={isPending || isReadOnly}
+            disabled={isPending || isFieldsDisabled}
             placeholder="Inserisci un numero intero"
             min={field.min}
             max={field.max}
@@ -583,7 +585,7 @@ export default function TodolistClient({
                 }
               }
             }}
-            disabled={isPending || isReadOnly}
+            disabled={isPending || isFieldsDisabled}
             placeholder="Inserisci un numero decimale (es. 3,14 o 3.14)"
             min={field.min}
             max={field.max}
@@ -595,7 +597,7 @@ export default function TodolistClient({
             type="text"
             value={currentValue}
             onChange={(e) => setLocalValue(fieldKey, e.target.value)}
-            disabled={isPending || isReadOnly}
+            disabled={isPending || isFieldsDisabled}
             placeholder="Inserisci il testo"
           />
         )
@@ -604,7 +606,7 @@ export default function TodolistClient({
           <Textarea
             value={currentValue}
             onChange={(e) => setLocalValue(fieldKey, e.target.value)}
-            disabled={isPending || isReadOnly}
+            disabled={isPending || isFieldsDisabled}
             placeholder="Inserisci il testo"
             rows={3}
           />
@@ -616,7 +618,7 @@ export default function TodolistClient({
               <Button
                 variant="outline"
                 className="w-full justify-start text-left font-normal"
-                disabled={isPending || isReadOnly}
+                disabled={isPending || isFieldsDisabled}
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
                 {currentValue ? (
@@ -631,7 +633,7 @@ export default function TodolistClient({
                 mode="single"
                 selected={currentValue ? new Date(currentValue) : undefined}
                 onSelect={(date) => setLocalValue(fieldKey, date ? format(date, "yyyy-MM-dd") : "")}
-                disabled={isPending || isReadOnly}
+                disabled={isPending || isFieldsDisabled}
                 initialFocus
               />
             </PopoverContent>
@@ -644,7 +646,7 @@ export default function TodolistClient({
               type="button"
               variant={currentValue === true ? "default" : "outline"}
               onClick={() => setLocalValue(fieldKey, true)}
-              disabled={isPending || isReadOnly}
+              disabled={isPending || isFieldsDisabled}
               className="flex-1"
             >
               Sì
@@ -653,7 +655,7 @@ export default function TodolistClient({
               type="button"
               variant={currentValue === false ? "default" : "outline"}
               onClick={() => setLocalValue(fieldKey, false)}
-              disabled={isPending || isReadOnly}
+              disabled={isPending || isFieldsDisabled}
               className="flex-1"
             >
               No
@@ -684,7 +686,7 @@ export default function TodolistClient({
                   variant="outline"
                   size="sm"
                   onClick={() => setLocalValue(fieldKey, '')}
-                  disabled={isPending || isReadOnly}
+                  disabled={isPending || isFieldsDisabled}
                   className="mt-2"
                 >
                   <X className="h-4 w-4 mr-1" />
@@ -731,7 +733,7 @@ export default function TodolistClient({
           <Select
             value={currentValue}
             onValueChange={(value) => setLocalValue(fieldKey, value)}
-            disabled={isPending || isReadOnly}
+            disabled={isPending || isFieldsDisabled}
           >
             <SelectTrigger>
               <SelectValue placeholder="Seleziona un'opzione" />
@@ -782,6 +784,10 @@ export default function TodolistClient({
     todolistData.time_slot_end,
     todolistData.time_slot_start
   ));
+
+  // Determina se i campi devono essere disabilitati
+  // Gli admin possono modificare anche le todolist scadute
+  const isFieldsDisabled = isReadOnly || (isExpired && userRole !== 'admin');
 
   // Funzione helper per formattare l'orario (anche custom)
   function formatTimeSlotLabel(timeSlot: string) {
@@ -875,7 +881,7 @@ export default function TodolistClient({
                     <TooltipTrigger asChild>
                       <Button 
                         onClick={handleCompleteTodolist}
-                        disabled={isPending || isCompleting || isExpired}
+                        disabled={isPending || isCompleting || (isExpired && userRole !== 'admin')}
                         className="relative bg-green-600 hover:bg-green-700"
                       >
                         {isCompleting ? (
@@ -891,9 +897,9 @@ export default function TodolistClient({
                         )}
                       </Button>
                     </TooltipTrigger>
-                    {isExpired && (
+                    {isExpired && userRole !== 'admin' && (
                       <TooltipContent>
-                        <p>Non è possibile completare una todolist scaduta</p>
+                        <p>Non è possibile completare una todolist scaduta. Solo gli amministratori possono farlo.</p>
                       </TooltipContent>
                     )}
                   </Tooltip>

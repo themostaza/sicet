@@ -91,8 +91,10 @@ export async function GET(request: NextRequest) {
               const deviceIds = [...new Set(mappingExcel.mappings.map((mapping: any) => mapping.deviceId))]
               
               if (deviceIds.length > 0) {
-                // Verifica se esistono todolist completate per questi device nella data selezionata
-                const { data: todolists, error: todolistError } = await supabase
+                // Verifica se esistono todolist completate O scadute per questi device nella data selezionata
+                
+                // 1. Todolist completate nella data selezionata
+                const { data: completedTodolists, error: completedError } = await supabase
                   .from('todolist')
                   .select('id')
                   .in('device_id', deviceIds)
@@ -101,8 +103,33 @@ export async function GET(request: NextRequest) {
                   .lt('completion_date', `${selectedDate}T23:59:59.999Z`)
                   .limit(1)
 
-                if (!todolistError && todolists && todolists.length > 0) {
+                if (!completedError && completedTodolists && completedTodolists.length > 0) {
                   hasDataAvailable = true
+                } else {
+                  // 2. Todolist scadute: scheduled nella data selezionata ma NON completate
+                  // e la cui deadline (considerando time slot + tolleranza) è passata
+                  const { data: expiredTodolists, error: expiredError } = await supabase
+                    .from('todolist')
+                    .select('id, scheduled_execution, end_day_time')
+                    .in('device_id', deviceIds)
+                    .is('completion_date', null)
+                    .gte('scheduled_execution', `${selectedDate}T00:00:00.000Z`)
+                    .lt('scheduled_execution', `${selectedDate}T23:59:59.999Z`)
+
+                  if (!expiredError && expiredTodolists && expiredTodolists.length > 0) {
+                    // Verifica se almeno una è scaduta (la deadline è passata rispetto a ora)
+                    const now = new Date()
+                    for (const todolist of expiredTodolists) {
+                      if (todolist.end_day_time) {
+                        const deadline = new Date(todolist.end_day_time)
+                        // La deadline già include la tolleranza nel campo end_day_time
+                        if (now > deadline) {
+                          hasDataAvailable = true
+                          break
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }

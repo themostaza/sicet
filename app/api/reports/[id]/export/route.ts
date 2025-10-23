@@ -105,27 +105,57 @@ async function getReportDataForExport(supabase: any, report: any, selectedDate: 
 
   const deviceIds = [...new Set(mappingExcel.mappings.map((mapping: MappingItem) => mapping.deviceId))]
   
-  // 2. Trova le todolist completate per questi device nella data selezionata
-  const { data: completedTodolists, error: todolistError } = await supabase
-      .from('todolist')
+  // 2. Trova le todolist completate O scadute per questi device nella data selezionata
+  
+  // 2a. Todolist completate nella data selezionata
+  const { data: completedTodolists, error: completedError } = await supabase
+    .from('todolist')
     .select('id, device_id, completion_date')
     .in('device_id', deviceIds)
     .not('completion_date', 'is', null)
     .gte('completion_date', `${selectedDate}T00:00:00.000Z`)
     .lt('completion_date', `${selectedDate}T23:59:59.999Z`)
 
-  if (todolistError) {
-    console.error('Error fetching todolists:', todolistError)
-    throw new Error('Failed to fetch todolists')
+  if (completedError) {
+    console.error('Error fetching completed todolists:', completedError)
+    throw new Error('Failed to fetch completed todolists')
   }
 
-  // Se non ci sono todolist completate per NESSUN device, blocca il download
-  if (!completedTodolists || completedTodolists.length === 0) {
+  // 2b. Todolist scadute: scheduled nella data selezionata ma NON completate
+  const { data: expiredTodolists, error: expiredError } = await supabase
+    .from('todolist')
+    .select('id, device_id, completion_date, scheduled_execution, end_day_time')
+    .in('device_id', deviceIds)
+    .is('completion_date', null)
+    .gte('scheduled_execution', `${selectedDate}T00:00:00.000Z`)
+    .lt('scheduled_execution', `${selectedDate}T23:59:59.999Z`)
+
+  if (expiredError) {
+    console.error('Error fetching expired todolists:', expiredError)
+    throw new Error('Failed to fetch expired todolists')
+  }
+
+  // Filtra solo le todolist effettivamente scadute (deadline passata)
+  const now = new Date()
+  const filteredExpiredTodolists = (expiredTodolists || []).filter((todolist: any) => {
+    if (todolist.end_day_time) {
+      const deadline = new Date(todolist.end_day_time)
+      // La deadline già include la tolleranza nel campo end_day_time
+      return now > deadline
+    }
+    return false
+  })
+
+  // Combina todolist completate e scadute
+  const allTodolists = [...(completedTodolists || []), ...filteredExpiredTodolists]
+
+  // Se non ci sono todolist (completate o scadute) per NESSUN device, ritorna vuoto
+  if (allTodolists.length === 0) {
     return { mappings: mappingExcel.mappings, taskData: [] }
   }
 
-  // 3. Ottieni tutti i task per le todolist completate
-  const todolistIds = completedTodolists.map((t: any) => t.id)
+  // 3. Ottieni tutti i task per le todolist (completate e scadute)
+  const todolistIds = allTodolists.map((t: any) => t.id)
   const { data: tasks, error: tasksError } = await supabase
     .from('tasks')
     .select('id, kpi_id, value, todolist_id, completed_at')
@@ -139,7 +169,7 @@ async function getReportDataForExport(supabase: any, report: any, selectedDate: 
 
   // 4. Combina i dati per facilitare il mapping
   const enrichedTasks: TaskData[] = (tasks || []).map((task: any) => {
-    const todolist = completedTodolists.find((tl: any) => tl.id === task.todolist_id)
+    const todolist = allTodolists.find((tl: any) => tl.id === task.todolist_id)
     return {
       ...task,
       device_id: todolist?.device_id || '',
@@ -147,16 +177,16 @@ async function getReportDataForExport(supabase: any, report: any, selectedDate: 
     } as TaskData
   })
 
-  // 5. Crea task "placeholder" per i device che non hanno completato la todolist
-  const completedDeviceIds = new Set(completedTodolists.map((tl: any) => tl.device_id))
-  const missingDeviceIds = deviceIds.filter(deviceId => !completedDeviceIds.has(deviceId))
+  // 5. Crea task "placeholder" per i device che non hanno completato/scaduto la todolist
+  const processedDeviceIds = new Set(allTodolists.map((tl: any) => tl.device_id))
+  const missingDeviceIds = deviceIds.filter(deviceId => !processedDeviceIds.has(deviceId))
   
   // Per ogni device mancante, crea task placeholder per ogni KPI nel mapping
   const uniqueKpiIds = [...new Set(mappingExcel.mappings.map((mapping: MappingItem) => mapping.kpiId))]
   
   for (const deviceId of missingDeviceIds) {
     for (const kpiId of uniqueKpiIds) {
-      // Crea un task placeholder che indica che la todolist non è stata completata
+      // Crea un task placeholder per device senza todolist completate/scadute
       enrichedTasks.push({
         id: `placeholder-${deviceId}-${kpiId}`,
         kpi_id: kpiId,
