@@ -273,29 +273,30 @@ function generateDataSheet(report: any, mappings: MappingItem[], taskData: TaskD
   for (const originalRow of sortedRows) {
     const rowMaps = rowMappings.get(originalRow)!
     
-    // Trova tutte le todolist uniche per questa riga
-    const todolistsForRow: Map<string, { completion_date: string, tasks: TaskData[], isMissing: boolean }> = new Map()
+    // Per questa riga, trova tutte le todolist che hanno task per almeno uno dei KPI/device mappati
+    const todolistsForThisRow: Map<string, { completion_date: string, device_id: string, isMissing: boolean }> = new Map()
     
     for (const mapping of rowMaps) {
+      // Trova tutti i task che corrispondono a questo mapping
       const relevantTasks = taskData.filter((task: TaskData) => 
         task.device_id === mapping.deviceId && task.kpi_id === mapping.kpiId
       )
       
+      // Aggiungi le todolist di questi task
       for (const task of relevantTasks) {
-        const isMissingTodolist = task.todolist_id.startsWith('missing-')
-        if (!todolistsForRow.has(task.todolist_id)) {
-          todolistsForRow.set(task.todolist_id, {
+        if (!todolistsForThisRow.has(task.todolist_id)) {
+          const isMissing = task.todolist_id.startsWith('missing-')
+          todolistsForThisRow.set(task.todolist_id, {
             completion_date: task.completion_date,
-            tasks: [],
-            isMissing: isMissingTodolist
+            device_id: task.device_id,
+            isMissing: isMissing
           })
         }
-        todolistsForRow.get(task.todolist_id)!.tasks.push(task)
       }
     }
     
-    // Ordina le todolist: prima quelle completate (cronologicamente), poi quelle mancanti
-    const sortedTodolists = Array.from(todolistsForRow.entries())
+    // Ordina le todolist per questa riga
+    const sortedTodolistsForRow = Array.from(todolistsForThisRow.entries())
       .sort((a, b) => {
         // Se una è mancante e l'altra no, quella mancante viene dopo
         if (a[1].isMissing && !b[1].isMissing) return 1
@@ -303,6 +304,7 @@ function generateDataSheet(report: any, mappings: MappingItem[], taskData: TaskD
         
         // Se entrambe sono completate, ordina per data
         if (!a[1].isMissing && !b[1].isMissing) {
+          if (!a[1].completion_date || !b[1].completion_date) return 0
           const dateA = new Date(a[1].completion_date).getTime()
           const dateB = new Date(b[1].completion_date).getTime()
           return dateA - dateB
@@ -312,23 +314,14 @@ function generateDataSheet(report: any, mappings: MappingItem[], taskData: TaskD
         return a[0].localeCompare(b[0])
       })
     
-    // Se non ci sono todolist, crea comunque una riga vuota
-    if (sortedTodolists.length === 0) {
+    // Se non ci sono todolist per questa riga, crea comunque una riga vuota
+    if (sortedTodolistsForRow.length === 0) {
       const headerCell = `A${currentExcelRow}`
       const firstMapping = rowMaps[0]
       
       ws[headerCell] = { 
         t: 's',
-        r: [
-          { 
-            t: firstMapping.kpiName, 
-            s: { font: { bold: true, sz: 11 } } 
-          },
-          { 
-            t: ` - ${firstMapping.fieldName}\n(nessun dato)`, 
-            s: { font: { bold: false, sz: 10 } } 
-          }
-        ],
+        v: `${firstMapping.kpiName} - ${firstMapping.fieldName}\n(nessun dato)`,
         s: { 
           fill: { fgColor: { rgb: "E2EFDA" } },
           alignment: { horizontal: 'left', vertical: 'top', wrapText: true }
@@ -346,8 +339,8 @@ function generateDataSheet(report: any, mappings: MappingItem[], taskData: TaskD
       
       currentExcelRow++
     } else {
-      // Crea una riga per ogni todolist
-      for (const [todolistId, todolistInfo] of sortedTodolists) {
+      // Crea una riga per ogni todolist che ha dati per questa riga del mapping
+      for (const [todolistId, todolistInfo] of sortedTodolistsForRow) {
         const headerCell = `A${currentExcelRow}`
         const firstMapping = rowMaps[0]
         
@@ -366,19 +359,10 @@ function generateDataSheet(report: any, mappings: MappingItem[], taskData: TaskD
           fillColor = "E2EFDA" // Verde chiaro per todolist completate
         }
         
-        // Usa rich text per formattare solo il KPI in grassetto
+        // Cella colonna A con etichetta e info todolist
         ws[headerCell] = { 
           t: 's',
-          r: [
-            { 
-              t: firstMapping.kpiName, 
-              s: { font: { bold: true, sz: 11 } } 
-            },
-            { 
-              t: ` - ${firstMapping.fieldName}${statusText}`, 
-              s: { font: { bold: false, sz: 10 } } 
-            }
-          ],
+          v: `${firstMapping.kpiName} - ${firstMapping.fieldName}${statusText}`,
           s: { 
             fill: { fgColor: { rgb: fillColor } },
             alignment: { horizontal: 'left', vertical: 'top', wrapText: true }
@@ -391,9 +375,12 @@ function generateDataSheet(report: any, mappings: MappingItem[], taskData: TaskD
           if (cellMatch) {
             const column = cellMatch[1]
             
+            // Trova tutti i task per questa todolist
+            const todolistTasks = taskData.filter(t => t.todolist_id === todolistId)
+            
             // Trova il valore specifico per questa todolist
             const value = findValueForMappingFromTodolist(
-              todolistInfo.tasks,
+              todolistTasks,
               mapping.fieldId,
               mapping.deviceId,
               mapping.kpiId
@@ -413,15 +400,11 @@ function generateDataSheet(report: any, mappings: MappingItem[], taskData: TaskD
                 s: todolistInfo.isMissing ? { fill: { fgColor: { rgb: "FFEEEE" } } } : undefined
               }
             } else {
-              // Se è una todolist mancante, mostra chiaramente che non è completata
-              const displayValue = todolistInfo.isMissing ? 'Non completata' : '-'
+              // Se non c'è valore, mostra '-'
               ws[`${column}${currentExcelRow}`] = { 
                 t: 's', 
-                v: displayValue,
-                s: todolistInfo.isMissing ? { 
-                  fill: { fgColor: { rgb: "FFEEEE" } },
-                  font: { italic: true, color: { rgb: "CC0000" } }
-                } : undefined
+                v: '-',
+                s: todolistInfo.isMissing ? { fill: { fgColor: { rgb: "FFEEEE" } } } : undefined
               }
             }
           }
