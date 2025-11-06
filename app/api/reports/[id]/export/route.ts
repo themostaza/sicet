@@ -2,34 +2,25 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import * as XLSX from 'xlsx'
 import { isTodolistExpired } from '@/lib/validation/todolist-schemas'
-
-interface MappingItem {
-  fieldId: string
-  cellPosition: string
-  deviceId: string
-  kpiId: string
-  label?: string
-  deviceName?: string
-  fieldName?: string
-  kpiName?: string
-}
-
-interface MappingExcel {
-  mappings: MappingItem[]
-}
+import { ControlPoint, Control, TodolistParamsLinked } from '@/types/reports'
 
 interface TaskData {
   id: string
   kpi_id: string
-  value: { id: string; value: any }[]
+  value: { id: string; value: unknown }[]
   todolist_id: string
   completed_at: string
   device_id: string
   completion_date: string
+  scheduled_execution?: string
+  time_slot_type?: string
+  time_slot_start?: number
+  time_slot_end?: number
+  end_day_time?: string
 }
 
 interface ExcelData {
-  mappings: MappingItem[]
+  controlPoints: ControlPoint[]
   taskData: TaskData[]
 }
 
@@ -69,16 +60,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .eq('id', id)
       .single()
 
-    if (reportError) {
+    if (reportError || !report) {
       console.error('Error fetching report:', reportError)
       return NextResponse.json({ error: 'Report not found' }, { status: 404 })
     }
 
-    // Ottieni i dati per l'export basati sul mapping del report
-    const excelData = await getReportDataForExport(supabase, report, selectedDate)
+    // Type assertion per report
+    const typedReport = report as unknown as { 
+      id: string;
+      name: string;
+      todolist_params_linked: TodolistParamsLinked 
+    }
 
-  // Genera l'Excel basato sul mapping del report
-  const excelBuffer = await generateMappedExcel(report, excelData, selectedDate)
+    // Ottieni i dati per l'export basati sui control points del report
+    const excelData = await getReportDataForExport(supabase, typedReport, selectedDate)
+
+  // Genera l'Excel basato sulla nuova struttura
+  const excelBuffer = await generateMappedExcel(typedReport, excelData, selectedDate)
 
     // Restituisci il file Excel
     const response = new NextResponse(new Uint8Array(excelBuffer), {
@@ -96,21 +94,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 }
 
-async function getReportDataForExport(supabase: any, report: any, selectedDate: string): Promise<ExcelData> {
-  // 1. Estrai i device IDs dal mapping_excel
-  const mappingExcel = report.mapping_excel as MappingExcel
-  if (!mappingExcel?.mappings || mappingExcel.mappings.length === 0) {
-    throw new Error('No mappings defined in report')
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getReportDataForExport(supabase: any, report: { todolist_params_linked: TodolistParamsLinked }, selectedDate: string): Promise<ExcelData> {
+  // 1. Estrai i device IDs dalla nuova struttura
+  const todolistParams = report.todolist_params_linked
+  if (!todolistParams?.controlPoints || todolistParams.controlPoints.length === 0) {
+    throw new Error('No control points defined in report')
   }
 
-  const deviceIds = [...new Set(mappingExcel.mappings.map((mapping: MappingItem) => mapping.deviceId))]
+  const deviceIds = todolistParams.controlPoints.map(cp => cp.deviceId)
   
   // 2. Trova le todolist completate O scadute per questi device nella data selezionata
   
   // 2a. Todolist completate nella data selezionata
   const { data: completedTodolists, error: completedError } = await supabase
     .from('todolist')
-    .select('id, device_id, completion_date')
+    .select('id, device_id, completion_date, scheduled_execution, time_slot_type, time_slot_start, time_slot_end, end_day_time')
     .in('device_id', deviceIds)
     .not('completion_date', 'is', null)
     .gte('completion_date', `${selectedDate}T00:00:00.000Z`)
@@ -124,7 +123,7 @@ async function getReportDataForExport(supabase: any, report: any, selectedDate: 
   // 2b. Todolist scadute: scheduled nella data selezionata ma NON completate
   const { data: expiredTodolists, error: expiredError } = await supabase
     .from('todolist')
-    .select('id, device_id, completion_date, scheduled_execution, end_day_time')
+    .select('id, device_id, completion_date, scheduled_execution, time_slot_type, time_slot_start, time_slot_end, end_day_time')
     .in('device_id', deviceIds)
     .is('completion_date', null)
     .gte('scheduled_execution', `${selectedDate}T00:00:00.000Z`)
@@ -151,16 +150,47 @@ async function getReportDataForExport(supabase: any, report: any, selectedDate: 
 
   // Se non ci sono todolist (completate o scadute) per NESSUN device, ritorna vuoto
   if (allTodolists.length === 0) {
-    return { mappings: mappingExcel.mappings, taskData: [] }
+    return { controlPoints: todolistParams.controlPoints, taskData: [] }
   }
 
   // 3. Ottieni tutti i task per le todolist (completate e scadute)
+  // Per le todolist scadute, prendiamo anche i task parzialmente completati
   const todolistIds = allTodolists.map((t: any) => t.id)
-  const { data: tasks, error: tasksError } = await supabase
+  
+  // Separa todolist completate da quelle scadute
+  const completedTodolistIds = (completedTodolists || []).map((t: any) => t.id)
+  const expiredTodolistIds = filteredExpiredTodolists.map((t: any) => t.id)
+  
+  // Per le completate: solo task con completed_at
+  const { data: completedTasks, error: completedTasksError } = await supabase
     .from('tasks')
     .select('id, kpi_id, value, todolist_id, completed_at')
-    .in('todolist_id', todolistIds)
+    .in('todolist_id', completedTodolistIds)
     .not('completed_at', 'is', null)
+  
+  if (completedTasksError) {
+    console.error('Error fetching completed tasks:', completedTasksError)
+    throw new Error('Failed to fetch completed tasks')
+  }
+  
+  // Per le scadute: TUTTI i task (completati e non), così mostriamo anche dati parziali
+  const { data: expiredTasks, error: expiredTasksError } = expiredTodolistIds.length > 0
+    ? await supabase
+        .from('tasks')
+        .select('id, kpi_id, value, todolist_id, completed_at')
+        .in('todolist_id', expiredTodolistIds)
+    : { data: [], error: null }
+  
+  if (expiredTasksError) {
+    console.error('Error fetching expired tasks:', expiredTasksError)
+    throw new Error('Failed to fetch expired tasks')
+  }
+  
+  // Combina tutti i task
+  const tasks = [...(completedTasks || []), ...(expiredTasks || [])]
+  
+  // Vecchio blocco error handling
+  const tasksError = null
 
   if (tasksError) {
     console.error('Error fetching tasks:', tasksError)
@@ -173,16 +203,24 @@ async function getReportDataForExport(supabase: any, report: any, selectedDate: 
     return {
       ...task,
       device_id: todolist?.device_id || '',
-      completion_date: todolist?.completion_date || ''
+      completion_date: todolist?.completion_date || '',
+      scheduled_execution: todolist?.scheduled_execution || '',
+      time_slot_type: todolist?.time_slot_type || 'standard',
+      time_slot_start: todolist?.time_slot_start,
+      time_slot_end: todolist?.time_slot_end,
+      end_day_time: todolist?.end_day_time || ''
     } as TaskData
   })
 
   // 5. Crea task "placeholder" per i device che non hanno completato/scaduto la todolist
-  const processedDeviceIds = new Set(allTodolists.map((tl: any) => tl.device_id))
+  const processedDeviceIds = new Set(allTodolists.map((tl: { device_id: string }) => tl.device_id))
   const missingDeviceIds = deviceIds.filter(deviceId => !processedDeviceIds.has(deviceId))
   
-  // Per ogni device mancante, crea task placeholder per ogni KPI nel mapping
-  const uniqueKpiIds = [...new Set(mappingExcel.mappings.map((mapping: MappingItem) => mapping.kpiId))]
+  // Per ogni device mancante, crea task placeholder per ogni KPI unico nei controlli
+  const uniqueKpiIds = new Set<string>()
+  todolistParams.controlPoints.forEach(cp => {
+    cp.controls.forEach(ctrl => uniqueKpiIds.add(ctrl.kpiId))
+  })
   
   for (const deviceId of missingDeviceIds) {
     for (const kpiId of uniqueKpiIds) {
@@ -194,24 +232,29 @@ async function getReportDataForExport(supabase: any, report: any, selectedDate: 
         todolist_id: `missing-${deviceId}`,
         completed_at: '',
         device_id: deviceId,
-        completion_date: '' // Nessuna data di completamento
+        completion_date: '', // Nessuna data di completamento
+        scheduled_execution: `${selectedDate}T00:00:00.000Z`,
+        time_slot_type: 'standard',
+        time_slot_start: undefined,
+        time_slot_end: undefined,
+        end_day_time: ''
       } as TaskData)
     }
   }
 
   return {
-    mappings: mappingExcel.mappings,
+    controlPoints: todolistParams.controlPoints,
     taskData: enrichedTasks
   }
 }
 
-async function generateMappedExcel(report: any, excelData: ExcelData, selectedDate: string): Promise<Buffer> {
+async function generateMappedExcel(report: { name: string; todolist_params_linked: TodolistParamsLinked }, excelData: ExcelData, selectedDate: string): Promise<Buffer> {
   const wb = XLSX.utils.book_new()
   
-  const { mappings, taskData } = excelData
+  const { controlPoints, taskData } = excelData
   
   // PRIMO FOGLIO: Dati del Report
-  const dataWs = generateDataSheet(report, mappings, taskData, selectedDate)
+  const dataWs = generateDataSheet(report, controlPoints, taskData, selectedDate)
   XLSX.utils.book_append_sheet(wb, dataWs, 'Dati Report')
   
   // SECONDO FOGLIO: Documentazione e Tracciabilità
@@ -223,247 +266,308 @@ async function generateMappedExcel(report: any, excelData: ExcelData, selectedDa
   return buffer
 }
 
-function generateDataSheet(report: any, mappings: MappingItem[], taskData: TaskData[], selectedDate: string): any {
-  const ws: any = {}
+function generateDataSheet(
+  report: { name: string }, 
+  controlPoints: ControlPoint[], 
+  taskData: TaskData[], 
+  selectedDate: string
+): Record<string, unknown> {
+  const ws: Record<string, unknown> = {}
   
-  // Raggruppa i mappings per riga originale
-  const rowMappings: Map<number, MappingItem[]> = new Map()
-  const columnHeaders: Map<string, { deviceName: string, deviceId: string }> = new Map()
+  // Helper per convertire numero colonna in lettera (0=A, 1=B, 2=C, etc)
+  const getColumnLetter = (index: number): string => {
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    if (index < 26) return letters[index]
+    return letters[Math.floor(index / 26) - 1] + letters[index % 26]
+  }
   
-  for (const mapping of mappings) {
-    const cellMatch = mapping.cellPosition.match(/^([A-Z]+)(\d+)$/)
-    if (cellMatch) {
-      const column = cellMatch[1]
-      const row = parseInt(cellMatch[2])
+  // Calcola il mapping: ogni controllo ha la sua colonna
+  // Struttura: colonna = 1 per ogni controllo (non per control point)
+  let currentColumn = 1 // Inizia da B (colonna 1), A è riservata
+  
+  const controlColumnMapping: Map<string, { col: number, cp: ControlPoint, control: Control }> = new Map()
+  
+  controlPoints.forEach(cp => {
+    const startCol = currentColumn
+    
+    cp.controls.forEach(control => {
+      controlColumnMapping.set(`${cp.id}-${control.id}`, {
+        col: currentColumn,
+        cp: cp,
+        control: control
+      })
+      currentColumn++
+    })
+    
+    // RIGA 1: Intestazione Control Point (merged su tutte le colonne dei suoi controlli)
+    if (cp.controls.length > 0) {
+      const endCol = currentColumn - 1
+      const startColLetter = getColumnLetter(startCol)
+      const endColLetter = getColumnLetter(endCol)
       
-      // Raggruppa per riga
-      if (!rowMappings.has(row)) {
-        rowMappings.set(row, [])
+      // Imposta il valore nella prima cella
+      ws[`${startColLetter}1`] = {
+        t: 's',
+        v: `${cp.name}`,
+        s: {
+          font: { bold: true, sz: 12 },
+          fill: { fgColor: { rgb: "4472C4" } },
+          alignment: { horizontal: 'center', vertical: 'center' },
+          border: {
+            top: { style: 'thin', color: { rgb: '000000' } },
+            bottom: { style: 'thin', color: { rgb: '000000' } },
+            left: { style: 'thin', color: { rgb: '000000' } },
+            right: { style: 'thin', color: { rgb: '000000' } }
+          }
+        }
       }
-      rowMappings.get(row)!.push(mapping)
       
-      // Header colonne
-      if (!columnHeaders.has(column)) {
-        columnHeaders.set(column, {
-          deviceName: mapping.deviceName || mapping.deviceId,
-          deviceId: mapping.deviceId
+      // Imposta il merge per l'header del control point
+      if (!ws['!merges']) {
+        ws['!merges'] = []
+      }
+      if (startCol !== endCol) {
+        const merges = ws['!merges'] as Array<{ s: { r: number; c: number }; e: { r: number; c: number } }>
+        merges.push({
+          s: { r: 0, c: startCol }, // start row, start col
+          e: { r: 0, c: endCol }     // end row, end col
         })
       }
     }
-  }
+  })
   
-  // GENERA HEADER COLONNA (RIGA 1) - Nomi dei device con ID
-  for (const [column, headerInfo] of columnHeaders.entries()) {
-    const headerCell = `${column}1`
-    ws[headerCell] = { 
-      t: 's', 
-      v: `${headerInfo.deviceName} (${headerInfo.deviceId})`,
-      s: { 
-        font: { bold: true },
-        fill: { fgColor: { rgb: "E2EFDA" } },
-        alignment: { horizontal: 'center', vertical: 'center' }
+  // RIGA 2: Nomi dei Controlli (una colonna per ogni controllo)
+  controlColumnMapping.forEach((info) => {
+    const colLetter = getColumnLetter(info.col)
+    ws[`${colLetter}2`] = {
+      t: 's',
+      v: `${info.control.fieldName}`,
+      s: {
+        font: { bold: true, sz: 10 },
+        fill: { fgColor: { rgb: "D9E1F2" } },
+        alignment: { horizontal: 'left', vertical: 'center', wrapText: true },
+        border: {
+          top: { style: 'thin', color: { rgb: '000000' } },
+          bottom: { style: 'thin', color: { rgb: '000000' } },
+          left: { style: 'thin', color: { rgb: '000000' } },
+          right: { style: 'thin', color: { rgb: '000000' } }
+        }
       }
     }
-  }
+  })
   
-  // Elabora le righe ordinandole
-  const sortedRows = Array.from(rowMappings.keys()).sort((a, b) => a - b)
-  let currentExcelRow = 2 // Inizia dalla riga 2 (dopo l'header)
+  // RIGHE 3 in poi: Valori effettivi dei controlli
+  // Raggruppa i task per SLOT TEMPORALE (indipendentemente dal device!)
+  // Uno slot è identificato da: data + time_slot (NON device!)
+  const shiftGroups = new Map<string, { 
+    tasks: TaskData[], 
+    scheduled_execution: string,
+    time_slot_type: string,
+    time_slot_start?: number,
+    time_slot_end?: number,
+    isMissing: boolean,
+    latestCompletionDate: string
+  }>()
   
-  for (const originalRow of sortedRows) {
-    const rowMaps = rowMappings.get(originalRow)!
+  taskData.forEach(task => {
+    // Normalizza la scheduled_execution alla data (senza orario)
+    let scheduledDate = ''
+    if (task.scheduled_execution) {
+      const d = new Date(task.scheduled_execution)
+      scheduledDate = d.toISOString().split('T')[0] // Solo YYYY-MM-DD
+    }
     
-    // Per questa riga, trova tutte le todolist che hanno task per almeno uno dei KPI/device mappati
-    const todolistsForThisRow: Map<string, { completion_date: string, device_id: string, isMissing: boolean }> = new Map()
+    // Crea una chiave unica per il SLOT TEMPORALE basata su:
+    // - data scheduled (senza orario)
+    // - time_slot_type
+    // - time_slot_start/end (se custom)
+    // NON include device_id perché vogliamo raggruppare più devices nello stesso slot!
+    const shiftKey = `${scheduledDate}|${task.time_slot_type}|${task.time_slot_start || 'none'}|${task.time_slot_end || 'none'}`
     
-    for (const mapping of rowMaps) {
-      // Trova tutti i task che corrispondono a questo mapping
-      const relevantTasks = taskData.filter((task: TaskData) => 
-        task.device_id === mapping.deviceId && task.kpi_id === mapping.kpiId
+    if (!shiftGroups.has(shiftKey)) {
+      // Determina se è mancante: è mancante se ALMENO UNO dei device è mancante
+      const isMissing = task.todolist_id.startsWith('missing-')
+      
+      shiftGroups.set(shiftKey, {
+        tasks: [],
+        scheduled_execution: task.scheduled_execution || '',
+        time_slot_type: task.time_slot_type || 'standard',
+        time_slot_start: task.time_slot_start,
+        time_slot_end: task.time_slot_end,
+        isMissing: isMissing,
+        latestCompletionDate: task.completion_date
+      })
+    }
+    
+    const group = shiftGroups.get(shiftKey)!
+    group.tasks.push(task)
+    
+    // Uno slot è considerato "complete" se ALMENO UN device ha completato
+    // Se troviamo un task che NON è missing, lo slot non è missing
+    if (!task.todolist_id.startsWith('missing-')) {
+      group.isMissing = false
+    }
+    
+    // Aggiorna la data di completamento più recente (tra tutti i device)
+    if (task.completion_date && (!group.latestCompletionDate || task.completion_date > group.latestCompletionDate)) {
+      group.latestCompletionDate = task.completion_date
+    }
+  })
+  
+  // Ordina i turni (completati prima, poi mancanti; poi per scheduled_execution)
+  const sortedShifts = Array.from(shiftGroups.entries()).sort((a, b) => {
+    if (a[1].isMissing && !b[1].isMissing) return 1
+    if (!a[1].isMissing && b[1].isMissing) return -1
+    
+    // Ordina per scheduled_execution
+    if (a[1].scheduled_execution && b[1].scheduled_execution) {
+      const dateA = new Date(a[1].scheduled_execution).getTime()
+      const dateB = new Date(b[1].scheduled_execution).getTime()
+      if (dateA !== dateB) return dateA - dateB
+    }
+    
+    // Se hanno lo stesso scheduled, ordina per time_slot_start
+    if (a[1].time_slot_start !== undefined && b[1].time_slot_start !== undefined) {
+      return a[1].time_slot_start - b[1].time_slot_start
+    }
+    
+    return a[0].localeCompare(b[0])
+  })
+  
+  // Crea una riga per ogni turno
+  let currentRow = 3 // Inizia dalla riga 3 (dopo header CP e header controlli)
+  for (const [shiftKey, shiftInfo] of sortedShifts) {
+    // Colonna A: Info turno
+    let infoText: string
+    if (shiftInfo.isMissing) {
+      infoText = `Turno NON completato (${selectedDate})`
+    } else {
+      // Mostra info del turno
+      const scheduledDate = new Date(shiftInfo.scheduled_execution)
+      const dateStr = scheduledDate.toLocaleDateString('it-IT')
+      
+      let timeSlotStr = ''
+      if (shiftInfo.time_slot_type === 'custom' && shiftInfo.time_slot_start !== undefined && shiftInfo.time_slot_end !== undefined) {
+        const startHour = Math.floor(shiftInfo.time_slot_start / 60)
+        const startMin = shiftInfo.time_slot_start % 60
+        const endHour = Math.floor(shiftInfo.time_slot_end / 60)
+        const endMin = shiftInfo.time_slot_end % 60
+        timeSlotStr = `${String(startHour).padStart(2, '0')}:${String(startMin).padStart(2, '0')}-${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`
+      } else {
+        timeSlotStr = 'Turno standard'
+      }
+      
+      const completedDate = new Date(shiftInfo.latestCompletionDate)
+      const completedTimeStr = completedDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+      
+      infoText = `${dateStr} ${timeSlotStr}\n(ult. completamento: ${completedTimeStr})`
+    }
+    
+    ws[`A${currentRow}`] = {
+      t: 's',
+      v: infoText,
+      s: {
+        font: { sz: 9 },
+        fill: { fgColor: { rgb: shiftInfo.isMissing ? "FFEEEE" : "E2EFDA" } },
+        alignment: { horizontal: 'left', vertical: 'center', wrapText: true },
+        border: {
+          top: { style: 'thin', color: { rgb: '000000' } },
+          bottom: { style: 'thin', color: { rgb: '000000' } },
+          left: { style: 'thin', color: { rgb: '000000' } },
+          right: { style: 'thin', color: { rgb: '000000' } }
+        }
+      }
+    }
+    
+    // Per ogni controllo, scrivi il suo valore nella sua colonna
+    controlColumnMapping.forEach((info) => {
+      const colLetter = getColumnLetter(info.col)
+      
+      // Cerca il valore per questo specifico controllo tra tutti i task del turno
+      // Filtra per device_id del control point + kpiId del controllo
+      const relevantTasks = shiftInfo.tasks.filter(t => 
+        t.kpi_id === info.control.kpiId && 
+        t.device_id === info.cp.deviceId
       )
       
-      // Aggiungi le todolist di questi task
-      for (const task of relevantTasks) {
-        if (!todolistsForThisRow.has(task.todolist_id)) {
-          const isMissing = task.todolist_id.startsWith('missing-')
-          todolistsForThisRow.set(task.todolist_id, {
-            completion_date: task.completion_date,
-            device_id: task.device_id,
-            isMissing: isMissing
-          })
-        }
-      }
-    }
-    
-    // Ordina le todolist per questa riga
-    const sortedTodolistsForRow = Array.from(todolistsForThisRow.entries())
-      .sort((a, b) => {
-        // Se una è mancante e l'altra no, quella mancante viene dopo
-        if (a[1].isMissing && !b[1].isMissing) return 1
-        if (!a[1].isMissing && b[1].isMissing) return -1
-        
-        // Se entrambe sono completate, ordina per data
-        if (!a[1].isMissing && !b[1].isMissing) {
-          if (!a[1].completion_date || !b[1].completion_date) return 0
-          const dateA = new Date(a[1].completion_date).getTime()
-          const dateB = new Date(b[1].completion_date).getTime()
-          return dateA - dateB
-        }
-        
-        // Se entrambe sono mancanti, ordina per todolist_id per coerenza
-        return a[0].localeCompare(b[0])
+      // Ordina per completion_date (più recente prima)
+      relevantTasks.sort((a, b) => {
+        const dateA = new Date(a.completed_at || a.completion_date).getTime()
+        const dateB = new Date(b.completed_at || b.completion_date).getTime()
+        return dateB - dateA
       })
-    
-    // Se non ci sono todolist per questa riga, crea comunque una riga vuota
-    if (sortedTodolistsForRow.length === 0) {
-      const headerCell = `A${currentExcelRow}`
-      const firstMapping = rowMaps[0]
       
-      ws[headerCell] = { 
-        t: 's',
-        v: `${firstMapping.kpiName} - ${firstMapping.fieldName}\n(nessun dato)`,
-        s: { 
-          fill: { fgColor: { rgb: "E2EFDA" } },
-          alignment: { horizontal: 'left', vertical: 'top', wrapText: true }
-        }
-      }
-      
-      // Celle vuote per questa riga
-      for (const mapping of rowMaps) {
-        const cellMatch = mapping.cellPosition.match(/^([A-Z]+)(\d+)$/)
-        if (cellMatch) {
-          const column = cellMatch[1]
-          ws[`${column}${currentExcelRow}`] = { t: 's', v: '-' }
-        }
-      }
-      
-      currentExcelRow++
-    } else {
-      // Crea una riga per ogni todolist che ha dati per questa riga del mapping
-      for (const [todolistId, todolistInfo] of sortedTodolistsForRow) {
-        const headerCell = `A${currentExcelRow}`
-        const firstMapping = rowMaps[0]
-        
-        let statusText: string
-        let fillColor: string
-        
-        if (todolistInfo.isMissing) {
-          // Todolist non completata
-          statusText = `\n(todolist NON completata il ${selectedDate})`
-          fillColor = "FFEEEE" // Rosso chiaro per indicare mancanza
-        } else {
-          // Todolist completata
-          const date = new Date(todolistInfo.completion_date)
-          const dateStr = `${date.toLocaleDateString('it-IT')} ${date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`
-          statusText = `\n(completata il ${dateStr} [ID: ${todolistId}])`
-          fillColor = "E2EFDA" // Verde chiaro per todolist completate
-        }
-        
-        // Cella colonna A con etichetta e info todolist
-        ws[headerCell] = { 
-          t: 's',
-          v: `${firstMapping.kpiName} - ${firstMapping.fieldName}${statusText}`,
-          s: { 
-            fill: { fgColor: { rgb: fillColor } },
-            alignment: { horizontal: 'left', vertical: 'top', wrapText: true }
-          }
-        }
-        
-        // Popola i dati per questa todolist
-        for (const mapping of rowMaps) {
-          const cellMatch = mapping.cellPosition.match(/^([A-Z]+)(\d+)$/)
-          if (cellMatch) {
-            const column = cellMatch[1]
-            
-            // Trova tutti i task per questa todolist
-            const todolistTasks = taskData.filter(t => t.todolist_id === todolistId)
-            
-            // Trova il valore specifico per questa todolist
-            const value = findValueForMappingFromTodolist(
-              todolistTasks,
-              mapping.fieldId,
-              mapping.deviceId,
-              mapping.kpiId
-            )
-            
-            let formattedValue = value
-            if (value !== null && value !== undefined) {
-              if (typeof value === 'boolean') {
-                formattedValue = value ? 'Sì' : 'No'
-              } else if (value === '') {
-                formattedValue = '-'
-              }
-              
-              ws[`${column}${currentExcelRow}`] = { 
-                t: typeof formattedValue === 'number' ? 'n' : 's', 
-                v: formattedValue,
-                s: todolistInfo.isMissing ? { fill: { fgColor: { rgb: "FFEEEE" } } } : undefined
-              }
-            } else {
-              // Se non c'è valore, mostra '-'
-              ws[`${column}${currentExcelRow}`] = { 
-                t: 's', 
-                v: '-',
-                s: todolistInfo.isMissing ? { fill: { fgColor: { rgb: "FFEEEE" } } } : undefined
-              }
+      let cellValue = '-'
+      for (const task of relevantTasks) {
+        if (task.value && Array.isArray(task.value)) {
+          const fieldValue = task.value.find(v => v.id === info.control.fieldId)
+          if (fieldValue && fieldValue.value !== undefined) {
+            let formatted = fieldValue.value
+            if (typeof formatted === 'boolean') {
+              formatted = formatted ? 'Sì' : 'No'
+            } else if (formatted === '') {
+              formatted = '-'
             }
+            cellValue = String(formatted)
+            break // Prendi il primo valore valido (il più recente)
           }
         }
-        
-        currentExcelRow++
       }
-    }
+      
+      ws[`${colLetter}${currentRow}`] = {
+        t: typeof cellValue === 'number' || (!isNaN(Number(cellValue)) && cellValue !== '-') ? 'n' : 's',
+        v: typeof cellValue === 'number' || (!isNaN(Number(cellValue)) && cellValue !== '-') ? Number(cellValue) : cellValue,
+        s: {
+          fill: { fgColor: { rgb: shiftInfo.isMissing ? "FFEEEE" : "FFFFFF" } },
+          alignment: { horizontal: 'center', vertical: 'center' },
+          border: {
+            top: { style: 'thin', color: { rgb: '000000' } },
+            bottom: { style: 'thin', color: { rgb: '000000' } },
+            left: { style: 'thin', color: { rgb: '000000' } },
+            right: { style: 'thin', color: { rgb: '000000' } }
+          }
+        }
+      }
+    })
+    
+    currentRow++
   }
   
-  // Calcola il range
-  const usedCells = Object.keys(ws).filter(key => key !== '!ref' && key !== '!cols')
-  if (usedCells.length > 0) {
-    let maxCol = 'A', maxRow = 1
-    for (const cell of usedCells) {
-      const col = cell.match(/[A-Z]+/)?.[0]
-      const row = parseInt(cell.match(/\d+/)?.[0] || '1')
-      if (col && col > maxCol) maxCol = col
-      if (row > maxRow) maxRow = row
-    }
-    ws['!ref'] = `A1:${maxCol}${maxRow}`
-  }
+  // Calcola il range finale
+  const totalColumns = currentColumn - 1 // Numero totale di colonne di controlli
+  const lastCol = getColumnLetter(totalColumns)
+  const lastRow = currentRow - 1
+  ws['!ref'] = `A1:${lastCol}${lastRow}`
   
-  ws['!cols'] = Array(26).fill({ wch: 25 })
+  // Imposta larghezza colonne
+  const cols: { wch: number }[] = Array(totalColumns + 1).fill({ wch: 20 })
+  cols[0] = { wch: 30 } // Colonna A più larga per info todolist
+  ws['!cols'] = cols
   
   return ws
 }
 
-// Nuova funzione helper per trovare valori da una todolist specifica
-function findValueForMappingFromTodolist(tasks: TaskData[], fieldId: string, deviceId: string, kpiId: string): any {
-  const relevantTasks = tasks.filter((task: TaskData) => 
-    task.device_id === deviceId && task.kpi_id === kpiId
-  )
+// Helper per raggruppare task per todolist
+function groupTasksByTodolist(taskData: TaskData[]): Record<string, TaskData[]> {
+  const groups: Record<string, TaskData[]> = {}
   
-  if (relevantTasks.length === 0) {
-    return null
-  }
-  
-  // Ordina per data di completamento (più recente prima) nel caso ci siano più task
-  relevantTasks.sort((a: TaskData, b: TaskData) => {
-    const dateA = new Date(a.completed_at || a.completion_date)
-    const dateB = new Date(b.completed_at || b.completion_date)
-    return dateB.getTime() - dateA.getTime()
-  })
-  
-  for (const task of relevantTasks) {
-    if (task.value && Array.isArray(task.value)) {
-      const fieldValue = task.value.find((v: { id: string; value: any }) => v.id === fieldId)
-      if (fieldValue && fieldValue.value !== undefined) {
-        return fieldValue.value
-      }
+  for (const task of taskData) {
+    const todolistId = task.todolist_id
+    if (!groups[todolistId]) {
+      groups[todolistId] = []
     }
+    groups[todolistId].push(task)
   }
   
-  return null
+  return groups
 }
 
-function generateDocumentationSheet(report: any, excelData: ExcelData, taskData: TaskData[]): any {
-  const ws: any = {}
+function generateDocumentationSheet(
+  report: { name?: string; id?: string; todolist_params_linked: TodolistParamsLinked }, 
+  excelData: ExcelData, 
+  taskData: TaskData[]
+): Record<string, unknown> {
+  const ws: Record<string, unknown> = {}
   let currentRow = 1
   
   // SEZIONE 1: Metadati del Report
@@ -479,27 +583,31 @@ function generateDocumentationSheet(report: any, excelData: ExcelData, taskData:
   currentRow++
   
   ws[`A${currentRow}`] = { t: 's', v: 'ID Report:' }
-  ws[`B${currentRow}`] = { t: 's', v: report.id }
+  ws[`B${currentRow}`] = { t: 's', v: report.id || 'N/A' }
   currentRow += 3
   
-  // SEZIONE 2: Control Points del Report
-  ws[`A${currentRow}`] = { t: 's', v: 'DISPOSITIVI MONITORATI', s: { font: { bold: true, sz: 14 } } }
+  // SEZIONE 2: Control Points e Controlli del Report
+  ws[`A${currentRow}`] = { t: 's', v: 'PUNTI DI CONTROLLO E CONTROLLI', s: { font: { bold: true, sz: 14 } } }
   currentRow += 2
   
-  if (report.todolist_params_linked?.controlPoints) {
-    ws[`A${currentRow}`] = { t: 's', v: 'Dispositivo' }
+  if (excelData.controlPoints && excelData.controlPoints.length > 0) {
+    ws[`A${currentRow}`] = { t: 's', v: 'Punto di Controllo' }
     ws[`B${currentRow}`] = { t: 's', v: 'ID Dispositivo' }
-    ws[`C${currentRow}`] = { t: 's', v: 'KPI Monitorati' }
-    ws[`D${currentRow}`] = { t: 's', v: 'Time Slots' }
-    ws[`E${currentRow}`] = { t: 's', v: 'Categorie' }
+    ws[`C${currentRow}`] = { t: 's', v: 'Controlli Configurati' }
     currentRow++
     
-    for (const controlPoint of report.todolist_params_linked.controlPoints) {
+    for (const controlPoint of excelData.controlPoints) {
+      const controlsText = controlPoint.controls
+        .map((c, idx) => `${idx + 1}. ${c.fieldName} (KPI: ${c.kpiName})`)
+        .join('\n')
+      
       ws[`A${currentRow}`] = { t: 's', v: controlPoint.name || 'N/A' }
       ws[`B${currentRow}`] = { t: 's', v: controlPoint.deviceId || 'N/A' }
-      ws[`C${currentRow}`] = { t: 's', v: (controlPoint.kpiIds || []).join(', ') }
-      ws[`D${currentRow}`] = { t: 's', v: (controlPoint.timeSlots || []).join(', ') }
-      ws[`E${currentRow}`] = { t: 's', v: (controlPoint.categories || []).join(', ') || 'Tutte' }
+      ws[`C${currentRow}`] = { 
+        t: 's', 
+        v: controlsText || 'Nessun controllo',
+        s: { alignment: { wrapText: true, vertical: 'top' } }
+      }
       currentRow++
     }
   }
@@ -521,6 +629,8 @@ function generateDocumentationSheet(report: any, excelData: ExcelData, taskData:
   
   for (const [todolistId, tasks] of Object.entries(todolistGroups)) {
     const firstTask: TaskData = tasks[0]
+    if (!firstTask) continue
+    
     const completionDate = new Date(firstTask.completion_date)
     
     ws[`A${currentRow}`] = { t: 's', v: todolistId }
@@ -532,93 +642,15 @@ function generateDocumentationSheet(report: any, excelData: ExcelData, taskData:
   }
   currentRow += 2
   
-  // SEZIONE 4: Mappatura Completa
-  ws[`A${currentRow}`] = { t: 's', v: 'MAPPATURA CELLE EXCEL', s: { font: { bold: true, sz: 14 } } }
-  currentRow += 2
-  
-  ws[`A${currentRow}`] = { t: 's', v: 'Cella' }
-  ws[`B${currentRow}`] = { t: 's', v: 'Dispositivo' }
-  ws[`C${currentRow}`] = { t: 's', v: 'KPI ID' }
-  ws[`D${currentRow}`] = { t: 's', v: 'Campo' }
-  ws[`E${currentRow}`] = { t: 's', v: 'Field ID' }
-  ws[`F${currentRow}`] = { t: 's', v: 'Valore Inserito' }
-  currentRow++
-  
-  for (const mapping of excelData.mappings) {
-    const value = findValueForMapping(taskData, mapping.fieldId, mapping.deviceId, mapping.kpiId)
-    let formattedValue = value
-    if (typeof value === 'boolean') {
-      formattedValue = value ? 'Sì' : 'No'
-    } else if (value === null || value === undefined || value === '') {
-      formattedValue = '-'
-    }
-    
-    ws[`A${currentRow}`] = { t: 's', v: mapping.cellPosition }
-    ws[`B${currentRow}`] = { t: 's', v: mapping.deviceName || mapping.deviceId }
-    ws[`C${currentRow}`] = { t: 's', v: mapping.kpiId }
-    ws[`D${currentRow}`] = { t: 's', v: mapping.fieldName || mapping.fieldId }
-    ws[`E${currentRow}`] = { t: 's', v: mapping.fieldId }
-    ws[`F${currentRow}`] = { t: 's', v: formattedValue?.toString() || '-' }
-    currentRow++
-  }
-  
   // Imposta il range del worksheet
-  ws['!ref'] = `A1:F${currentRow - 1}`
+  ws['!ref'] = `A1:C${currentRow - 1}`
   
   // Applica larghezze colonne ottimizzate
   ws['!cols'] = [
-    { wch: 20 }, // A: Etichette/Celle
-    { wch: 25 }, // B: Valori/Dispositivi
-    { wch: 15 }, // C: KPI ID
-    { wch: 30 }, // D: Campo
-    { wch: 25 }, // E: Field ID
-    { wch: 15 }  // F: Valore
+    { wch: 30 }, // A: Punto di Controllo
+    { wch: 20 }, // B: ID Dispositivo
+    { wch: 50 }  // C: Controlli
   ]
   
   return ws
-}
-
-function groupTasksByTodolist(taskData: TaskData[]): Record<string, TaskData[]> {
-  const groups: Record<string, TaskData[]> = {}
-  
-  for (const task of taskData) {
-    const todolistId = task.todolist_id
-    if (!groups[todolistId]) {
-      groups[todolistId] = []
-    }
-    groups[todolistId].push(task)
-  }
-  
-  return groups
-}
-
-function findValueForMapping(taskData: TaskData[], fieldId: string, deviceId: string, kpiId: string): any {
-  // Trova tutti i task che corrispondono al device e al KPI
-  const relevantTasks = taskData.filter((task: TaskData) => 
-    task.device_id === deviceId && task.kpi_id === kpiId
-  )
-  
-  if (relevantTasks.length === 0) {
-    return null
-  }
-  
-  // Ordina per data di completamento (più recente prima)
-  relevantTasks.sort((a: TaskData, b: TaskData) => {
-    const dateA = new Date(a.completed_at || a.completion_date)
-    const dateB = new Date(b.completed_at || b.completion_date)
-    return dateB.getTime() - dateA.getTime()
-  })
-  
-  // Cerca il valore nel task più recente
-  for (const task of relevantTasks) {
-    if (task.value && Array.isArray(task.value)) {
-      // Cerca il fieldId nell'array di valori
-      const fieldValue = task.value.find((v: { id: string; value: any }) => v.id === fieldId)
-      if (fieldValue && fieldValue.value !== undefined) {
-        return fieldValue.value
-      }
-    }
-  }
-  
-  return null
 }

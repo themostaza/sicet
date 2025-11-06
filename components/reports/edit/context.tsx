@@ -23,15 +23,9 @@ export function EditReportProvider({ children }: EditReportProviderProps) {
   
   const {
     setReportName,
-    setSelectedDevices,
-    setSelectedKpis,
-    setMappings,
+    setControlPoints,
     devices,
-    kpis,
-    devicesOrder,
-    fieldsOrder,
-    setDevicesOrder,
-    setFieldsOrder
+    kpis
   } = useReport()
 
   // Load existing report data
@@ -58,109 +52,92 @@ export function EditReportProvider({ children }: EditReportProviderProps) {
         // Set report name
         setReportName(report.name || "")
 
-        // Extract devices and KPIs from todolist_params_linked
+        // Carica la struttura controlPoints
         if (report.todolist_params_linked?.controlPoints) {
-          const controlPoints = report.todolist_params_linked.controlPoints
+          const loadedControlPoints = report.todolist_params_linked.controlPoints
           
-          // Get unique device IDs
-          const deviceIds = new Set<string>()
-          const kpiIds = new Set<string>()
+          console.log('Loaded controlPoints from DB:', loadedControlPoints)
           
-          controlPoints.forEach((cp: any) => {
-            if (cp.deviceId) {
-              deviceIds.add(cp.deviceId)
-            }
-            if (cp.kpiIds && Array.isArray(cp.kpiIds)) {
-              cp.kpiIds.forEach((kpiId: string) => kpiIds.add(kpiId))
-            }
-          })
-          
-          setSelectedDevices(deviceIds)
-          setSelectedKpis(kpiIds)
-        }
-
-        // Load ordering from mapping_excel if available
-        if (report.mapping_excel?.devicesOrder && Array.isArray(report.mapping_excel.devicesOrder)) {
-          setDevicesOrder(report.mapping_excel.devicesOrder)
-        }
-        if (report.mapping_excel?.fieldsOrder && Array.isArray(report.mapping_excel.fieldsOrder)) {
-          setFieldsOrder(report.mapping_excel.fieldsOrder)
-        }
-
-        // Extract mappings from mapping_excel
-        if (report.mapping_excel?.mappings) {
-          console.log('Raw mapping_excel from DB:', report.mapping_excel) // Debug
-          const mappingsObj: {[key: string]: string} = {}
-          
-          // Prepara mappa KPI -> possibili fieldId e defaultFieldId, così la normalizzazione segue lo schema reale
-          const kpiToFieldInfo = new Map<string, { fieldIds: Set<string>, defaultFieldId: string }>()
-          try {
-            kpis.forEach((k: any) => {
-              const fieldIds: string[] = []
-              if (k?.value && Array.isArray(k.value) && k.value.length > 0) {
-                k.value.forEach((f: any) => {
-                  const fid = f?.id || `${k.id}-${String(f?.name || '').toLowerCase().replace(/\s+/g, '_')}`
-                  fieldIds.push(String(fid))
-                })
-              } else if (k?.value && typeof k.value === 'object' && !Array.isArray(k.value)) {
-                const v = k.value as any
-                const fid = v?.id || `${k.id}-${String(v?.name || 'value').toLowerCase().replace(/\s+/g, '_')}`
-                fieldIds.push(String(fid))
-              } else {
-                fieldIds.push(`${k.id}-value`)
-              }
-              const preferred = fieldIds.includes(`${k.id}-value`) ? `${k.id}-value` : fieldIds[0]
-              kpiToFieldInfo.set(String(k.id), { fieldIds: new Set(fieldIds), defaultFieldId: preferred })
-            })
-          } catch (e) {
-            console.warn('Failed computing KPI fieldId map for normalization', e)
-          }
-          
-          report.mapping_excel.mappings.forEach((mapping: any) => {
-            // Normalizza in modo che la chiave corrisponda a quella usata dalla griglia: deviceId-fieldId
-            // Se manca fieldId ma abbiamo controlId che è un KPI id, mappiamo a `${kpiId}-value`
-            let fieldId = ''
-            if (mapping.fieldId) {
-              fieldId = String(mapping.fieldId)
-              if (!fieldId.includes('-')) {
-                // fieldId potrebbe essere in realtà un KPI id semplice: normalizza al default field id
-                const info = kpiToFieldInfo.get(fieldId)
-                if (info) {
-                  fieldId = info.defaultFieldId
-                }
-              }
-            } else if (mapping.controlId) {
-              const controlId = String(mapping.controlId)
-              if (controlId.includes('-')) {
-                // già in formato composito (es. KPIID-value o KPIID-sottoCampo)
-                fieldId = controlId
-              } else {
-                // potrebbe essere un KPI id semplice o un fieldId semplice
-                const info = kpiToFieldInfo.get(controlId)
-                if (info) {
-                  // è un KPI id: usa il default field id definito dallo schema KPI
-                  fieldId = info.defaultFieldId
-                } else {
-                  // non è un KPI id noto: fallback al controlId
-                  fieldId = controlId
-                }
-              }
-            }
-
-            const deviceId = mapping.deviceId ? String(mapping.deviceId) : ''
-            const key = deviceId && fieldId ? `${deviceId}-${fieldId}` : ''
+          // Converti in formato corretto per lo stato
+          const formattedControlPoints = loadedControlPoints.map((cp: {
+            id?: string;
+            name?: string;
+            deviceId?: string;
+            controls?: unknown[];
+            kpiIds?: string[]; // VECCHIA STRUTTURA
+            order?: number;
+          }, cpIndex: number) => {
             
-            if (key && mapping.cellPosition) {
-              const cell = String(mapping.cellPosition).toUpperCase()
-              mappingsObj[key] = cell
-              console.log(`Mapping loaded (normalized): ${key} -> ${cell}`) // Debug specifico
+            // MIGRAZIONE: Se ha kpiIds (vecchia struttura), converti in controls (nuova struttura)
+            let controls = []
+            if (cp.controls && Array.isArray(cp.controls) && cp.controls.length > 0) {
+              // NUOVA STRUTTURA: usa controls direttamente
+              controls = cp.controls.map((ctrl: unknown, ctrlIdx: number) => {
+                const c = ctrl as {
+                  id?: string;
+                  kpiId?: string;
+                  fieldId?: string;
+                  name?: string;
+                  kpiName?: string;
+                  fieldName?: string;
+                  order?: number;
+                }
+                return {
+                  id: c.id || `ctrl-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+                  kpiId: c.kpiId || '',
+                  fieldId: c.fieldId || '',
+                  name: c.name || '',
+                  kpiName: c.kpiName || '',
+                  fieldName: c.fieldName || '',
+                  order: c.order ?? ctrlIdx
+                }
+              })
+            } else if (cp.kpiIds && Array.isArray(cp.kpiIds) && cp.kpiIds.length > 0) {
+              // VECCHIA STRUTTURA: converti kpiIds in controls
+              console.warn('⚠️ Migrating old structure (kpiIds) to new structure (controls) for control point:', cp.name)
+              
+              controls = cp.kpiIds.map((kpiId: string, idx: number) => {
+                const kpi = kpis.find(k => k.id === kpiId)
+                
+                // Determina il fieldId per questo KPI
+                let fieldId = `${kpiId}-value`
+                let fieldName = kpi?.name || 'Campo'
+                
+                if (kpi?.value) {
+                  if (Array.isArray(kpi.value) && kpi.value.length > 0) {
+                    const firstField = kpi.value[0]
+                    fieldId = firstField.id || `${kpiId}-${String(firstField.name || '').toLowerCase().replace(/\s+/g, '_')}`
+                    fieldName = firstField.name || fieldName
+                  } else if (typeof kpi.value === 'object' && !Array.isArray(kpi.value)) {
+                    const v = kpi.value as { id?: string; name?: string }
+                    fieldId = v.id || `${kpiId}-${String(v.name || 'value').toLowerCase().replace(/\s+/g, '_')}`
+                    fieldName = v.name || fieldName
+                  }
+                }
+                
+                return {
+                  id: `ctrl-migrated-${kpiId}-${idx}`,
+                  kpiId: kpiId,
+                  fieldId: fieldId,
+                  name: `${kpi?.name || 'KPI'} - ${fieldName}`,
+                  kpiName: kpi?.name || 'KPI',
+                  fieldName: fieldName,
+                  order: idx
+                }
+              })
+            }
+            
+            return {
+              id: cp.id || `cp-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+              name: cp.name || '',
+              deviceId: cp.deviceId || '',
+              controls: controls,
+              order: cp.order ?? cpIndex
             }
           })
-          
-          console.log('Loaded mappings:', mappingsObj) // Debug
-          
-          // Imposta i mappings direttamente
-          setMappings(mappingsObj)
+
+          console.log('Setting formatted controlPoints:', formattedControlPoints)
+          setControlPoints(formattedControlPoints)
         }
 
       } catch (error) {
@@ -179,7 +156,7 @@ export function EditReportProvider({ children }: EditReportProviderProps) {
     if (devices.length > 0 && kpis.length > 0) {
       loadReportData()
     }
-  }, [reportId, devices.length, kpis.length, setReportName, setSelectedDevices, setSelectedKpis, setMappings, setDevicesOrder, setFieldsOrder])
+  }, [reportId, devices.length, kpis.length, setReportName, setControlPoints])
 
   const value: EditReportContextType = {
     isLoading,

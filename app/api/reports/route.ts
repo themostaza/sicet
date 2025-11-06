@@ -85,48 +85,58 @@ export async function GET(request: NextRequest) {
           let hasDataAvailable = false
 
           try {
-            // Estrai i device IDs dal mapping_excel
-            const mappingExcel = report.mapping_excel as unknown as { mappings: { deviceId: string }[] }
-            if (mappingExcel && mappingExcel.mappings) {
-              const deviceIds = [...new Set(mappingExcel.mappings.map((mapping: any) => mapping.deviceId))]
+            // Estrai i device IDs dalla NUOVA struttura controlPoints
+            let deviceIds: string[] = []
+            
+            // Prova prima la nuova struttura
+            const todolistParams = report.todolist_params_linked as unknown as { controlPoints?: { deviceId: string }[] }
+            if (todolistParams?.controlPoints && Array.isArray(todolistParams.controlPoints)) {
+              deviceIds = todolistParams.controlPoints.map((cp: { deviceId: string }) => cp.deviceId)
+            } 
+            // Fallback alla vecchia struttura (per retrocompatibilità)
+            else {
+              const mappingExcel = report.mapping_excel as unknown as { mappings: { deviceId: string }[] }
+              if (mappingExcel && mappingExcel.mappings) {
+                deviceIds = [...new Set(mappingExcel.mappings.map((mapping: { deviceId: string }) => mapping.deviceId))]
+              }
+            }
+            
+            if (deviceIds.length > 0) {
+              // Verifica se esistono todolist completate O scadute per questi device nella data selezionata
               
-              if (deviceIds.length > 0) {
-                // Verifica se esistono todolist completate O scadute per questi device nella data selezionata
-                
-                // 1. Todolist completate nella data selezionata
-                const { data: completedTodolists, error: completedError } = await supabase
+              // 1. Todolist completate nella data selezionata
+              const { data: completedTodolists, error: completedError } = await supabase
+                .from('todolist')
+                .select('id')
+                .in('device_id', deviceIds)
+                .not('completion_date', 'is', null)
+                .gte('completion_date', `${selectedDate}T00:00:00.000Z`)
+                .lt('completion_date', `${selectedDate}T23:59:59.999Z`)
+                .limit(1)
+
+              if (!completedError && completedTodolists && completedTodolists.length > 0) {
+                hasDataAvailable = true
+              } else {
+                // 2. Todolist scadute: scheduled nella data selezionata ma NON completate
+                // e la cui deadline (considerando time slot + tolleranza) è passata
+                const { data: expiredTodolists, error: expiredError } = await supabase
                   .from('todolist')
-                  .select('id')
+                  .select('id, scheduled_execution, end_day_time')
                   .in('device_id', deviceIds)
-                  .not('completion_date', 'is', null)
-                  .gte('completion_date', `${selectedDate}T00:00:00.000Z`)
-                  .lt('completion_date', `${selectedDate}T23:59:59.999Z`)
-                  .limit(1)
+                  .is('completion_date', null)
+                  .gte('scheduled_execution', `${selectedDate}T00:00:00.000Z`)
+                  .lt('scheduled_execution', `${selectedDate}T23:59:59.999Z`)
 
-                if (!completedError && completedTodolists && completedTodolists.length > 0) {
-                  hasDataAvailable = true
-                } else {
-                  // 2. Todolist scadute: scheduled nella data selezionata ma NON completate
-                  // e la cui deadline (considerando time slot + tolleranza) è passata
-                  const { data: expiredTodolists, error: expiredError } = await supabase
-                    .from('todolist')
-                    .select('id, scheduled_execution, end_day_time')
-                    .in('device_id', deviceIds)
-                    .is('completion_date', null)
-                    .gte('scheduled_execution', `${selectedDate}T00:00:00.000Z`)
-                    .lt('scheduled_execution', `${selectedDate}T23:59:59.999Z`)
-
-                  if (!expiredError && expiredTodolists && expiredTodolists.length > 0) {
-                    // Verifica se almeno una è scaduta (la deadline è passata rispetto a ora)
-                    const now = new Date()
-                    for (const todolist of expiredTodolists) {
-                      if (todolist.end_day_time) {
-                        const deadline = new Date(todolist.end_day_time)
-                        // La deadline già include la tolleranza nel campo end_day_time
-                        if (now > deadline) {
-                          hasDataAvailable = true
-                          break
-                        }
+                if (!expiredError && expiredTodolists && expiredTodolists.length > 0) {
+                  // Verifica se almeno una è scaduta (la deadline è passata rispetto a ora)
+                  const now = new Date()
+                  for (const todolist of expiredTodolists) {
+                    if (todolist.end_day_time) {
+                      const deadline = new Date(todolist.end_day_time)
+                      // La deadline già include la tolleranza nel campo end_day_time
+                      if (now > deadline) {
+                        hasDataAvailable = true
+                        break
                       }
                     }
                   }
