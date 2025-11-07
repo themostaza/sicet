@@ -69,7 +69,15 @@ export function EditReportProvider({ children }: EditReportProviderProps) {
           }, cpIndex: number) => {
             
             // MIGRAZIONE: Se ha kpiIds (vecchia struttura), converti in controls (nuova struttura)
-            let controls = []
+            let controls: Array<{
+              id: string;
+              kpiId: string;
+              fieldId: string;
+              name: string;
+              kpiName: string;
+              fieldName: string;
+              order: number;
+            }> = []
             if (cp.controls && Array.isArray(cp.controls) && cp.controls.length > 0) {
               // NUOVA STRUTTURA: usa controls direttamente
               controls = cp.controls.map((ctrl: unknown, ctrlIdx: number) => {

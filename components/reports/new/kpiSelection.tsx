@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button"
 import { AlertCircle, Plus, Settings } from "lucide-react"
 import { useReport } from "./context"
-import { KPI } from "./context"
+import { KPI } from "@/types/reports"
 
 export function KpiSelection() {
   const { 
