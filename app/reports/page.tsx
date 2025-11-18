@@ -43,14 +43,20 @@ export default function ReportsPage() {
     d.setDate(d.getDate() - 1) // giorno precedente
     return d
   })
+  const [endDate, setEndDate] = useState<Date | null>(null)
   const [showCalendar, setShowCalendar] = useState(false)
+  const [showEndCalendar, setShowEndCalendar] = useState(false)
   const [exportingReports, setExportingReports] = useState<Set<string>>(new Set())
 
   const loadReports = async () => {
     setIsLoading(true)
     try {
       const dateParam = format(selectedDate, 'yyyy-MM-dd')
-      const response = await fetch(`/api/reports?date=${dateParam}`)
+      const endDateParam = endDate ? format(endDate, 'yyyy-MM-dd') : null
+      const url = endDateParam 
+        ? `/api/reports?date=${dateParam}&endDate=${endDateParam}`
+        : `/api/reports?date=${dateParam}`
+      const response = await fetch(url)
       if (!response.ok) {
         throw new Error('Failed to fetch reports')
       }
@@ -70,7 +76,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     loadReports()
-  }, [selectedDate])
+  }, [selectedDate, endDate])
 
   const handleCreateReport = () => {
     // Redirect to the new report creation page
@@ -126,13 +132,17 @@ export default function ReportsPage() {
     setExportingReports(prev => new Set(prev).add(reportId))
     
     try {
+      const startDateStr = format(selectedDate, 'yyyy-MM-dd')
+      const endDateStr = endDate ? format(endDate, 'yyyy-MM-dd') : null
+      
       const response = await fetch(`/api/reports/${reportId}/export`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          selectedDate: format(selectedDate, 'yyyy-MM-dd'),
+          startDate: startDateStr,
+          endDate: endDateStr,
         }),
       })
 
@@ -147,7 +157,10 @@ export default function ReportsPage() {
       const a = document.createElement('a')
       a.style.display = 'none'
       a.href = url
-      a.download = `${report.name}_${format(selectedDate, 'dd-MM-yyyy')}.xlsx`
+      const filename = endDateStr 
+        ? `${report.name}_${format(selectedDate, 'dd-MM-yyyy')}_${format(endDate, 'dd-MM-yyyy')}.xlsx`
+        : `${report.name}_${format(selectedDate, 'dd-MM-yyyy')}.xlsx`
+      a.download = filename
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
@@ -212,24 +225,83 @@ export default function ReportsPage() {
         }
       `}</style>
       <div className="w-full">
-        <div className="flex gap-2 mb-4 items-center">
+        <div className="flex gap-2 mb-4 items-center flex-wrap">
           {/* Filtro data per export */}
-          <Popover open={showCalendar} onOpenChange={setShowCalendar}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className={cn("w-fit min-w-[120px] justify-start text-left font-normal max-w-[180px]")}>
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {format(selectedDate, "dd/MM/yyyy")}
+          <div className="flex gap-2 items-center">
+            <Popover open={showCalendar} onOpenChange={setShowCalendar}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className={cn("w-fit min-w-[120px] justify-start text-left font-normal max-w-[180px]")}>
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {format(selectedDate, "dd/MM/yyyy")}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={(d) => { 
+                    if (d) {
+                      setSelectedDate(d)
+                      // Se endDate è prima della nuova startDate, resettala
+                      if (endDate && d > endDate) {
+                        setEndDate(null)
+                      }
+                    }
+                    setShowCalendar(false) 
+                  }}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+
+            <span className="text-sm text-gray-500">-</span>
+
+            <Popover open={showEndCalendar} onOpenChange={setShowEndCalendar}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className={cn("w-fit min-w-[120px] justify-start text-left font-normal max-w-[180px]")}>
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {endDate ? format(endDate, "dd/MM/yyyy") : "Data fine (opzionale)"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={endDate || undefined}
+                  onSelect={(d) => { 
+                    if (d) {
+                      // Verifica che endDate non sia prima di startDate
+                      if (d >= selectedDate) {
+                        setEndDate(d)
+                      } else {
+                        toast({
+                          title: "Errore",
+                          description: "La data fine deve essere successiva o uguale alla data inizio.",
+                          variant: "destructive"
+                        })
+                      }
+                    } else {
+                      setEndDate(null)
+                    }
+                    setShowEndCalendar(false) 
+                  }}
+                  disabled={(date) => date < selectedDate}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+
+            {endDate && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setEndDate(null)}
+                className="h-8 px-2"
+                title="Rimuovi data fine"
+              >
+                ×
               </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={(d) => { if (d) setSelectedDate(d); setShowCalendar(false) }}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
+            )}
+          </div>
 
           <Button variant="outline" size="sm" onClick={loadReports} disabled={isLoading} className="gap-2">
             {isLoading ? (<><Loader2 className="h-4 w-4 animate-spin" /> Caricamento...</>) : ("Ricarica")}
@@ -244,11 +316,19 @@ export default function ReportsPage() {
         <div className="flex items-center gap-6 mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-green-500"></div>
-            <span className="text-sm text-gray-700">Dati disponibili per il {format(selectedDate, 'dd/MM/yyyy')}</span>
+            <span className="text-sm text-gray-700">
+              Dati disponibili {endDate 
+                ? `dal ${format(selectedDate, 'dd/MM/yyyy')} al ${format(endDate, 'dd/MM/yyyy')}`
+                : `per il ${format(selectedDate, 'dd/MM/yyyy')}`}
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-gray-400"></div>
-            <span className="text-sm text-gray-700">Nessun dato disponibile per il {format(selectedDate, 'dd/MM/yyyy')}</span>
+            <span className="text-sm text-gray-700">
+              Nessun dato disponibile {endDate 
+                ? `dal ${format(selectedDate, 'dd/MM/yyyy')} al ${format(endDate, 'dd/MM/yyyy')}`
+                : `per il ${format(selectedDate, 'dd/MM/yyyy')}`}
+            </span>
           </div>
         </div>
 
@@ -315,7 +395,9 @@ export default function ReportsPage() {
                           }`}
                           title={
                             !report.hasDataAvailable 
-                              ? `Nessun dato disponibile per il ${format(selectedDate, 'dd/MM/yyyy')}`
+                              ? `Nessun dato disponibile ${endDate 
+                                  ? `dal ${format(selectedDate, 'dd/MM/yyyy')} al ${format(endDate, 'dd/MM/yyyy')}`
+                                  : `per il ${format(selectedDate, 'dd/MM/yyyy')}`}`
                               : 'Scarica report'
                           }
                         >

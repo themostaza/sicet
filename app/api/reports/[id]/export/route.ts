@@ -47,11 +47,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const body = await request.json()
-    const { selectedDate } = body
+    const { startDate, endDate } = body
 
-    if (!selectedDate) {
-      return NextResponse.json({ error: 'selectedDate is required' }, { status: 400 })
+    if (!startDate) {
+      return NextResponse.json({ error: 'startDate is required' }, { status: 400 })
     }
+
+    // Se endDate non è fornita, usa startDate come singola data
+    const effectiveEndDate = endDate || startDate
 
     // Ottieni il report
     const { data: report, error: reportError } = await supabase
@@ -73,17 +76,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     // Ottieni i dati per l'export basati sui control points del report
-    const excelData = await getReportDataForExport(supabase, typedReport, selectedDate)
+    const excelData = await getReportDataForExport(supabase, typedReport, startDate, effectiveEndDate)
 
   // Genera l'Excel basato sulla nuova struttura
-  const excelBuffer = await generateMappedExcel(typedReport, excelData, selectedDate)
+  const excelBuffer = await generateMappedExcel(typedReport, excelData, startDate, effectiveEndDate)
+
+    // Genera nome file con range date se applicabile
+    const filename = endDate 
+      ? `${report.name}_${startDate}_${endDate}.xlsx`
+      : `${report.name}_${startDate}.xlsx`
 
     // Restituisci il file Excel
     const response = new NextResponse(new Uint8Array(excelBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="${report.name}_${selectedDate}.xlsx"`,
+        'Content-Disposition': `attachment; filename="${filename}"`,
       },
     })
 
@@ -95,7 +103,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getReportDataForExport(supabase: any, report: { todolist_params_linked: TodolistParamsLinked }, selectedDate: string): Promise<ExcelData> {
+async function getReportDataForExport(supabase: any, report: { todolist_params_linked: TodolistParamsLinked }, startDate: string, endDate: string): Promise<ExcelData> {
   // 1. Estrai i device IDs dalla nuova struttura
   const todolistParams = report.todolist_params_linked
   if (!todolistParams?.controlPoints || todolistParams.controlPoints.length === 0) {
@@ -104,30 +112,30 @@ async function getReportDataForExport(supabase: any, report: { todolist_params_l
 
   const deviceIds = todolistParams.controlPoints.map(cp => cp.deviceId)
   
-  // 2. Trova le todolist completate O scadute per questi device nella data selezionata
+  // 2. Trova le todolist completate O scadute per questi device nel range di date
   
-  // 2a. Todolist completate nella data selezionata
+  // 2a. Todolist completate nel range di date
   const { data: completedTodolists, error: completedError } = await supabase
     .from('todolist')
     .select('id, device_id, completion_date, scheduled_execution, time_slot_type, time_slot_start, time_slot_end, end_day_time')
     .in('device_id', deviceIds)
     .not('completion_date', 'is', null)
-    .gte('completion_date', `${selectedDate}T00:00:00.000Z`)
-    .lt('completion_date', `${selectedDate}T23:59:59.999Z`)
+    .gte('completion_date', `${startDate}T00:00:00.000Z`)
+    .lte('completion_date', `${endDate}T23:59:59.999Z`)
 
   if (completedError) {
     console.error('Error fetching completed todolists:', completedError)
     throw new Error('Failed to fetch completed todolists')
   }
 
-  // 2b. Todolist scadute: scheduled nella data selezionata ma NON completate
+  // 2b. Todolist scadute: scheduled nel range di date ma NON completate
   const { data: expiredTodolists, error: expiredError } = await supabase
     .from('todolist')
     .select('id, device_id, completion_date, scheduled_execution, time_slot_type, time_slot_start, time_slot_end, end_day_time')
     .in('device_id', deviceIds)
     .is('completion_date', null)
-    .gte('scheduled_execution', `${selectedDate}T00:00:00.000Z`)
-    .lt('scheduled_execution', `${selectedDate}T23:59:59.999Z`)
+    .gte('scheduled_execution', `${startDate}T00:00:00.000Z`)
+    .lte('scheduled_execution', `${endDate}T23:59:59.999Z`)
 
   if (expiredError) {
     console.error('Error fetching expired todolists:', expiredError)
@@ -233,7 +241,7 @@ async function getReportDataForExport(supabase: any, report: { todolist_params_l
         completed_at: '',
         device_id: deviceId,
         completion_date: '', // Nessuna data di completamento
-        scheduled_execution: `${selectedDate}T00:00:00.000Z`,
+        scheduled_execution: `${startDate}T00:00:00.000Z`,
         time_slot_type: 'standard',
         time_slot_start: undefined,
         time_slot_end: undefined,
@@ -248,13 +256,13 @@ async function getReportDataForExport(supabase: any, report: { todolist_params_l
   }
 }
 
-async function generateMappedExcel(report: { name: string; todolist_params_linked: TodolistParamsLinked }, excelData: ExcelData, selectedDate: string): Promise<Buffer> {
+async function generateMappedExcel(report: { name: string; todolist_params_linked: TodolistParamsLinked }, excelData: ExcelData, startDate: string, endDate: string): Promise<Buffer> {
   const wb = XLSX.utils.book_new()
   
   const { controlPoints, taskData } = excelData
   
   // PRIMO FOGLIO: Dati del Report
-  const dataWs = generateDataSheet(report, controlPoints, taskData, selectedDate)
+  const dataWs = generateDataSheet(report, controlPoints, taskData, startDate, endDate)
   XLSX.utils.book_append_sheet(wb, dataWs, 'Dati Report')
   
   // SECONDO FOGLIO: Documentazione e Tracciabilità
@@ -270,7 +278,8 @@ function generateDataSheet(
   report: { name: string }, 
   controlPoints: ControlPoint[], 
   taskData: TaskData[], 
-  selectedDate: string
+  startDate: string,
+  endDate: string
 ): Record<string, unknown> {
   const ws: Record<string, unknown> = {}
   
@@ -440,7 +449,9 @@ function generateDataSheet(
     // Colonna A: Info turno
     let infoText: string
     if (shiftInfo.isMissing) {
-      infoText = `Turno NON completato (${selectedDate})`
+      const scheduledDate = new Date(shiftInfo.scheduled_execution)
+      const dateStr = scheduledDate.toISOString().split('T')[0]
+      infoText = `Turno NON completato (${dateStr})`
     } else {
       // Mostra info del turno
       const scheduledDate = new Date(shiftInfo.scheduled_execution)

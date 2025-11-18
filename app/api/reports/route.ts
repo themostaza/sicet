@@ -63,9 +63,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Ottieni la data dal query parameter
+    // Ottieni le date dal query parameter
     const { searchParams } = new URL(request.url)
     const selectedDate = searchParams.get('date')
+    const endDate = searchParams.get('endDate')
 
     // Ottieni tutti i report
     const { data: reports, error } = await supabase
@@ -80,6 +81,7 @@ export async function GET(request: NextRequest) {
 
     // Se è stata fornita una data, verifica la disponibilità dei dati per ogni report
     if (selectedDate && reports) {
+      const effectiveEndDate = endDate || selectedDate
       const reportsWithAvailability = await Promise.all(
         reports.map(async (report) => {
           let hasDataAvailable = false
@@ -102,22 +104,22 @@ export async function GET(request: NextRequest) {
             }
             
             if (deviceIds.length > 0) {
-              // Verifica se esistono todolist completate O scadute per questi device nella data selezionata
+              // Verifica se esistono todolist completate O scadute per questi device nel range di date
               
-              // 1. Todolist completate nella data selezionata
+              // 1. Todolist completate nel range di date
               const { data: completedTodolists, error: completedError } = await supabase
                 .from('todolist')
                 .select('id')
                 .in('device_id', deviceIds)
                 .not('completion_date', 'is', null)
                 .gte('completion_date', `${selectedDate}T00:00:00.000Z`)
-                .lt('completion_date', `${selectedDate}T23:59:59.999Z`)
+                .lte('completion_date', `${effectiveEndDate}T23:59:59.999Z`)
                 .limit(1)
 
               if (!completedError && completedTodolists && completedTodolists.length > 0) {
                 hasDataAvailable = true
               } else {
-                // 2. Todolist scadute: scheduled nella data selezionata ma NON completate
+                // 2. Todolist scadute: scheduled nel range di date ma NON completate
                 // e la cui deadline (considerando time slot + tolleranza) è passata
                 const { data: expiredTodolists, error: expiredError } = await supabase
                   .from('todolist')
@@ -125,7 +127,7 @@ export async function GET(request: NextRequest) {
                   .in('device_id', deviceIds)
                   .is('completion_date', null)
                   .gte('scheduled_execution', `${selectedDate}T00:00:00.000Z`)
-                  .lt('scheduled_execution', `${selectedDate}T23:59:59.999Z`)
+                  .lte('scheduled_execution', `${effectiveEndDate}T23:59:59.999Z`)
 
                 if (!expiredError && expiredTodolists && expiredTodolists.length > 0) {
                   // Verifica se almeno una è scaduta (la deadline è passata rispetto a ora)
