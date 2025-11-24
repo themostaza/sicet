@@ -2,6 +2,35 @@ import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase-server"
 import { isTodolistExpired } from "@/lib/validation/todolist-schemas"
 
+// Funzione helper per recuperare tutti i record paginando
+async function fetchAllTodolistsPaginated(
+  buildQuery: (offset: number, limit: number) => Promise<{ data: unknown[] | null; error: unknown }>,
+  pageSize = 1000
+): Promise<unknown[]> {
+  const allData: any[] = []
+  let offset = 0
+  let hasMore = true
+
+  while (hasMore) {
+    const { data, error } = await buildQuery(offset, pageSize)
+
+    if (error) {
+      throw error
+    }
+
+    if (data && data.length > 0) {
+      allData.push(...data)
+      offset += pageSize
+      // Se abbiamo ricevuto meno record del pageSize, abbiamo finito
+      hasMore = data.length === pageSize
+    } else {
+      hasMore = false
+    }
+  }
+
+  return allData
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -42,12 +71,26 @@ export async function GET(request: NextRequest) {
     const deviceIds = devices.map(d => d.id)
     let todolistMetricsByDevice: Record<string, { total: number, completed: number, pending: number, overdue: number }> = {}
     if (deviceIds.length > 0) {
-      // Prendi tutte le todolist per questi device (includi time_slot_type, time_slot_end, completion_date)
-      const { data: todolists, error: todolistError } = await supabase
-        .from("todolist")
-        .select("id, device_id, status, scheduled_execution, time_slot_type, time_slot_end, time_slot_start, completion_date")
-        .in("device_id", deviceIds)
-      if (todolistError) throw todolistError
+      // Funzione per costruire la query per le todolist dei device
+      const buildQuery = async (offset: number, limit: number) => {
+        return supabase
+          .from("todolist")
+          .select("id, device_id, status, scheduled_execution, time_slot_type, time_slot_end, time_slot_start, completion_date")
+          .in("device_id", deviceIds)
+          .range(offset, offset + limit - 1)
+      }
+      
+      // Prendi tutte le todolist per questi device paginando (includi time_slot_type, time_slot_end, completion_date)
+      const todolists = await fetchAllTodolistsPaginated(buildQuery) as Array<{
+        id: string
+        device_id: string
+        status: string
+        scheduled_execution: string
+        time_slot_type: string | null
+        time_slot_end: string | null
+        time_slot_start: string | null
+        completion_date: string | null
+      }>
 
       for (const deviceId of deviceIds) {
         const todolistsForDevice = todolists.filter(t => t.device_id === deviceId)

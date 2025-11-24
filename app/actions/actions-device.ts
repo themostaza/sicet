@@ -138,17 +138,59 @@ export async function getDevice(id: string): Promise<Device | null> {
   return data ? toDevice(data) : null;
 }
 
+
 export async function createDevice(raw: unknown): Promise<Device> {
   try {
     const d = DeviceInsertSchema.parse(raw);
+    let deviceId = d.id || generateDeviceId();
+    let insertData = toInsertRow(d);
+    insertData.id = deviceId;
 
-    const { data, error } = await (await supabase())
-      .from("devices")
-      .insert(toInsertRow(d))
-      .select()
-      .single();
+    // Tentativo di inserimento con gestione automatica dei duplicati
+    let attempts = 0;
+    const maxAttempts = 100;
+    let data;
+    let error;
 
-    if (error) handlePostgrestError(error);
+    while (attempts < maxAttempts) {
+      const result = await (await supabase())
+        .from("devices")
+        .insert(insertData)
+        .select()
+        .single();
+
+      data = result.data;
+      error = result.error;
+
+      // Se non c'è errore, inserimento riuscito
+      if (!error) {
+        break;
+      }
+
+      // Se l'errore è di duplicato, genera un nuovo ID e riprova
+      if (error.code === "23505") {
+        attempts++;
+        deviceId = generateDeviceId();
+        insertData = { ...insertData, id: deviceId };
+        continue;
+      }
+
+      // Se l'errore non è di duplicato, gestiscilo normalmente
+      handlePostgrestError(error);
+      break;
+    }
+
+    // Se dopo tutti i tentativi non siamo riusciti a inserire, lancia un errore
+    if (error && error.code === "23505") {
+      throw new DeviceActionError(
+        "Impossibile generare un ID unico dopo diversi tentativi",
+        "ID_GENERATION_FAILED"
+      );
+    }
+
+    if (error) {
+      handlePostgrestError(error);
+    }
 
     // Log the activity (non-blocking)
     try {

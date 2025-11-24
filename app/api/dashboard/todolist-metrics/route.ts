@@ -3,6 +3,35 @@ import { createServerSupabaseClient } from "@/lib/supabase-server"
 import { handlePostgrestError as handleError } from "@/lib/supabase/error"
 import { isTodolistExpired } from "@/lib/validation/todolist-schemas"
 
+// Funzione helper per recuperare tutti i record paginando
+async function fetchAllTodolistsPaginated(
+  buildQuery: (offset: number, limit: number) => Promise<{ data: unknown[] | null; error: unknown }>,
+  pageSize = 1000
+): Promise<unknown[]> {
+  const allData: any[] = []
+  let offset = 0
+  let hasMore = true
+
+  while (hasMore) {
+    const { data, error } = await buildQuery(offset, pageSize)
+
+    if (error) {
+      throw error
+    }
+
+    if (data && data.length > 0) {
+      allData.push(...data)
+      offset += pageSize
+      // Se abbiamo ricevuto meno record del pageSize, abbiamo finito
+      hasMore = data.length === pageSize
+    } else {
+      hasMore = false
+    }
+  }
+
+  return allData
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -13,27 +42,33 @@ export async function GET(request: NextRequest) {
     
     const supabase = await createServerSupabaseClient()
 
-    // Query base per le metriche
-    let query = supabase
-      .from("todolist")
-      .select("id, status, scheduled_execution, time_slot_type, time_slot_end, time_slot_start, completion_date")
+    // Funzione per costruire la query con filtri
+    const buildQuery = async (offset: number, limit: number) => {
+      let query = supabase
+        .from("todolist")
+        .select("id, status, scheduled_execution, time_slot_type, time_slot_end, time_slot_start, completion_date")
 
-    // Applica filtri per data se specificati
-    if (dateFrom) {
-      query = query.gte("scheduled_execution", `${dateFrom}T00:00:00`)
-    }
-    if (dateTo) {
-      query = query.lte("scheduled_execution", `${dateTo}T23:59:59`)
-    }
+      // Applica filtri per data se specificati
+      if (dateFrom) {
+        query = query.gte("scheduled_execution", `${dateFrom}T00:00:00`)
+      }
+      if (dateTo) {
+        query = query.lte("scheduled_execution", `${dateTo}T23:59:59`)
+      }
 
-    const { data, error } = await query
-
-    if (error) {
-      console.error("Error fetching todolist metrics:", error)
-      handleError(error)
+      return query.range(offset, offset + limit - 1)
     }
 
-    const todolists = data || []
+    // Recupera tutti i record paginando
+    const todolists = await fetchAllTodolistsPaginated(buildQuery) as Array<{
+      id: string
+      status: string
+      scheduled_execution: string
+      time_slot_type: string | null
+      time_slot_end: string | null
+      time_slot_start: string | null
+      completion_date: string | null
+    }>
 
     // Calcola le metriche
     const total = todolists.length

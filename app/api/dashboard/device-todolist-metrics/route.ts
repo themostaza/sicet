@@ -2,6 +2,35 @@ import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase-server"
 import { isTodolistExpired } from "@/lib/validation/todolist-schemas"
 
+// Funzione helper per recuperare tutti i record paginando
+async function fetchAllTodolistsPaginated(
+  buildQuery: (offset: number, limit: number) => Promise<{ data: unknown[] | null; error: unknown }>,
+  pageSize = 1000
+): Promise<unknown[]> {
+  const allData: any[] = []
+  let offset = 0
+  let hasMore = true
+
+  while (hasMore) {
+    const { data, error } = await buildQuery(offset, pageSize)
+
+    if (error) {
+      throw error
+    }
+
+    if (data && data.length > 0) {
+      allData.push(...data)
+      offset += pageSize
+      // Se abbiamo ricevuto meno record del pageSize, abbiamo finito
+      hasMore = data.length === pageSize
+    } else {
+      hasMore = false
+    }
+  }
+
+  return allData
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -14,16 +43,28 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = await createServerSupabaseClient()
-    const { data: todolists, error } = await supabase
-      .from("todolist")
-      .select("id, status, scheduled_execution, completion_date, time_slot_type, time_slot_end, time_slot_start")
-      .eq("device_id", deviceId)
-      .gte("scheduled_execution", `${dateFrom}T00:00:00`)
-      .lte("scheduled_execution", `${dateTo}T23:59:59`)
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    
+    // Funzione per costruire la query con filtri
+    const buildQuery = async (offset: number, limit: number) => {
+      return supabase
+        .from("todolist")
+        .select("id, status, scheduled_execution, completion_date, time_slot_type, time_slot_end, time_slot_start")
+        .eq("device_id", deviceId)
+        .gte("scheduled_execution", `${dateFrom}T00:00:00`)
+        .lte("scheduled_execution", `${dateTo}T23:59:59`)
+        .range(offset, offset + limit - 1)
     }
+
+    // Recupera tutti i record paginando
+    const todolists = await fetchAllTodolistsPaginated(buildQuery) as Array<{
+      id: string
+      status: string
+      scheduled_execution: string
+      completion_date: string | null
+      time_slot_type: string | null
+      time_slot_end: string | null
+      time_slot_start: string | null
+    }>
 
     const total = todolists.length
     const completed = todolists.filter(t => t.completion_date !== null).length
