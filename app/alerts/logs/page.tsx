@@ -6,14 +6,12 @@ import { Badge } from "@/components/ui/badge"
 import { AlertCircle, CheckSquare, Mail, AlertTriangle } from "lucide-react"
 import React from "react"
 import { formatDateForDisplay } from "@/lib/utils"
-import { KpiLogsClient } from "./kpi-logs-client"
 
 // Tipi
 import { Database } from "@/supabase/database.types"
 
 type KpiAlertLog = Database['public']['Tables']['kpi_alert_logs']['Row'] & {
   kpi_alerts: (Database['public']['Tables']['kpi_alerts']['Row'] & {
-    kpis: Database['public']['Tables']['kpis']['Row'] | null
     todolist: (Database['public']['Tables']['todolist']['Row'] & {
       devices: Database['public']['Tables']['devices']['Row'] | null
     }) | null
@@ -31,15 +29,10 @@ async function getKpiAlertLogs(): Promise<KpiAlertLog[]> {
   const supabase = await createServerSupabaseClient()
   const { data: alertLogs, error: logsError } = await supabase
     .from('kpi_alert_logs')
-      .select(`
+    .select(`
       *,
       kpi_alerts (
         *,
-        kpis (
-          name,
-          description,
-          value
-        ),
         todolist (
           *,
           devices (
@@ -118,7 +111,46 @@ export default async function AlertLogsPage() {
             </CardHeader>
             <CardContent>
               {kpiAlertLogs && kpiAlertLogs.length > 0 ? (
-                <KpiLogsClient logs={kpiAlertLogs} />
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Valore Rilevato</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Stato</TableHead>
+                        <TableHead>Attivato</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {kpiAlertLogs.map((log) => (
+                        <TableRow key={log.id}>
+                          <TableCell className="max-w-xs truncate">
+                            {JSON.stringify(log.triggered_value)}
+                          </TableCell>
+                          <TableCell>{log.kpi_alerts?.email || 'Email sconosciuta'}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {log.email_sent ? (
+                                <Badge variant="default" className="flex items-center gap-1">
+                                  <Mail className="h-3 w-3" />
+                                  Inviata
+                                </Badge>
+                              ) : (
+                                <Badge variant="destructive" className="flex items-center gap-1">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  Errore
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {formatDateForDisplay(log.triggered_at)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   <AlertCircle className="h-12 w-12 mx-auto mb-4 text-gray-300" />
