@@ -1,34 +1,17 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase-server"
-import { isTodolistExpired } from "@/lib/validation/todolist-schemas"
 
-// Funzione helper per recuperare tutti i record paginando
-async function fetchAllTodolistsPaginated(
-  buildQuery: (offset: number, limit: number) => Promise<{ data: unknown[] | null; error: unknown }>,
-  pageSize = 1000
-): Promise<unknown[]> {
-  const allData: any[] = []
-  let offset = 0
-  let hasMore = true
+interface DeviceCounts {
+  total: number
+  active: number
+  disabled: number
+}
 
-  while (hasMore) {
-    const { data, error } = await buildQuery(offset, pageSize)
-
-    if (error) {
-      throw error
-    }
-
-    if (data && data.length > 0) {
-      allData.push(...data)
-      offset += pageSize
-      // Se abbiamo ricevuto meno record del pageSize, abbiamo finito
-      hasMore = data.length === pageSize
-    } else {
-      hasMore = false
-    }
-  }
-
-  return allData
+interface DeviceTodolistMetrics {
+  total: number
+  completed: number
+  pending: number
+  overdue: number
 }
 
 export async function GET(request: NextRequest) {
@@ -39,27 +22,14 @@ export async function GET(request: NextRequest) {
 
     const supabase = await createServerSupabaseClient()
 
-    // Conta totale dispositivi
-    const { count: totalDevices, error: countError } = await supabase
-      .from("devices")
-      .select("id", { count: "exact", head: true })
-    if (countError) throw countError
+    // Usa RPC per ottenere tutti i count in una singola query
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: countsData, error: countsError } = await (supabase.rpc as any)('get_device_counts')
+    if (countsError) throw countsError
+    
+    const counts = countsData as DeviceCounts
 
-    // Conta attivi
-    const { count: activeDevices, error: activeError } = await supabase
-      .from("devices")
-      .select("id", { count: "exact", head: true })
-      .eq("deleted", false)
-    if (activeError) throw activeError
-
-    // Conta disabilitati
-    const { count: disabledDevices, error: disabledError } = await supabase
-      .from("devices")
-      .select("id", { count: "exact", head: true })
-      .eq("deleted", true)
-    if (disabledError) throw disabledError
-
-    // Prendi lista paginata dispositivi (tutti, ordinati per created_at discendente, senza filtro deleted)
+    // Prendi lista paginata dispositivi
     const { data: devices, error: devicesError } = await supabase
       .from("devices")
       .select("id, name, created_at, deleted")
@@ -67,54 +37,21 @@ export async function GET(request: NextRequest) {
       .range(offset, offset + limit - 1)
     if (devicesError) throw devicesError
 
-    // Per ogni device, calcola metriche todolist
+    // Usa RPC per calcolare metriche todolist per device (GROUP BY, molto più efficiente)
     const deviceIds = devices.map(d => d.id)
-    let todolistMetricsByDevice: Record<string, { total: number, completed: number, pending: number, overdue: number }> = {}
+    let todolistMetricsByDevice: Record<string, DeviceTodolistMetrics> = {}
+    
     if (deviceIds.length > 0) {
-      // Funzione per costruire la query per le todolist dei device
-      const buildQuery = async (offset: number, limit: number) => {
-        return supabase
-          .from("todolist")
-          .select("id, device_id, status, scheduled_execution, time_slot_type, time_slot_end, time_slot_start, completion_date")
-          .in("device_id", deviceIds)
-          .range(offset, offset + limit - 1)
-      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: metricsData, error: metricsError } = await (supabase.rpc as any)(
+        'get_device_todolist_metrics',
+        { p_device_ids: deviceIds, p_now: new Date().toISOString() }
+      )
       
-      // Prendi tutte le todolist per questi device paginando (includi time_slot_type, time_slot_end, completion_date)
-      const todolists = await fetchAllTodolistsPaginated(buildQuery) as Array<{
-        id: string
-        device_id: string
-        status: string
-        scheduled_execution: string
-        time_slot_type: string | null
-        time_slot_end: string | null
-        time_slot_start: string | null
-        completion_date: string | null
-      }>
-
-      for (const deviceId of deviceIds) {
-        const todolistsForDevice = todolists.filter(t => t.device_id === deviceId)
-        const total = todolistsForDevice.length
-        const completed = todolistsForDevice.filter(t => t.completion_date !== null).length
-        const pending = todolistsForDevice.filter(t =>
-          t.completion_date === null &&
-          !isTodolistExpired(
-            t.scheduled_execution,
-            (t.time_slot_type === "standard" || t.time_slot_type === "custom") ? t.time_slot_type as "standard" | "custom" : undefined,
-            t.time_slot_end !== null ? Number(t.time_slot_end) : null,
-            t.time_slot_start !== null ? Number(t.time_slot_start) : null
-          )
-        ).length
-        const overdue = todolistsForDevice.filter(t =>
-          (t.status === "pending" || t.status === "in_progress") &&
-          isTodolistExpired(
-            t.scheduled_execution,
-            (t.time_slot_type === "standard" || t.time_slot_type === "custom") ? t.time_slot_type as "standard" | "custom" : undefined,
-            t.time_slot_end !== null ? Number(t.time_slot_end) : null,
-            t.time_slot_start !== null ? Number(t.time_slot_start) : null
-          )
-        ).length
-        todolistMetricsByDevice[deviceId] = { total, completed, pending, overdue }
+      if (metricsError) {
+        console.error("Error fetching device todolist metrics:", metricsError)
+      } else if (metricsData) {
+        todolistMetricsByDevice = metricsData as unknown as Record<string, DeviceTodolistMetrics>
       }
     }
 
@@ -126,12 +63,12 @@ export async function GET(request: NextRequest) {
       todolistMetrics: todolistMetricsByDevice[d.id] || { total: 0, completed: 0, pending: 0, overdue: 0 }
     }))
 
-    const hasMore = totalDevices !== null ? offset + limit < totalDevices : false
+    const hasMore = counts.total !== null ? offset + limit < counts.total : false
 
     return NextResponse.json({
-      totalDevices,
-      activeDevices,
-      disabledDevices,
+      totalDevices: counts.total,
+      activeDevices: counts.active,
+      disabledDevices: counts.disabled,
       devices: resultDevices,
       hasMore
     })

@@ -1,35 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase-server"
-import { handlePostgrestError as handleError } from "@/lib/supabase/error"
-import { isTodolistExpired } from "@/lib/validation/todolist-schemas"
 
-// Funzione helper per recuperare tutti i record paginando
-async function fetchAllTodolistsPaginated(
-  buildQuery: (offset: number, limit: number) => Promise<{ data: unknown[] | null; error: unknown }>,
-  pageSize = 1000
-): Promise<unknown[]> {
-  const allData: any[] = []
-  let offset = 0
-  let hasMore = true
-
-  while (hasMore) {
-    const { data, error } = await buildQuery(offset, pageSize)
-
-    if (error) {
-      throw error
-    }
-
-    if (data && data.length > 0) {
-      allData.push(...data)
-      offset += pageSize
-      // Se abbiamo ricevuto meno record del pageSize, abbiamo finito
-      hasMore = data.length === pageSize
-    } else {
-      hasMore = false
-    }
-  }
-
-  return allData
+interface DashboardMetrics {
+  total: number
+  completed: number
+  pending: number
+  inProgress: number
+  overdue: number
+  completionRate: number
 }
 
 export async function GET(request: NextRequest) {
@@ -42,59 +20,27 @@ export async function GET(request: NextRequest) {
     
     const supabase = await createServerSupabaseClient()
 
-    // Funzione per costruire la query con filtri
-    const buildQuery = async (offset: number, limit: number) => {
-      let query = supabase
-        .from("todolist")
-        .select("id, status, scheduled_execution, time_slot_type, time_slot_end, time_slot_start, completion_date")
+    // Usa la funzione RPC ottimizzata
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase.rpc as any)('get_dashboard_todolist_metrics', {
+      p_date_from: dateFrom ? `${dateFrom}T00:00:00+00:00` : null,
+      p_date_to: dateTo ? `${dateTo}T23:59:59+00:00` : null
+    })
 
-      // Applica filtri per data se specificati
-      if (dateFrom) {
-        query = query.gte("scheduled_execution", `${dateFrom}T00:00:00`)
-      }
-      if (dateTo) {
-        query = query.lte("scheduled_execution", `${dateTo}T23:59:59`)
-      }
-
-      return query.range(offset, offset + limit - 1)
+    if (error) {
+      console.error("Error calling RPC:", error)
+      throw error
     }
 
-    // Recupera tutti i record paginando
-    const todolists = await fetchAllTodolistsPaginated(buildQuery) as Array<{
-      id: string
-      status: string
-      scheduled_execution: string
-      time_slot_type: string | null
-      time_slot_end: string | null
-      time_slot_start: string | null
-      completion_date: string | null
-    }>
-
-    // Calcola le metriche
-    const total = todolists.length
-    const completed = todolists.filter(t => t.completion_date !== null).length
-    const pending = todolists.filter(t =>
-      t.completion_date === null &&
-      !isTodolistExpired(
-        t.scheduled_execution,
-        (t.time_slot_type === "standard" || t.time_slot_type === "custom") ? t.time_slot_type as "standard" | "custom" : undefined,
-        t.time_slot_end,
-        t.time_slot_start
-      )
-    ).length
-    const inProgress = todolists.filter(t => t.status === 'in_progress').length // opzionale, legacy
-    // Calcola scadute: pending o in_progress e isTodolistExpired
-    const overdue = todolists.filter(t => 
-      (t.status === 'pending' || t.status === 'in_progress') && 
-      isTodolistExpired(
-        t.scheduled_execution,
-        (t.time_slot_type === "standard" || t.time_slot_type === "custom") ? t.time_slot_type as "standard" | "custom" : undefined,
-        t.time_slot_end,
-        t.time_slot_start
-      )
-    ).length
+    const metrics = data as DashboardMetrics
 
     // Calcola percentuali per il grafico a torta
+    const total = metrics.total || 0
+    const completed = metrics.completed || 0
+    const pending = metrics.pending || 0
+    const inProgress = metrics.inProgress || 0
+    const overdue = metrics.overdue || 0
+
     const completedPercentage = total > 0 ? Math.round((completed / total) * 100) : 0
     const pendingPercentage = total > 0 ? Math.round((pending / total) * 100) : 0
     const inProgressPercentage = total > 0 ? Math.round((inProgress / total) * 100) : 0
@@ -128,7 +74,7 @@ export async function GET(request: NextRequest) {
       }
     ].filter(item => item.value > 0) // Rimuovi categorie con valore 0
 
-    const metrics = {
+    const result = {
       total,
       pending,
       completed,
@@ -142,7 +88,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json(metrics)
+    return NextResponse.json(result)
     
   } catch (error) {
     console.error("Error in todolist metrics API:", error)

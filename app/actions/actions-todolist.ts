@@ -87,7 +87,8 @@ export async function getTodolistCategories(): Promise<string[]> {
   try {
     const supabase = await createServerSupabaseClient()
     
-    const { data, error } = await supabase.rpc('get_distinct_todolist_categories')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase.rpc as any)('get_distinct_todolist_categories')
     
     if (error) {
       console.error("Error fetching todolist categories:", error)
@@ -114,7 +115,8 @@ export async function getTodolistCounts(userRole: string | null): Promise<{
   try {
     const supabase = await createServerSupabaseClient()
     
-    const { data, error } = await supabase.rpc('get_todolist_counts', {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase.rpc as any)('get_todolist_counts', {
       p_user_role: userRole,
       p_tolerance_hours: TIME_SLOT_TOLERANCE
     })
