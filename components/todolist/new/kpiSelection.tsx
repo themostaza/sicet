@@ -21,7 +21,7 @@ interface KpiField {
   id: string;
   name: string;
   description?: string;
-  type: 'number' | 'decimal' | 'text' | 'boolean' | 'unsupported';
+  type: 'number' | 'decimal' | 'text' | 'boolean' | 'select' | 'unsupported';
   placeholder?: string;
   min?: string | number;
   max?: string | number;
@@ -32,11 +32,12 @@ interface KpiField {
 // Define types for alert conditions
 interface AlertCondition {
   field_id: string;
-  type: 'number' | 'decimal' | 'text' | 'boolean';
+  type: 'number' | 'decimal' | 'text' | 'boolean' | 'select';
   min?: number | string;
   max?: number | string;
   match_text?: string;
   boolean_value?: boolean;
+  match_values?: string[]; // Per i campi select: valori che fanno scattare l'alert
 }
 
 export function KpiSelection() {
@@ -121,7 +122,7 @@ export function KpiSelection() {
   };
 
   // Map KPI field types to alert field types
-  const mapFieldType = (type: string): 'number' | 'decimal' | 'text' | 'boolean' | 'unsupported' => {
+  const mapFieldType = (type: string): 'number' | 'decimal' | 'text' | 'boolean' | 'select' | 'unsupported' => {
     switch (String(type).toLowerCase()) {
       case 'number':
         return 'number';
@@ -134,6 +135,9 @@ export function KpiSelection() {
       case 'si/no':
       case 'sì/no':
         return 'boolean';
+      case 'select':
+      case 'selezione':
+        return 'select';
       default:
         return 'unsupported';
     }
@@ -161,7 +165,8 @@ export function KpiSelection() {
         (c.type === 'number' && (c.min !== undefined || c.max !== undefined)) ||
         (c.type === 'decimal' && (c.min !== undefined || c.max !== undefined)) ||
         (c.type === 'text' && c.match_text) ||
-        (c.type === 'boolean' && c.boolean_value !== undefined)
+        (c.type === 'boolean' && c.boolean_value !== undefined) ||
+        (c.type === 'select' && c.match_values && c.match_values.length > 0)
       );
       
       const hasActiveConditions = activeConditions.length > 0;
@@ -345,7 +350,7 @@ export function KpiSelection() {
                 <div className="flex justify-between items-center">
                   <Label htmlFor={field.id}>{field.name}</Label>
                   <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-                    {field.type === 'boolean' ? 'Sì/No' : field.type}
+                    {field.type === 'boolean' ? 'Sì/No' : field.type === 'select' ? 'Selezione' : field.type}
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground">{field.description}</p>
@@ -517,6 +522,45 @@ export function KpiSelection() {
                         <Label htmlFor={`${field.id}-false`}>No</Label>
                       </div>
                     </div>
+                  </div>
+                ) : field.type === 'select' && field.options && field.options.length > 0 ? (
+                  <div className="space-y-2">
+                    <Label>Alert quando il valore è uno dei seguenti:</Label>
+                    <div className="space-y-2 border rounded-md p-3 bg-muted/30">
+                      {field.options.map((option, optIndex) => {
+                        const currentMatchValues = localAlertConditions.find(c => c.field_id === field.id)?.match_values || []
+                        const isChecked = currentMatchValues.includes(option)
+                        return (
+                          <div key={optIndex} className="flex items-center space-x-2">
+                            <input 
+                              type="checkbox" 
+                              id={`${field.id}-option-${optIndex}`} 
+                              checked={isChecked}
+                              onChange={(e) => {
+                                const newMatchValues = e.target.checked
+                                  ? [...currentMatchValues, option]
+                                  : currentMatchValues.filter(v => v !== option)
+                                handleConditionChange(
+                                  field.id,
+                                  'select',
+                                  { match_values: newMatchValues }
+                                )
+                              }}
+                              className="h-4 w-4 rounded border-gray-300"
+                            />
+                            <Label 
+                              htmlFor={`${field.id}-option-${optIndex}`}
+                              className="text-sm font-normal cursor-pointer"
+                            >
+                              {option}
+                            </Label>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Seleziona i valori che devono far scattare l'alert
+                    </p>
                   </div>
                 ) : null}
               </div>

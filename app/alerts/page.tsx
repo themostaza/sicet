@@ -31,12 +31,13 @@ type TodolistAlert = Database['public']['Tables']['todolist_alert']['Row'] & {
 }
 
 type AlertCondition = {
-  type: 'number' | 'decimal' | 'text' | 'boolean'
+  type: 'number' | 'decimal' | 'text' | 'boolean' | 'select'
   field_id: string
   min?: number
   max?: number
   match_text?: string
   boolean_value?: boolean
+  match_values?: string[] // Per i campi select: valori che fanno scattare l'alert
 }
 
 // Helper function to get supabase client
@@ -136,7 +137,10 @@ function renderKpiConditions(alert: KpiAlert) {
             {cond.type === 'boolean' && cond.boolean_value !== undefined && (
               <> | Valore: <span className="font-mono">{cond.boolean_value ? 'Sì' : 'No'}</span></>
             )}
-            <span className="ml-2 text-gray-400">({field.type})</span>
+            {cond.type === 'select' && cond.match_values && cond.match_values.length > 0 && (
+              <> | Valori: <span className="font-mono">{cond.match_values.join(', ')}</span></>
+            )}
+            <span className="ml-2 text-gray-400">({field.type === 'select' ? 'Selezione' : field.type})</span>
           </li>
         );
       })}
@@ -155,7 +159,10 @@ function renderKpiConditions(alert: KpiAlert) {
           {cond.type === 'boolean' && cond.boolean_value !== undefined && (
             <> Valore: <span className="font-mono">{cond.boolean_value ? 'Sì' : 'No'}</span></>
           )}
-          <span className="ml-2 text-gray-400">({cond.type})</span>
+          {cond.type === 'select' && cond.match_values && cond.match_values.length > 0 && (
+            <> Valori: <span className="font-mono">{cond.match_values.join(', ')}</span></>
+          )}
+          <span className="ml-2 text-gray-400">({cond.type === 'select' ? 'Selezione' : cond.type})</span>
         </li>
       ))}
     </ul>

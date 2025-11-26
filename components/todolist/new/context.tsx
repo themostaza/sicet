@@ -14,11 +14,12 @@ import { getTodolistCategories } from "@/app/actions/actions-todolist"
 // Define types for alert conditions
 interface AlertCondition {
   field_id: string;
-  type: 'number' | 'decimal' | 'text' | 'boolean';
+  type: 'number' | 'decimal' | 'text' | 'boolean' | 'select';
   min?: number | string;
   max?: number | string;
   match_text?: string;
   boolean_value?: boolean;
+  match_values?: string[]; // Per i campi select: valori che fanno scattare l'alert
 }
 
 // Definizione dell'interfaccia del context

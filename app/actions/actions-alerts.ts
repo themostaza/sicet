@@ -20,11 +20,12 @@ const supabase = async (): Promise<SupabaseClient<Database>> =>
 // Schema for alert validation
 const AlertConditionSchema = z.object({
   field_id: z.string(),
-  type: z.enum(['number', 'decimal', 'text', 'boolean']),
+  type: z.enum(['number', 'decimal', 'text', 'boolean', 'select']),
   min: z.number().optional(),
   max: z.number().optional(),
   match_text: z.string().optional(),
-  boolean_value: z.boolean().optional()
+  boolean_value: z.boolean().optional(),
+  match_values: z.array(z.string()).optional() // Per i campi select: valori che fanno scattare l'alert
 })
 
 const AlertSchema = z.object({
@@ -362,6 +363,17 @@ export async function checkKpiAlerts(
             }
             
             if (boolValue === condition.boolean_value) {
+              conditionTriggered = true
+            }
+          }
+          break
+
+        case 'select':
+          // Per i campi select, verifica se il valore inserito è tra quelli configurati per scattare l'alert
+          if (condition.match_values && condition.match_values.length > 0) {
+            const selectValue = String(fieldValue).toLowerCase().trim()
+            const matchValuesLower = condition.match_values.map(v => v.toLowerCase().trim())
+            if (matchValuesLower.includes(selectValue)) {
               conditionTriggered = true
             }
           }

@@ -41,7 +41,10 @@ function renderKpiConditions(alert: any) {
             {cond.type === 'boolean' && cond.boolean_value !== undefined && (
               <> | Valore: <span className="font-mono">{cond.boolean_value ? 'Sì' : 'No'}</span></>
             )}
-            <span className="ml-2 text-gray-400">({field.type})</span>
+            {cond.type === 'select' && cond.match_values && cond.match_values.length > 0 && (
+              <> | Valori: <span className="font-mono">{cond.match_values.join(', ')}</span></>
+            )}
+            <span className="ml-2 text-gray-400">({field.type === 'select' ? 'Selezione' : field.type})</span>
           </li>
         );
       })}
@@ -59,7 +62,10 @@ function renderKpiConditions(alert: any) {
           {cond.type === 'boolean' && cond.boolean_value !== undefined && (
             <> Valore: <span className="font-mono">{cond.boolean_value ? 'Sì' : 'No'}</span></>
           )}
-          <span className="ml-2 text-gray-400">({cond.type})</span>
+          {cond.type === 'select' && cond.match_values && cond.match_values.length > 0 && (
+            <> Valori: <span className="font-mono">{cond.match_values.join(', ')}</span></>
+          )}
+          <span className="ml-2 text-gray-400">({cond.type === 'select' ? 'Selezione' : cond.type})</span>
         </li>
       ))}
     </ul>

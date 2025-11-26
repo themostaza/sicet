@@ -72,6 +72,9 @@ function formatTriggeredCondition(triggered: TriggeredCondition, kpiValue: any):
       return `<strong>${fieldName} (Numero)</strong>: ${fieldValue} ⚠️ ${range}`;
     case 'boolean':
       return `<strong>${fieldName} (Sì/No)</strong>: ${fieldValue ? 'sì' : 'no'} ⚠️`;
+    case 'select':
+      const matchValues = condition.match_values || [];
+      return `<strong>${fieldName} (Selezione)</strong>: "${String(fieldValue)}" ⚠️ corrisponde ai valori di alert [${matchValues.join(', ')}]`;
     default:
       return `<strong>${fieldName}</strong>: ${String(fieldValue)}`;
   }

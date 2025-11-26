@@ -107,6 +107,17 @@ function formatAlertReasons(triggeredValue: any, kpiValue: any): ReactNode[] {
           </span>
         )
       
+      case 'select':
+        const matchValues = condition.match_values || []
+        return (
+          <span key={index}>
+            {fieldName}: "{fieldValue}" corrisponde ai valori alert{' '}
+            <span className="text-xs font-normal opacity-70">
+              [{matchValues.join(', ')}]
+            </span>
+          </span>
+        )
+      
       default:
         return (
           <span key={index}>
