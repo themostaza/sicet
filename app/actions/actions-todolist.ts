@@ -82,51 +82,53 @@ type TodolistWithTasks = TodolistRow & {
  * CATEGORIES
  * ------------------------------------------------------------------------*/
 
-// Get all existing todolist categories from database
+// Get all existing todolist categories from database (optimized with RPC)
 export async function getTodolistCategories(): Promise<string[]> {
   try {
     const supabase = await createServerSupabaseClient()
     
-    // Fetch all categories with pagination (1000 at a time)
-    const categoriesSet = new Set<string>()
-    let offset = 0
-    const limit = 1000
-    let hasMore = true
+    const { data, error } = await supabase.rpc('get_distinct_todolist_categories')
     
-    while (hasMore) {
-      const { data, error } = await supabase
-        .from("todolist")
-        .select("todolist_category")
-        .not("todolist_category", "is", null)
-        .not("todolist_category", "eq", "")
-        .range(offset, offset + limit - 1)
-      
-      if (error) {
-        console.error("Error fetching todolist categories:", error)
-        break
-      }
-      
-      // Add categories to set
-      if (data && data.length > 0) {
-        data.forEach(item => {
-          if (item.todolist_category && item.todolist_category.trim() !== "") {
-            categoriesSet.add(item.todolist_category.trim())
-          }
-        })
-      }
-      
-      // Check if we need to fetch more
-      hasMore = data && data.length === limit
-      offset += limit
+    if (error) {
+      console.error("Error fetching todolist categories:", error)
+      return []
     }
     
-    // Convert set to sorted array
-    const categories = [...categoriesSet].sort()
-    
-    return categories
+    // RPC returns TEXT[] - filter out any null/empty and sort
+    const categories = (data as string[] | null) || []
+    return categories.filter(c => c && c.trim() !== '').sort()
   } catch (error) {
     console.error("Error in getTodolistCategories:", error)
     return []
+  }
+}
+
+// Get all todolist counts in a single RPC call (optimized)
+export async function getTodolistCounts(userRole: string | null): Promise<{
+  all: number
+  today: number
+  overdue: number
+  future: number
+  completed: number
+}> {
+  try {
+    const supabase = await createServerSupabaseClient()
+    
+    const { data, error } = await supabase.rpc('get_todolist_counts', {
+      p_user_role: userRole,
+      p_tolerance_hours: TIME_SLOT_TOLERANCE
+    })
+    
+    if (error) {
+      console.error("Error fetching todolist counts:", error)
+      return { all: 0, today: 0, overdue: 0, future: 0, completed: 0 }
+    }
+    
+    const counts = data as { all: number; today: number; overdue: number; future: number; completed: number } | null
+    return counts || { all: 0, today: 0, overdue: 0, future: 0, completed: 0 }
+  } catch (error) {
+    console.error("Error in getTodolistCounts:", error)
+    return { all: 0, today: 0, overdue: 0, future: 0, completed: 0 }
   }
 }
 
