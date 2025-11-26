@@ -298,8 +298,8 @@ export default function AlertsClient({
                           </TableCell>
                           <TableCell>{alert.email}</TableCell>
                           <TableCell>
-                            <Badge variant={alert.todolist?.status === 'completed' ? 'default' : 'secondary'}>
-                              {alert.todolist?.status === 'completed' ? 'Completata' : 'In corso'}
+                            <Badge variant={alert.is_active ? 'default' : 'secondary'}>
+                              {alert.is_active ? 'Attivo' : 'Non attivo'}
                             </Badge>
                           </TableCell>
                           <TableCell>{formatDateForDisplay(alert.created_at)}</TableCell>

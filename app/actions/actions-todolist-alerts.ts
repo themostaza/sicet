@@ -2,15 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase-server"
 import { handlePostgrestError as handleError } from "@/lib/supabase/error"
-import { generateUUID } from "@/lib/utils"
 import type { TablesInsert } from "@/supabase/database.types"
-import { 
-  TIME_SLOT_TOLERANCE, 
-  TIME_SLOT_INTERVALS, 
-  isCustomTimeSlot,
-  minutesToTime,
-  type TimeSlotValue 
-} from "@/lib/validation/todolist-schemas"
 import { sendTodolistOverdueEmail } from "@/app/lib/email"
 
 /** -------------------------------------------------------------------------
@@ -53,89 +45,6 @@ async function getSupabaseClient() {
   return await createServerSupabaseClient()
 }
 
-// Calculate the deadline for a todolist based on its time slot
-function calculateTodolistDeadline(
-  scheduledExecution: string, 
-  timeSlotType: "standard" | "custom",
-  timeSlotStart: number | null,
-  timeSlotEnd: number | null
-): Date {
-  const scheduledDate = new Date(scheduledExecution)
-  
-  if (timeSlotStart !== null && timeSlotEnd !== null) {
-    // Use explicit end time from database
-    const endTime = minutesToTime(timeSlotEnd)
-    const deadline = new Date(scheduledDate)
-    
-    // Add tolerance hours but keep the exact minutes
-    const deadlineHour = endTime.hour + TIME_SLOT_TOLERANCE
-    deadline.setHours(deadlineHour, endTime.minute, 0, 0)
-    
-    // If the deadline goes past midnight, add a day
-    if (deadlineHour >= 24) {
-      deadline.setDate(deadline.getDate() + 1)
-      deadline.setHours(deadlineHour - 24, endTime.minute, 0, 0)
-    }
-    
-    return deadline
-  } else {
-    // Fallback for old data - reconstruct from scheduled_execution
-    const hour = scheduledDate.getHours()
-    let endHour = 23 // Default to end of day
-    let foundSlot = "unknown"
-    
-    // Find the appropriate time slot interval
-    for (const [slotName, interval] of Object.entries(TIME_SLOT_INTERVALS)) {
-      if (hour >= interval.start && hour <= interval.end) {
-        endHour = interval.end + TIME_SLOT_TOLERANCE
-        foundSlot = slotName
-        break
-      }
-    }
-    
-    console.log(`🔄 [DEADLINE] Fallback mode for ${scheduledExecution}: found slot "${foundSlot}", end hour: ${endHour}`)
-    
-    const deadline = new Date(scheduledDate)
-    deadline.setHours(endHour, 0, 0, 0)
-    
-    // If the deadline goes past midnight, add a day
-    if (deadline.getHours() < endHour) {
-      deadline.setDate(deadline.getDate() + 1)
-    }
-    
-    return deadline
-  }
-}
-
-// Check if a todolist is overdue
-function isTodolistOverdue(todolist: {
-  scheduled_execution: string
-  time_slot_type: "standard" | "custom"
-  time_slot_start: number | null
-  time_slot_end: number | null
-}): boolean {
-  const deadline = calculateTodolistDeadline(
-    todolist.scheduled_execution,
-    todolist.time_slot_type,
-    todolist.time_slot_start,
-    todolist.time_slot_end
-  )
-  
-  const now = new Date()
-  const isOverdue = now > deadline
-  
-  // Only log if actually overdue to reduce noise
-  if (isOverdue) {
-    console.log(`⚖️ [OVERDUE-CHECK] Found overdue todolist:`, {
-      scheduledExecution: todolist.scheduled_execution,
-      now: now.toISOString(),
-      deadline: deadline.toISOString(),
-      hoursOverdue: Math.round((now.getTime() - deadline.getTime()) / (1000 * 60 * 60))
-    })
-  }
-  
-  return isOverdue
-}
 
 // Check if all tasks in a todolist are completed
 function areAllTasksCompleted(tasks: OverdueTodolist['tasks']): boolean {
@@ -151,18 +60,14 @@ export async function getOverdueTodolists(): Promise<OverdueTodolist[]> {
   console.log('🔍 [OVERDUE] Starting getOverdueTodolists analysis...')
   const supabase = await getSupabaseClient()
   
-  // Calculate the time window: end_day_time between (NOW - 6h) and (NOW - 3h)
-  const currentTime = new Date()
-  const windowEnd = new Date(currentTime.getTime() - (TIME_SLOT_TOLERANCE * 60 * 60 * 1000)) // NOW - 3h
-  const windowStart = new Date(currentTime.getTime() - (6 * 60 * 60 * 1000)) // NOW - 6h
+  const now = new Date().toISOString()
   
-  console.log('⏰ [OVERDUE] Time window for filtering:', {
-    now: currentTime.toISOString(),
-    windowStart: windowStart.toISOString(),
-    windowEnd: windowEnd.toISOString(),
-    toleranceHours: TIME_SLOT_TOLERANCE
+  console.log('⏰ [OVERDUE] Searching for overdue todolists:', {
+    now: now,
+    criteria: 'end_day_time < NOW() AND completion_date IS NULL AND status = pending'
   })
   
+  // Simplified query: if end_day_time is past and completion_date is null, it's overdue
   const { data, error } = await supabase
     .from("todolist")
     .select(`
@@ -174,13 +79,15 @@ export async function getOverdueTodolists(): Promise<OverdueTodolist[]> {
       time_slot_end,
       status,
       end_day_time,
+      completion_date,
       device:devices (
         name,
         location
       ),
-      alert:todolist_alert (
+      alert:todolist_alert!inner (
         id,
-        email
+        email,
+        is_active
       ),
       tasks (
         id,
@@ -193,8 +100,9 @@ export async function getOverdueTodolists(): Promise<OverdueTodolist[]> {
       )
     `)
     .eq("status", "pending")
-    .gte("end_day_time", windowStart.toISOString())
-    .lte("end_day_time", windowEnd.toISOString())
+    .is("completion_date", null)
+    .lt("end_day_time", now)
+    .eq("alert.is_active", true)
 
   if (error) handleError(error)
 
@@ -203,53 +111,28 @@ export async function getOverdueTodolists(): Promise<OverdueTodolist[]> {
     return []
   }
 
-  console.log(`📊 [OVERDUE] Found ${data.length} pending todolists in time window (pre-filtered by DB)`)
+  console.log(`📊 [OVERDUE] Found ${data.length} overdue todolists with alerts configured`)
 
-  // Log details about filtering process
-  const withAlerts = data.filter(t => t.alert && t.alert.length > 0)
-  console.log(`📧 [OVERDUE] ${withAlerts.length} have alerts configured`)
-
-  const withValidTimeSlot = withAlerts.filter(t => 
-    t.time_slot_type === "standard" || t.time_slot_type === "custom"
-  )
-  console.log(`⏰ [OVERDUE] ${withValidTimeSlot.length} have valid time slot type`)
-
-  // Since we already filtered by end_day_time in DB, all these should be potentially overdue
-  console.log(`🔍 [OVERDUE] Processing ${withValidTimeSlot.length} todolists (already filtered by DB time window)`)
-  
-  const overdueResults = withValidTimeSlot.map(todolist => {
-    const isOverdue = isTodolistOverdue({
-      ...todolist,
-      time_slot_type: todolist.time_slot_type as "standard" | "custom"
+  // Filter for todolists that have alerts and incomplete tasks
+  const finalResults = data
+    .filter(todolist => {
+      const hasAlert = todolist.alert && todolist.alert.length > 0
+      const allTasksCompleted = areAllTasksCompleted(todolist.tasks)
+      
+      if (hasAlert && !allTasksCompleted) {
+        console.log(`📝 [OVERDUE] Todolist ${todolist.id}:`, {
+          device: todolist.device?.name || 'Unknown',
+          scheduledExecution: todolist.scheduled_execution,
+          endDayTime: todolist.end_day_time,
+          totalTasks: todolist.tasks.length,
+          completedTasks: todolist.tasks.filter(t => t.status === 'completed').length,
+          alertEmail: todolist.alert?.[0]?.email || 'No email'
+        })
+        return true
+      }
+      return false
     })
-    
-    const allTasksCompleted = areAllTasksCompleted(todolist.tasks)
-    const shouldProcess = isOverdue && !allTasksCompleted
-    
-    // Only log details for todolists that actually matter
-    if (shouldProcess || isOverdue) {
-      console.log(`📝 [OVERDUE] Todolist ${todolist.id}:`, {
-        device: todolist.device?.name || 'Unknown',
-        scheduledExecution: todolist.scheduled_execution,
-        timeSlotType: todolist.time_slot_type,
-        timeSlotStart: todolist.time_slot_start,
-        timeSlotEnd: todolist.time_slot_end,
-        isOverdue: isOverdue,
-        totalTasks: todolist.tasks.length,
-        completedTasks: todolist.tasks.filter(t => t.status === 'completed').length,
-        allTasksCompleted: allTasksCompleted,
-        shouldProcess: shouldProcess,
-        alertEmail: todolist.alert?.[0]?.email || 'No email'
-      })
-    }
-    
-    return { todolist, shouldProcess }
-  })
-
-  // Filter for overdue todolists with alerts and incomplete tasks
-  const finalResults = overdueResults
-    .filter(({ shouldProcess }) => shouldProcess)
-    .map(({ todolist }) => ({
+    .map(todolist => ({
       ...todolist,
       time_slot_type: todolist.time_slot_type as "standard" | "custom",
       alert: todolist.alert[0] // Take the first alert since it's a one-to-one relationship
@@ -294,7 +177,6 @@ export async function sendTodolistOverdueNotification(todolist: OverdueTodolist)
 
     // Log the successful notification
     const logData: TablesInsert<"todolist_alert_logs"> = {
-      id: generateUUID(),
       todolist_id: todolist.id,
       alert_id: todolist.alert.id,
       email: todolist.alert.email,
@@ -313,23 +195,23 @@ export async function sendTodolistOverdueNotification(todolist: OverdueTodolist)
       console.log(`✅ [EMAIL] Successfully logged notification to database`)
     }
 
-    // Try to disable the alert after successfully sending the email
-    console.log(`🗑️ [EMAIL] Deleting alert to prevent duplicates...`)
+    // Disable the alert after successfully sending the email
+    console.log(`🔒 [EMAIL] Disabling alert to prevent duplicates...`)
     try {
-      // For now, delete the alert after sending the email
-      // This will prevent the alert from being triggered again
-      const { error: deleteError } = await supabase
+      // Set is_active to false instead of deleting
+      // This will prevent the alert from being triggered again while keeping the record
+      const { error: updateError } = await supabase
         .from("todolist_alert")
-        .delete()
+        .update({ is_active: false })
         .eq("id", todolist.alert.id)
 
-      if (deleteError) {
-        console.error("❌ [EMAIL] Error deleting todolist alert:", deleteError)
+      if (updateError) {
+        console.error("❌ [EMAIL] Error disabling todolist alert:", updateError)
       } else {
-        console.log(`✅ [EMAIL] Alert deleted successfully for todolist ${todolist.id}`)
+        console.log(`✅ [EMAIL] Alert disabled successfully for todolist ${todolist.id}`)
       }
     } catch (disableError) {
-      console.error("❌ [EMAIL] Error in alert delete logic:", disableError)
+      console.error("❌ [EMAIL] Error in alert disable logic:", disableError)
     }
 
   } catch (error) {
@@ -339,7 +221,6 @@ export async function sendTodolistOverdueNotification(todolist: OverdueTodolist)
     // Log the failed notification
     console.log(`📊 [EMAIL] Logging error notification to database...`)
     const logData: TablesInsert<"todolist_alert_logs"> = {
-      id: generateUUID(),
       todolist_id: todolist.id,
       alert_id: todolist.alert.id,
       email: todolist.alert.email,

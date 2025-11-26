@@ -207,8 +207,21 @@ export function DateSelectionSheet() {
     }
   }
 
+  const handleSheetOpenChange = (open: boolean) => {
+    // Se si sta cercando di chiudere la sidebar
+    if (!open) {
+      // Verifica se il toggle è attivo ma l'email non è compilata
+      if (alertEnabled && (!email || email.trim() === '')) {
+        // Non permettere la chiusura
+        return
+      }
+    }
+    // Altrimenti permettere la chiusura
+    setIsDateSheetOpen(open)
+  }
+
   return (
-    <Sheet open={isDateSheetOpen} onOpenChange={setIsDateSheetOpen}>
+    <Sheet open={isDateSheetOpen} onOpenChange={handleSheetOpenChange}>
       <SheetContent className="w-full sm:max-w-5xl overflow-y-auto">
         <SheetHeader className="mb-6">
           <SheetTitle>Seleziona date e orari</SheetTitle>
@@ -219,20 +232,22 @@ export function DateSelectionSheet() {
 
         <div className="space-y-6">
           {/* -------- Notifiche -------- */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+          <div className="space-y-4">
             <div className="flex items-center space-x-2">
               <Switch
                 id="alertEnabled"
                 checked={alertEnabled}
                 onCheckedChange={setAlertEnabled}
               />
-              <Label htmlFor="alertEnabled">Abilita notifiche</Label>
+              <Label htmlFor="alertEnabled">
+                {alertEnabled ? "Notifiche mail abilitate" : "Notifiche mail disabilitate"}
+              </Label>
             </div>
             
             {alertEnabled && (
-              <div>
+              <div className="max-w-md">
                 <Label htmlFor="email" className="text-sm text-muted-foreground mb-1 block">
-                  Email per notifiche
+                  Email per notifiche <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   id="email"
@@ -240,13 +255,19 @@ export function DateSelectionSheet() {
                   placeholder="Inserisci email per le notifiche"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  className={alertEnabled && (!email || email.trim() === '') ? "border-destructive" : ""}
                 />
+                {alertEnabled && (!email || email.trim() === '') && (
+                  <p className="text-xs text-destructive mt-1">
+                    L'email è obbligatoria quando le notifiche sono abilitate
+                  </p>
+                )}
               </div>
             )}
           </div>
 
           {/* -------- Categoria Todolist -------- */}
-          <div>
+          <div className="max-w-md">
             <Label htmlFor="category" className="mb-2 block">
               Categoria Todolist
             </Label>

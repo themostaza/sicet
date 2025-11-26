@@ -64,6 +64,7 @@ async function getKpiAlerts(): Promise<KpiAlert[]> {
         )
       )
     `)
+    .eq('is_active', true)
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -95,6 +96,7 @@ async function getTodolistAlerts(): Promise<TodolistAlert[]> {
         )
       )
     `)
+    .eq('is_active', true)
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -187,12 +189,10 @@ function formatTimeSlot(todolist: any) {
 
 export default async function AlertsPage() {
   const client = await supabase();
-  // Fetch KPI alerts
-  const kpiAlertsRaw = await getKpiAlerts()
-  const kpiAlerts = kpiAlertsRaw.filter(alert => alert.todolist?.status !== 'completed')
-  // Fetch todolist alerts
-  const todolistAlertsRaw = await getTodolistAlerts()
-  const todolistAlerts = todolistAlertsRaw.filter(alert => alert.todolist?.status !== 'completed')
+  // Fetch KPI alerts (only active ones)
+  const kpiAlerts = await getKpiAlerts()
+  // Fetch todolist alerts (only active ones)
+  const todolistAlerts = await getTodolistAlerts()
 
   return (
     <AlertsClient
