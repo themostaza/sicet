@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     
     // Send a very simple test email
     const { data, error } = await resend.emails.send({
-      from: 'SICET Alerts <onboarding@resend.dev>',
+      from: 'SICET Alerts <alerts@sicetenergia.it>',
       to: [email],
       subject: 'Test SICET - Resend',
       html: '<p>Questo è un test di Resend per SICET.</p>',

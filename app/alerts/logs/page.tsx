@@ -87,13 +87,13 @@ export default async function AlertLogsPage() {
 
   return (
     <div className="container mx-auto py-6">
-      <h1 className="text-2xl font-bold mb-6">Storico Alert</h1>
+      <h1 className="text-2xl font-bold mb-6">Log Alert</h1>
       
       <Tabs defaultValue="kpi-logs" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="w-fit">
           <TabsTrigger value="kpi-logs" className="flex items-center gap-2">
             <AlertCircle className="h-4 w-4" />
-            Log Alert KPI
+            Log Alert Controlli
           </TabsTrigger>
           <TabsTrigger value="todolist-logs" className="flex items-center gap-2">
             <CheckSquare className="h-4 w-4" />
@@ -106,7 +106,7 @@ export default async function AlertLogsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <AlertCircle className="h-5 w-5" />
-                Storico Alert KPI
+                Log Alert Controlli
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -166,7 +166,7 @@ export default async function AlertLogsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CheckSquare className="h-5 w-5" />
-                Storico Alert Todolist
+                Log Alert Todolist
               </CardTitle>
             </CardHeader>
             <CardContent>

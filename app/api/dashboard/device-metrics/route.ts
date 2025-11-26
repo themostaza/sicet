@@ -101,8 +101,8 @@ export async function GET(request: NextRequest) {
           !isTodolistExpired(
             t.scheduled_execution,
             (t.time_slot_type === "standard" || t.time_slot_type === "custom") ? t.time_slot_type as "standard" | "custom" : undefined,
-            t.time_slot_end,
-            t.time_slot_start
+            t.time_slot_end !== null ? Number(t.time_slot_end) : null,
+            t.time_slot_start !== null ? Number(t.time_slot_start) : null
           )
         ).length
         const overdue = todolistsForDevice.filter(t =>
@@ -110,8 +110,8 @@ export async function GET(request: NextRequest) {
           isTodolistExpired(
             t.scheduled_execution,
             (t.time_slot_type === "standard" || t.time_slot_type === "custom") ? t.time_slot_type as "standard" | "custom" : undefined,
-            t.time_slot_end,
-            t.time_slot_start
+            t.time_slot_end !== null ? Number(t.time_slot_end) : null,
+            t.time_slot_start !== null ? Number(t.time_slot_start) : null
           )
         ).length
         todolistMetricsByDevice[deviceId] = { total, completed, pending, overdue }

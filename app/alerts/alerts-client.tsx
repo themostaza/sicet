@@ -8,8 +8,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { format } from "date-fns"
 import { it } from "date-fns/locale"
 import { AlertCircle, CheckSquare, ArrowUp, ArrowDown } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader as DialogHeaderUI, DialogTitle as DialogTitleUI, DialogTrigger } from "@/components/ui/dialog"
 import { AlertActions } from "./alert-actions"
 import { AlertDelete } from "./alert-delete"
 import { toast } from "@/components/ui/use-toast"
@@ -89,14 +87,10 @@ function formatTimeSlot(todolist: any) {
 
 export default function AlertsClient({
   kpiAlerts,
-  kpiAlertsConsumed,
-  todolistAlerts,
-  todolistAlertsConsumed
+  todolistAlerts
 }: {
   kpiAlerts: any[]
-  kpiAlertsConsumed: any[]
   todolistAlerts: any[]
-  todolistAlertsConsumed: any[]
 }) {
   const [sortColumn, setSortColumn] = useState<string>("created_at")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
@@ -151,9 +145,7 @@ export default function AlertsClient({
   }
 
   const sortedKpiAlerts = sortData(kpiAlerts, sortColumn, sortDirection)
-  const sortedKpiAlertsConsumed = sortData(kpiAlertsConsumed, sortColumn, sortDirection)
   const sortedTodolistAlerts = sortData(todolistAlerts, sortColumn, sortDirection)
-  const sortedTodolistAlertsConsumed = sortData(todolistAlertsConsumed, sortColumn, sortDirection)
 
   const handleSort = (col: string) => {
     if (sortColumn === col) {
@@ -168,189 +160,12 @@ export default function AlertsClient({
     <div className="container mx-auto py-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Gestione Alert</h1>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button variant="outline" className="text-base font-medium">
-              Alert consumati (todolist completate)
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-5xl w-full">
-            <DialogHeaderUI>
-              <DialogTitleUI>Alert consumati (todolist completate)</DialogTitleUI>
-            </DialogHeaderUI>
-            <Tabs defaultValue="kpi-alerts-consumed" className="w-full mt-4">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="kpi-alerts-consumed" className="flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4" />
-                  Alert Controllo consumati
-                </TabsTrigger>
-                <TabsTrigger value="todolist-alerts-consumed" className="flex items-center gap-2">
-                  <CheckSquare className="h-4 w-4" />
-                  Alert Todolist consumati
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent value="kpi-alerts-consumed" className="mt-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <AlertCircle className="h-5 w-5" />
-                      Alert Controllo consumati
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {sortedKpiAlertsConsumed && sortedKpiAlertsConsumed.length > 0 ? (
-                      <div className="rounded-md border">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead onClick={() => handleSort("kpi_name")} className="cursor-pointer select-none">
-                                Controllo
-                                {sortColumn === "kpi_name" && (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />)}
-                              </TableHead>
-                              <TableHead onClick={() => handleSort("device_name")} className="cursor-pointer select-none">
-                                Punto di controllo
-                                {sortColumn === "device_name" && (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />)}
-                              </TableHead>
-                              <TableHead onClick={() => handleSort("email")} className="cursor-pointer select-none">
-                                Email
-                                {sortColumn === "email" && (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />)}
-                              </TableHead>
-                              <TableHead>Condizioni</TableHead>
-                              <TableHead onClick={() => handleSort("created_at")}
-                                className="cursor-pointer select-none">
-                                Creato
-                                {sortColumn === "created_at" && (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />)}
-                              </TableHead>
-                              <TableHead>Azioni</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {sortedKpiAlertsConsumed.map((alert) => (
-                              <TableRow key={alert.id}>
-                                <TableCell>{alert.kpis?.name || 'Controllo sconosciuto'}</TableCell>
-                                <TableCell>{alert.todolist?.devices?.name || 'Punto di controllo sconosciuto'}</TableCell>
-                                <TableCell>{alert.email}</TableCell>
-                                <TableCell>{renderKpiConditions(alert)}</TableCell>
-                                <TableCell>{formatDateForDisplay(alert.created_at)}</TableCell>
-                                <TableCell>
-                                  <AlertDelete 
-                                    alert={alert} 
-                                    onDelete={async () => { toast({ title: "Eliminato" }); return Promise.resolve(); }} 
-                                    confirmMessage="Sei sicuro di voler eliminare questo alert Controllo?" 
-                                    description={`L'alert per il Controllo "${alert.kpis?.name}" sarà eliminato definitivamente.`}
-                                  />
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <AlertCircle className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                        <p>Nessun alert Controllo consumato</p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-              <TabsContent value="todolist-alerts-consumed" className="mt-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <CheckSquare className="h-5 w-5" />
-                      Alert Todolist consumati
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {sortedTodolistAlertsConsumed && sortedTodolistAlertsConsumed.length > 0 ? (
-                      <div className="rounded-md border">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead onClick={() => handleSort("device_name")} className="cursor-pointer select-none">
-                                Punto di controllo
-                                {sortColumn === "device_name" && (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />)}
-                              </TableHead>
-                              <TableHead onClick={() => handleSort("scheduled_execution")}
-                                className="cursor-pointer select-none">
-                                Data Programmata
-                                {sortColumn === "scheduled_execution" && (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />)}
-                              </TableHead>
-                              <TableHead onClick={() => handleSort("time_slot")}
-                                className="cursor-pointer select-none">
-                                Fascia Oraria
-                                {sortColumn === "time_slot" && (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />)}
-                              </TableHead>
-                              <TableHead onClick={() => handleSort("email")}
-                                className="cursor-pointer select-none">
-                                Email
-                                {sortColumn === "email" && (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />)}
-                              </TableHead>
-                              <TableHead onClick={() => handleSort("status")}
-                                className="cursor-pointer select-none">
-                                Stato
-                                {sortColumn === "status" && (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />)}
-                              </TableHead>
-                              <TableHead onClick={() => handleSort("created_at")}
-                                className="cursor-pointer select-none">
-                                Creato
-                                {sortColumn === "created_at" && (sortDirection === "asc" ? <ArrowUp className="inline ml-1 w-3 h-3" /> : <ArrowDown className="inline ml-1 w-3 h-3" />)}
-                              </TableHead>
-                              <TableHead>Azioni</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {sortedTodolistAlertsConsumed.map((alert) => (
-                              <TableRow key={alert.id}>
-                                <TableCell>{alert.todolist?.devices?.name || 'Punto di controllo sconosciuto'}</TableCell>
-                                <TableCell>
-                                  {alert.todolist?.scheduled_execution 
-                                    ? format(new Date(alert.todolist.scheduled_execution), 'dd/MM/yyyy', { locale: it })
-                                    : 'N/A'
-                                  }
-                                </TableCell>
-                                <TableCell>
-                                  {alert.todolist ? formatTimeSlot(alert.todolist) : 'N/A'}
-                                </TableCell>
-                                <TableCell>{alert.email}</TableCell>
-                                <TableCell>
-                                  <Badge variant={alert.todolist?.status === 'completed' ? 'default' : 'secondary'}>
-                                    {alert.todolist?.status === 'completed' ? 'Completata' : 'In corso'}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>{formatDateForDisplay(alert.created_at)}</TableCell>
-                                <TableCell>
-                                  <AlertDelete 
-                                    alert={alert} 
-                                    onDelete={async () => { toast({ title: "Eliminato" }); return Promise.resolve(); }} 
-                                    confirmMessage="Sei sicuro di voler eliminare questo alert Todolist?" 
-                                    description={`L'alert per la todolist del punto di controllo "${alert.todolist?.devices?.name}" sarà eliminato definitivamente.`}
-                                  />
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <CheckSquare className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                        <p>Nessun alert todolist consumato</p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
-          </DialogContent>
-        </Dialog>
       </div>
       <Tabs defaultValue="kpi-alerts" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="w-fit">
           <TabsTrigger value="kpi-alerts" className="flex items-center gap-2">
             <AlertCircle className="h-4 w-4" />
-            Alert Controllo
+            Alert Controlli
           </TabsTrigger>
           <TabsTrigger value="todolist-alerts" className="flex items-center gap-2">
             <CheckSquare className="h-4 w-4" />
@@ -362,7 +177,7 @@ export default function AlertsClient({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <AlertCircle className="h-5 w-5" />
-                Alert Controllo Attivi
+                Alert Controlli Attivi
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -404,7 +219,7 @@ export default function AlertsClient({
                             <AlertDelete 
                               alert={alert} 
                               onDelete={async () => { toast({ title: "Eliminato" }); return Promise.resolve(); }} 
-                              confirmMessage="Sei sicuro di voler eliminare questo alert Controllo?" 
+                              confirmMessage="Sei sicuro di voler eliminare questo alert Controlli?" 
                               description={`L'alert per il Controllo "${alert.kpis?.name}" sarà eliminato definitivamente.`}
                             />
                           </TableCell>
@@ -416,7 +231,7 @@ export default function AlertsClient({
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   <AlertCircle className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                  <p>Nessun alert Controllo attivo</p>
+                  <p>Nessun alert Controlli attivo</p>
                 </div>
               )}
             </CardContent>

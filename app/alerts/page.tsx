@@ -190,18 +190,14 @@ export default async function AlertsPage() {
   // Fetch KPI alerts
   const kpiAlertsRaw = await getKpiAlerts()
   const kpiAlerts = kpiAlertsRaw.filter(alert => alert.todolist?.status !== 'completed')
-  const kpiAlertsConsumed = kpiAlertsRaw.filter(alert => alert.todolist?.status === 'completed')
   // Fetch todolist alerts
   const todolistAlertsRaw = await getTodolistAlerts()
   const todolistAlerts = todolistAlertsRaw.filter(alert => alert.todolist?.status !== 'completed')
-  const todolistAlertsConsumed = todolistAlertsRaw.filter(alert => alert.todolist?.status === 'completed')
 
   return (
     <AlertsClient
       kpiAlerts={kpiAlerts}
-      kpiAlertsConsumed={kpiAlertsConsumed}
       todolistAlerts={todolistAlerts}
-      todolistAlertsConsumed={todolistAlertsConsumed}
     />
   )
 } 

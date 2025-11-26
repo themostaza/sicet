@@ -103,7 +103,7 @@ export async function sendAlertEmail(to: string, data: AlertEmailData) {
 
   try {
     const response = await resend.emails.send({
-      from: 'Sicet <onboarding@resend.dev>',
+      from: 'Sicet <alerts@sicetenergia.it>',
       to,
       subject,
       html,
@@ -188,7 +188,7 @@ export async function sendTodolistOverdueEmail(data: TodolistOverdueEmailData): 
 
   try {    
     await resend.emails.send({
-      from: 'SICET Alerts <onboarding@resend.dev>',
+      from: 'SICET Alerts <alerts@sicetenergia.it>',
       to: [email],
       subject: `⚠️ Todolist Scaduta: ${deviceName}`,
       html: htmlContent,
