@@ -146,10 +146,23 @@ export function HierarchicalReportSummary() {
     const available = availableKpiFields.filter(f => !usedFieldIds.has(f.fieldId))
     
     if (controlSearchQuery) {
-      return available.filter(f => 
-        f.fieldName.toLowerCase().includes(controlSearchQuery.toLowerCase()) ||
-        f.kpiName.toLowerCase().includes(controlSearchQuery.toLowerCase())
+      const searchLower = controlSearchQuery.toLowerCase()
+      const filtered = available.filter(f => 
+        f.fieldName.toLowerCase().includes(searchLower) ||
+        f.kpiName.toLowerCase().includes(searchLower)
       )
+      
+      // Ordina dando priorità ai match sul kpiName
+      return filtered.sort((a, b) => {
+        const aKpiMatch = a.kpiName.toLowerCase().includes(searchLower)
+        const bKpiMatch = b.kpiName.toLowerCase().includes(searchLower)
+        
+        // Se entrambi matchano sul kpiName o nessuno dei due, mantieni l'ordine originale
+        if (aKpiMatch === bKpiMatch) return 0
+        
+        // Dai priorità a chi matcha sul kpiName
+        return aKpiMatch ? -1 : 1
+      })
     }
     
     return available
