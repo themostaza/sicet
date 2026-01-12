@@ -552,7 +552,7 @@ Considerazioni per dati storici:
 - `kpi_alert_logs`: Idem
 - `todolist_alert_logs`: Idem
 
-### Indici Consigliati
+### Indici Consigliati.
 
 ```sql
 -- Per query frequenti
