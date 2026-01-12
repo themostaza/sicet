@@ -214,6 +214,39 @@ export default function TabOperatori({ dateRange, setDateRange, selectedRole, se
     '#2563eb', '#10b981', '#f59e42', '#ef4444', '#a21caf', '#eab308', '#0ea5e9', '#6366f1', '#f43f5e', '#14b8a6',
   ];
 
+  // Custom Tooltip per il grafico
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload || payload.length === 0) return null;
+
+    // Filtra e ordina per valore (dal più alto al più basso), escludendo valori 0
+    const sortedPayload = [...payload]
+      .filter((entry: any) => entry.value > 0)
+      .sort((a: any, b: any) => b.value - a.value);
+
+    if (sortedPayload.length === 0) return null;
+
+    return (
+      <div className="bg-white border border-gray-300 rounded shadow-lg p-2" style={{ fontSize: '11px' }}>
+        <p className="font-semibold mb-1" style={{ fontSize: '11px' }}>
+          {formatXAxisLabel(label)}
+        </p>
+        <div className="space-y-0.5">
+          {sortedPayload.map((entry: any, index: number) => (
+            <div key={index} className="flex items-center gap-1.5">
+              <div 
+                className="w-2 h-2 rounded-full" 
+                style={{ backgroundColor: entry.color }}
+              />
+              <span className="text-gray-700" style={{ fontSize: '10px' }}>
+                {entry.name}: <span className="font-semibold">{entry.value}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <>
       <div className="flex flex-col lg:flex-row gap-8">
@@ -372,9 +405,7 @@ export default function TabOperatori({ dateRange, setDateRange, selectedRole, se
                           tick={{ fontSize: 12 }}
                         />
                         <YAxis allowDecimals={false} />
-                        <Tooltip 
-                          labelFormatter={(label) => `Data: ${formatXAxisLabel(label)}`}
-                        />
+                        <Tooltip content={<CustomTooltip />} />
                         <Legend />
                         {operatori.map((op, idx) => (
                           <Line

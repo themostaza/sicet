@@ -698,6 +698,7 @@ export default function TodolistClient({
                 <input
                   type="file"
                   accept="image/*"
+                  capture="environment"
                   onChange={(e) => {
                     const file = e.target.files?.[0]
                     if (file) {
@@ -720,7 +721,7 @@ export default function TodolistClient({
                   ) : (
                     <>
                       <Upload className="h-8 w-8 text-gray-400 mb-2" />
-                      <span className="text-sm text-gray-500">Clicca per caricare un'immagine</span>
+                      <span className="text-sm text-gray-500">Scatta una foto</span>
                     </>
                   )}
                 </label>

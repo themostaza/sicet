@@ -1120,10 +1120,11 @@ export async function getTodolistsWithPagination(params: {
         orderAsc = true
       }
     }
-    // For device_name and count, we need to sort after fetching (not supported nativamente da supabase su join/aggregati)
+    // For device_name, count, and time_slot, we need to sort after fetching (not supported nativamente da supabase su join/aggregati)
     let data, count, error
-    if (orderCol === "device_name" || orderCol === "count") {
+    if (orderCol === "device_name" || orderCol === "count" || orderCol === "time_slot") {
       // Fallback: order by scheduled_execution for DB, ensure stable pagination with secondary id order
+      // Client-side sorting will be applied after
       ({ data, count, error } = await query
         .order("scheduled_execution", { ascending: false })
         .order("id", { ascending: false })
@@ -1248,7 +1249,7 @@ export async function getTodolistsWithPagination(params: {
     }
     
     // Per operatore non è più necessario un post-filtro: la validità è gestita direttamente a livello DB con end_day_time + tolleranza
-    // Applico ordinamento lato server per device_name e count (non supportato da supabase)
+    // Applico ordinamento lato server per device_name, count e time_slot (non supportato da supabase)
     let finalTodolists = filteredTodolists
     if (orderCol === "device_name") {
       finalTodolists = [...filteredTodolists].sort((a, b) => {
@@ -1264,6 +1265,17 @@ export async function getTodolistsWithPagination(params: {
           return a.count - b.count
         } else {
           return b.count - a.count
+        }
+      })
+    } else if (orderCol === "time_slot") {
+      // Ordina per fascia oraria usando time_slot_start (minuti dall'inizio del giorno)
+      finalTodolists = [...filteredTodolists].sort((a, b) => {
+        const aStart = a.time_slot_start ?? 0
+        const bStart = b.time_slot_start ?? 0
+        if (orderAsc) {
+          return aStart - bStart
+        } else {
+          return bStart - aStart
         }
       })
     }

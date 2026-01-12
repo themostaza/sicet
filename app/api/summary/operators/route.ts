@@ -3,8 +3,6 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 const validRoles = ['operator', 'admin', 'referrer', 'all'];
 
-type Role = 'operator' | 'admin' | 'referrer';
-
 export async function GET(req: Request) {
   const supabase = await createServerSupabaseClient();
   const { searchParams } = new URL(req.url);
@@ -13,59 +11,33 @@ export async function GET(req: Request) {
   let role = searchParams.get('role') || 'operator';
   if (!validRoles.includes(role)) role = 'operator';
 
-  // Prendi tutti i profili, eventualmente filtra per ruolo
-  let profileQuery = supabase
-    .from('profiles')
-    .select('id, email, role, auth_id');
-  if (role !== 'all') {
-    profileQuery = profileQuery.eq('role', role as Role);
-  }
-  const { data: profiles, error: profileError } = await profileQuery;
-
-  if (profileError) {
-    return NextResponse.json({ error: profileError.message }, { status: 500 });
+  // Prepara la data "to" con fine giornata
+  let toDate: string | null = null;
+  if (to) {
+    const d = new Date(to);
+    d.setHours(23, 59, 59, 999);
+    toDate = d.toISOString();
   }
 
-  // Per ogni profilo, conta le todolist completate nell'intervallo usando la tabella todolist
-  const results = [];
-  for (const profile of profiles || []) {
-    // Salta profili senza auth_id (utenti non ancora attivati)
-    if (!profile.auth_id) {
-      results.push({
-        id: profile.id,
-        email: profile.email,
-        role: profile.role,
-        completed_todolists: 0,
-      });
-      continue;
-    }
+  // Usa la funzione RPC ottimizzata (singola query invece di N query)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)('get_operators_completion_counts', {
+    p_from: from || null,
+    p_to: toDate,
+    p_role: role
+  });
 
-    let query = supabase
-      .from('todolist')
-      .select('id', { count: 'exact', head: true })
-      .eq('completed_by', profile.auth_id)
-      .eq('status', 'completed');
-    
-    // Filtra per completion_date nell'intervallo specificato
-    if (from) query = query.gte('completion_date', from);
-    if (to) {
-      const toDate = new Date(to);
-      toDate.setHours(23, 59, 59, 999);
-      query = query.lte('completion_date', toDate.toISOString());
-    }
-    
-    const { count, error: countError } = await query;
-    if (countError) {
-      return NextResponse.json({ error: countError.message }, { status: 500 });
-    }
-    
-    results.push({
-      id: profile.id,
-      email: profile.email,
-      role: profile.role,
-      completed_todolists: count || 0,
-    });
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ operators: results });
-} 
+  // Mappa i risultati nel formato atteso dal frontend
+  const operators = (data || []).map((row: { profile_id: string; email: string; role: string; completed_todolists: number }) => ({
+    id: row.profile_id,
+    email: row.email,
+    role: row.role,
+    completed_todolists: row.completed_todolists
+  }));
+
+  return NextResponse.json({ operators });
+}

@@ -94,7 +94,18 @@ export default function ActivityDashboard() {
     from: undefined,
     to: undefined,
   });
-  const [users, setUsers] = useState<Array<{ id: string; email: string; role: string }>>([]);
+
+  // Imposta il range di default (ultimi 3 giorni) solo lato client per evitare hydration mismatch
+  useEffect(() => {
+    const today = new Date();
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(today.getDate() - 3);
+    setDateRange({
+      from: threeDaysAgo,
+      to: today,
+    });
+  }, []);
+  const [users, setUsers] = useState<Array<{ id: string; email: string; role: string; auth_id: string | null }>>([]);
   const [activeTab, setActiveTab] = useState<'operatori' | 'attivita'>('operatori');
 
   // Stato per tab operatori
@@ -111,7 +122,7 @@ export default function ActivityDashboard() {
   // Carica utenti all'avvio
   useEffect(() => {
     async function loadUsers() {
-      const { data: profiles } = await supabase.from('profiles').select('id, email, role');
+      const { data: profiles } = await supabase.from('profiles').select('id, email, role, auth_id');
       setUsers(profiles || []);
     }
     loadUsers();
@@ -163,7 +174,8 @@ export default function ActivityDashboard() {
 
         // Combina i dati
         const activities = activitiesData?.map(activity => {
-          const profile = users.find(p => p.id === activity.user_id);
+          // Match usando auth_id perché user_activities.user_id fa riferimento a auth.users(id)
+          const profile = users.find(p => p.auth_id === activity.user_id);
           return {
             ...activity,
             profile: profile ? {

@@ -12,6 +12,20 @@ import { cn } from '@/lib/utils';
 import { CalendarIcon } from 'lucide-react';
 import React from 'react';
 
+const simplifiedActionTypeMap: Record<string, string> = {
+  create_device: 'create',
+  create_kpi: 'create',
+  create_todolist: 'create',
+  complete_task: 'update',
+  complete_todolist: 'update',
+  update_device: 'update',
+  update_kpi: 'update',
+  update_todolist: 'update',
+  delete_device: 'delete',
+  delete_kpi: 'delete',
+  delete_todolist: 'delete'
+};
+
 const simplifiedActionLabels: Record<string, string> = {
   create: 'Creazione',
   update: 'Modifica',
@@ -24,8 +38,8 @@ const simplifiedActionColors: Record<string, string> = {
 };
 const entityTypeLabels: Record<string, string> = {
   device: 'Punto di Controllo',
-  kpi: 'Device',
-  todolist: 'Todo',
+  kpi: 'Controllo',
+  todolist: 'Todolist',
   task: 'Task',
 };
 const getMetadataLabel = (key: string): string => {
@@ -227,15 +241,17 @@ export default function TabAttivita({
                   Nessuna attività trovata
                 </div>
               ) : (
-                filteredActivities.map((activity) => (
+                filteredActivities.map((activity) => {
+                  const simplifiedAction = simplifiedActionTypeMap[activity.action_type] || 'update';
+                  return (
                   <div key={activity.id} className="flex gap-4 p-4 rounded-lg border bg-card">
                     <div className="flex-1 space-y-1">
                       <div className="flex items-center gap-2">
                         <Badge 
                           variant="outline" 
-                          className={simplifiedActionColors[activity.action_type]}
+                          className={simplifiedActionColors[simplifiedAction]}
                         >
-                          {simplifiedActionLabels[activity.action_type]}
+                          {simplifiedActionLabels[simplifiedAction]}
                         </Badge>
                         <span className="text-sm text-muted-foreground">
                           {entityTypeLabels[activity.entity_type]}
@@ -243,9 +259,13 @@ export default function TabAttivita({
                       </div>
                       <div className="flex items-center gap-2 text-sm">
                         <User className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">{activity.profile?.email}</span>
-                        <span className="text-muted-foreground">•</span>
-                        <span className="text-muted-foreground">{activity.profile?.role}</span>
+                        <span className="font-medium">{activity.profile?.email || 'Utente sconosciuto'}</span>
+                        {activity.profile?.role && (
+                          <>
+                            <span className="text-muted-foreground">•</span>
+                            <span className="text-muted-foreground">{activity.profile.role}</span>
+                          </>
+                        )}
                       </div>
                       {activity.metadata && Object.keys(activity.metadata).length > 0 && (
                         <div className="text-sm text-muted-foreground">
@@ -264,7 +284,8 @@ export default function TabAttivita({
                       </time>
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           </ScrollArea>

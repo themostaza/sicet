@@ -21,7 +21,9 @@ const rolePermissions = {
     '/kpis', 
     '/kpi/*',
     '/todolist',
-    '/todolist/view/*/*/*/*'
+    '/todolist/view/*/*/*/*',
+    '/reports', // Solo visualizzazione report
+    '/summary' // Dashboard statistiche
   ]
 } as const
 
@@ -176,6 +178,18 @@ export async function middleware(req: NextRequest) {
   if (role === 'operator' && creationPages.includes(path)) {
     // Redirect alla pagina principale consentita
     return NextResponse.redirect(new URL('/todolist', req.url))
+  }
+
+  // Blocca l'accesso alle pagine di creazione/modifica report per referrer
+  if (role === 'referrer') {
+    // Blocca creazione report
+    if (path === '/reports/new') {
+      return NextResponse.redirect(new URL('/reports', req.url))
+    }
+    // Blocca modifica report (pattern: /reports/[id]/edit)
+    if (path.match(/^\/reports\/[^/]+\/edit$/)) {
+      return NextResponse.redirect(new URL('/reports', req.url))
+    }
   }
 
   return res

@@ -80,7 +80,9 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
   const searchParams = useSearchParams()
   
   // Initialize states from URL params or defaults
-  const [activeFilter, setActiveFilter] = useState<FilterType>(userRole === 'operator' ? 'today' : initialFilter)
+  const [activeFilter, setActiveFilter] = useState<FilterType>(
+    (searchParams.get('filter') as FilterType) || (userRole === 'operator' ? 'today' : initialFilter)
+  )
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(
     searchParams.get('date') ? new Date(searchParams.get('date')!) : undefined
   )
@@ -96,10 +98,16 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
   const [isBulkDeleting, setIsBulkDeleting] = useState(false)
-  const [sortColumn, setSortColumn] = useState<string>("date")
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
+  const [sortColumn, setSortColumn] = useState<string>(
+    searchParams.get('sort') || "date"
+  )
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">(
+    (searchParams.get('dir') as "asc" | "desc") || "desc"
+  )
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false)
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(
+    searchParams.get('categories')?.split(',').filter(Boolean) || []
+  )
   const [isSelectingAllFiltered, setIsSelectingAllFiltered] = useState(false)
   const [allFilteredIds, setAllFilteredIds] = useState<Set<string>>(new Set())
   const [filteredCount, setFilteredCount] = useState<number>(0)
@@ -227,7 +235,46 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
     }
   }, [activeFilter, selectedDate, selectedDevice, selectedCategory, currentOffset, isLoading, selectedTags, sortColumn, sortDirection, userRole])
 
-  // Intentionally do not write filters to URL; keep only initial read via useSearchParams
+  // Scrivi i filtri nell'URL quando cambiano per preservarli quando si torna indietro
+  useEffect(() => {
+    const params = new URLSearchParams()
+    
+    // Salva solo i filtri non di default
+    if (activeFilter !== 'today') {
+      params.set('filter', activeFilter)
+    }
+    
+    if (selectedDate) {
+      params.set('date', selectedDate.toISOString().split('T')[0])
+    }
+    
+    if (selectedDevice !== 'all') {
+      params.set('device', selectedDevice)
+    }
+    
+    if (selectedTags.length > 0) {
+      params.set('tags', selectedTags.join(','))
+    }
+    
+    if (selectedCategory !== 'all') {
+      params.set('category', selectedCategory)
+    }
+    
+    if (selectedCategories.length > 0) {
+      params.set('categories', selectedCategories.join(','))
+    }
+    
+    if (sortColumn !== 'date' || sortDirection !== 'desc') {
+      params.set('sort', sortColumn)
+      params.set('dir', sortDirection)
+    }
+    
+    const queryString = params.toString()
+    const newUrl = queryString ? `/todolist?${queryString}` : '/todolist'
+    
+    // Usa replace per non aggiungere voci alla history
+    router.replace(newUrl, { scroll: false })
+  }, [activeFilter, selectedDate, selectedDevice, selectedCategory, selectedTags, selectedCategories, sortColumn, sortDirection, router])
 
   // Reset and fetch when filters change
   useEffect(() => {
@@ -277,7 +324,48 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
   const handleRowClick = (todolist: TodolistItem) => {
     const timeSlotString = timeSlotToUrlString(todolist.time_slot)
     if (!isOperator) {
-      router.push(`/todolist/view/${todolist.id}/${todolist.device_id}/${todolist.date}/${timeSlotString}`)
+      // Costruisci l'URL con i filtri correnti come query parameters
+      const params = new URLSearchParams()
+      
+      // Salva il filtro attivo
+      if (activeFilter !== 'today') {
+        params.set('filter', activeFilter)
+      }
+      
+      // Salva la data selezionata
+      if (selectedDate) {
+        params.set('date', selectedDate.toISOString().split('T')[0])
+      }
+      
+      // Salva il device selezionato
+      if (selectedDevice !== 'all') {
+        params.set('device', selectedDevice)
+      }
+      
+      // Salva i tags selezionati
+      if (selectedTags.length > 0) {
+        params.set('tags', selectedTags.join(','))
+      }
+      
+      // Salva la categoria selezionata (singola)
+      if (selectedCategory !== 'all') {
+        params.set('category', selectedCategory)
+      }
+      
+      // Salva le categorie selezionate (multiple)
+      if (selectedCategories.length > 0) {
+        params.set('categories', selectedCategories.join(','))
+      }
+      
+      // Salva l'ordinamento
+      if (sortColumn !== 'date' || sortDirection !== 'desc') {
+        params.set('sort', sortColumn)
+        params.set('dir', sortDirection)
+      }
+      
+      const queryString = params.toString()
+      const url = `/todolist/view/${todolist.id}/${todolist.device_id}/${todolist.date}/${timeSlotString}${queryString ? `?${queryString}` : ''}`
+      router.push(url)
     }
     // Gli operatori non possono mai cliccare sulle righe
   }
@@ -640,8 +728,33 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle>Sei sicuro?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Questa azione non può essere annullata. Le {selectedItems.size} todolist selezionate e tutte le loro attività verranno eliminate permanentemente.
+                    <AlertDialogDescription asChild>
+                      <div className="space-y-2">
+                        <div>Questa azione non può essere annullata. Le {selectedItems.size} todolist selezionate e tutte le loro attività verranno eliminate permanentemente.</div>
+                        {(() => {
+                          const selectedTodolists = todolists.filter(t => selectedItems.has(t.id))
+                          const totalTasks = selectedTodolists.reduce((sum, t) => sum + t.count, 0)
+                          const completedTasks = selectedTodolists.reduce((sum, t) => 
+                            sum + t.tasks.filter(task => task.status === 'completed').length, 0
+                          )
+                          const percentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
+                          
+                          return (
+                            <div className="mt-3 p-3 bg-muted rounded-md">
+                              <div className="font-semibold text-foreground">Stato avanzamento complessivo:</div>
+                              <div className="text-foreground">
+                                {completedTasks} di {totalTasks} task completati ({percentage}%)
+                              </div>
+                              <div className="mt-2 w-full bg-background rounded-full h-2">
+                                <div 
+                                  className="bg-primary rounded-full h-2 transition-all" 
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
+                            </div>
+                          )
+                        })()}
+                      </div>
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -717,9 +830,9 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                 <Button variant="outline" className="flex items-center gap-2">
                   <Filter className="h-4 w-4" />
                   Filtri
-                  {(selectedDate || selectedDevice !== "all" || selectedTags.length > 0) && (
+                  {(selectedDate || selectedDevice !== "all" || selectedTags.length > 0 || selectedCategories.length > 0) && (
                     <Badge variant="secondary" className="ml-1">
-                                              {(selectedDate ? 1 : 0) + (selectedDevice !== "all" ? 1 : 0) + selectedTags.length}
+                      {(selectedDate ? 1 : 0) + (selectedDevice !== "all" ? 1 : 0) + selectedTags.length + selectedCategories.length}
                     </Badge>
                   )}
                 </Button>
@@ -1142,8 +1255,29 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                               <AlertDialogContent>
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>Sei sicuro?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Questa azione non può essere annullata. La todolist e tutte le sue attività verranno eliminate permanentemente.
+                                  <AlertDialogDescription asChild>
+                                    <div className="space-y-2">
+                                      <div>Questa azione non può essere annullata. La todolist e tutte le sue attività verranno eliminate permanentemente.</div>
+                                      {(() => {
+                                        const completedCount = item.tasks.filter(t => t.status === 'completed').length
+                                        const totalCount = item.count
+                                        const percentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
+                                        return (
+                                          <div className="mt-3 p-3 bg-muted rounded-md">
+                                            <div className="font-semibold text-foreground">Stato avanzamento:</div>
+                                            <div className="text-foreground">
+                                              {completedCount} di {totalCount} task completati ({percentage}%)
+                                            </div>
+                                            <div className="mt-2 w-full bg-background rounded-full h-2">
+                                              <div 
+                                                className="bg-primary rounded-full h-2 transition-all" 
+                                                style={{ width: `${percentage}%` }}
+                                              />
+                                            </div>
+                                          </div>
+                                        )
+                                      })()}
+                                    </div>
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>

@@ -9,6 +9,7 @@ import { Calendar as CalendarIcon, Download, Loader2, Plus, Settings, Trash2, Ed
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import { toast } from "@/components/ui/use-toast"
+import { createBrowserClient } from '@supabase/ssr'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,11 +32,17 @@ interface Report {
 }
 
 export default function ReportsPage() {
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+  
   const [reports, setReports] = useState<Report[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [reportToDelete, setReportToDelete] = useState<Report | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [userRole, setUserRole] = useState<'admin' | 'operator' | 'referrer' | null>(null)
   
   // Data per export
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
@@ -47,6 +54,25 @@ export default function ReportsPage() {
   const [showCalendar, setShowCalendar] = useState(false)
   const [showEndCalendar, setShowEndCalendar] = useState(false)
   const [exportingReports, setExportingReports] = useState<Set<string>>(new Set())
+
+  // Carica il ruolo dell'utente
+  useEffect(() => {
+    async function loadUserRole() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user?.email) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('email', user.email)
+          .single()
+        
+        if (profile) {
+          setUserRole(profile.role as 'admin' | 'operator' | 'referrer')
+        }
+      }
+    }
+    loadUserRole()
+  }, [])
 
   const loadReports = async () => {
     setIsLoading(true)
@@ -307,9 +333,11 @@ export default function ReportsPage() {
             {isLoading ? (<><Loader2 className="h-4 w-4 animate-spin" /> Caricamento...</>) : ("Ricarica")}
           </Button>
 
-          <Button variant="outline" size="sm" onClick={handleCreateReport} className="gap-2 ml-auto">
-            <Plus className="h-4 w-4" /> Nuovo Report
-          </Button>
+          {userRole !== 'referrer' && (
+            <Button variant="outline" size="sm" onClick={handleCreateReport} className="gap-2 ml-auto">
+              <Plus className="h-4 w-4" /> Nuovo Report
+            </Button>
+          )}
         </div>
 
         {/* Legenda */}
@@ -341,9 +369,11 @@ export default function ReportsPage() {
           <div className="flex items-center justify-center h-64 text-gray-500">
             <div className="text-center">
               <p className="mb-4">Nessun report trovato</p>
-              <Button onClick={handleCreateReport} className="gap-2">
-                <Plus className="h-4 w-4" /> Crea il primo report
-              </Button>
+              {userRole !== 'referrer' && (
+                <Button onClick={handleCreateReport} className="gap-2">
+                  <Plus className="h-4 w-4" /> Crea il primo report
+                </Button>
+              )}
             </div>
           </div>
         ) : (
@@ -407,23 +437,27 @@ export default function ReportsPage() {
                             <Download className={`h-4 w-4 ${!report.hasDataAvailable ? 'text-gray-400' : ''}`} />
                           )}
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEditReport(report)}
-                          className="h-8 px-2"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteReport(report)}
-                          disabled={isDeleting}
-                          className="h-8 px-2"
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
+                        {userRole !== 'referrer' && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditReport(report)}
+                              className="h-8 px-2"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteReport(report)}
+                              disabled={isDeleting}
+                              className="h-8 px-2"
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
