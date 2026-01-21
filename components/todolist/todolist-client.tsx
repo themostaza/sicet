@@ -1012,8 +1012,31 @@ export default function TodolistClient({
             <DialogTitle>Visualizza Immagine</DialogTitle>
           </DialogHeader>
           <div className="relative w-full h-[70vh] overflow-hidden">
-            {imageModalOpen && typeof localValues[imageModalOpen] === 'string' && localValues[imageModalOpen] && (() => {
-              const imageUrl = localValues[imageModalOpen] as string
+            {imageModalOpen && (() => {
+              // Estrai taskId e fieldIndex dalla fieldKey (formato: uuid-fieldIdOrIdx)
+              // L'UUID contiene trattini, quindi prendiamo l'ultima parte come fieldIdOrIdx
+              const lastDashIndex = imageModalOpen.lastIndexOf('-')
+              const taskId = imageModalOpen.substring(0, lastDashIndex)
+              const fieldIdOrIdx = imageModalOpen.substring(lastDashIndex + 1)
+              
+              const task = tasks.find(t => t.id === taskId)
+              const kpi = task ? kpis.find(k => k.id === task.kpi_id) : null
+              const fields = kpi && kpi.value ? (Array.isArray(kpi.value) ? kpi.value : [kpi.value]) : []
+              const idx = parseInt(fieldIdOrIdx) || 0
+              const current = task?.value
+              
+              // Usa lo stesso fallback del renderInput
+              const imageUrl = localValues[imageModalOpen] ?? 
+                (Array.isArray(current) ? current[idx]?.value : current?.value ?? current) ?? ""
+              
+              if (!imageUrl || typeof imageUrl !== 'string') {
+                return (
+                  <div className="flex items-center justify-center h-full">
+                    <p className="text-gray-500">Nessuna immagine disponibile</p>
+                  </div>
+                )
+              }
+              
               try {
                 new URL(imageUrl)
                 return (
