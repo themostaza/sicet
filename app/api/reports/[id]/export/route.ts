@@ -163,19 +163,21 @@ async function getReportDataForExport(supabase: any, report: { todolist_params_l
 
   // 3. Ottieni tutti i task per le todolist (completate e scadute)
   // Per le todolist scadute, prendiamo anche i task parzialmente completati
-  const todolistIds = allTodolists.map((t: any) => t.id)
-  
+
   // Separa todolist completate da quelle scadute
   const completedTodolistIds = (completedTodolists || []).map((t: any) => t.id)
   const expiredTodolistIds = filteredExpiredTodolists.map((t: any) => t.id)
-  
+
   // Per le completate: solo task con completed_at
-  const { data: completedTasks, error: completedTasksError } = await supabase
-    .from('tasks')
-    .select('id, kpi_id, value, todolist_id, completed_at')
-    .in('todolist_id', completedTodolistIds)
-    .not('completed_at', 'is', null)
-  
+  // Controllo per array vuoto per evitare query .in() con array vuoto
+  const { data: completedTasks, error: completedTasksError } = completedTodolistIds.length > 0
+    ? await supabase
+        .from('tasks')
+        .select('id, kpi_id, value, todolist_id, completed_at')
+        .in('todolist_id', completedTodolistIds)
+        .not('completed_at', 'is', null)
+    : { data: [], error: null }
+
   if (completedTasksError) {
     console.error('Error fetching completed tasks:', completedTasksError)
     throw new Error('Failed to fetch completed tasks')
