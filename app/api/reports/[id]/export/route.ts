@@ -115,6 +115,7 @@ async function getReportDataForExport(supabase: any, report: { todolist_params_l
   // 2. Trova le todolist completate O scadute per questi device nel range di date
   
   // 2a. Todolist completate nel range di date
+  // Nota: .range(0, 10000) rimuove il limite di default di 1000 righe di Supabase
   const { data: completedTodolists, error: completedError } = await supabase
     .from('todolist')
     .select('id, device_id, completion_date, scheduled_execution, time_slot_type, time_slot_start, time_slot_end, end_day_time')
@@ -122,6 +123,7 @@ async function getReportDataForExport(supabase: any, report: { todolist_params_l
     .not('completion_date', 'is', null)
     .gte('completion_date', `${startDate}T00:00:00.000Z`)
     .lte('completion_date', `${endDate}T23:59:59.999Z`)
+    .range(0, 10000)
 
   if (completedError) {
     console.error('Error fetching completed todolists:', completedError)
@@ -129,6 +131,7 @@ async function getReportDataForExport(supabase: any, report: { todolist_params_l
   }
 
   // 2b. Todolist scadute: scheduled nel range di date ma NON completate
+  // Nota: .range(0, 10000) rimuove il limite di default di 1000 righe di Supabase
   const { data: expiredTodolists, error: expiredError } = await supabase
     .from('todolist')
     .select('id, device_id, completion_date, scheduled_execution, time_slot_type, time_slot_start, time_slot_end, end_day_time')
@@ -136,6 +139,7 @@ async function getReportDataForExport(supabase: any, report: { todolist_params_l
     .is('completion_date', null)
     .gte('scheduled_execution', `${startDate}T00:00:00.000Z`)
     .lte('scheduled_execution', `${endDate}T23:59:59.999Z`)
+    .range(0, 10000)
 
   if (expiredError) {
     console.error('Error fetching expired todolists:', expiredError)
@@ -163,30 +167,36 @@ async function getReportDataForExport(supabase: any, report: { todolist_params_l
 
   // 3. Ottieni tutti i task per le todolist (completate e scadute)
   // Per le todolist scadute, prendiamo anche i task parzialmente completati
-  const todolistIds = allTodolists.map((t: any) => t.id)
-  
+
   // Separa todolist completate da quelle scadute
   const completedTodolistIds = (completedTodolists || []).map((t: any) => t.id)
   const expiredTodolistIds = filteredExpiredTodolists.map((t: any) => t.id)
-  
+
   // Per le completate: solo task con completed_at
-  const { data: completedTasks, error: completedTasksError } = await supabase
-    .from('tasks')
-    .select('id, kpi_id, value, todolist_id, completed_at')
-    .in('todolist_id', completedTodolistIds)
-    .not('completed_at', 'is', null)
-  
+  // Controllo per array vuoto per evitare query .in() con array vuoto
+  // Nota: .range(0, 10000) rimuove il limite di default di 1000 righe di Supabase
+  const { data: completedTasks, error: completedTasksError } = completedTodolistIds.length > 0
+    ? await supabase
+        .from('tasks')
+        .select('id, kpi_id, value, todolist_id, completed_at')
+        .in('todolist_id', completedTodolistIds)
+        .not('completed_at', 'is', null)
+        .range(0, 10000)
+    : { data: [], error: null }
+
   if (completedTasksError) {
     console.error('Error fetching completed tasks:', completedTasksError)
     throw new Error('Failed to fetch completed tasks')
   }
   
   // Per le scadute: TUTTI i task (completati e non), così mostriamo anche dati parziali
+  // Nota: .range(0, 10000) rimuove il limite di default di 1000 righe di Supabase
   const { data: expiredTasks, error: expiredTasksError } = expiredTodolistIds.length > 0
     ? await supabase
         .from('tasks')
         .select('id, kpi_id, value, todolist_id, completed_at')
         .in('todolist_id', expiredTodolistIds)
+        .range(0, 10000)
     : { data: [], error: null }
   
   if (expiredTasksError) {
