@@ -24,6 +24,39 @@ interface ExcelData {
   taskData: TaskData[]
 }
 
+// Helper function to batch .in() queries to avoid URL length limits
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function batchedInQuery<T>(
+  supabase: any,
+  table: string,
+  selectFields: string,
+  inColumn: string,
+  inValues: string[],
+  additionalFilters?: (query: any) => any,
+  batchSize: number = 100
+): Promise<{ data: T[] | null; error: any }> {
+  if (inValues.length === 0) {
+    return { data: [], error: null }
+  }
+
+  const allResults: T[] = []
+
+  for (let i = 0; i < inValues.length; i += batchSize) {
+    const batch = inValues.slice(i, i + batchSize)
+    let query = supabase.from(table).select(selectFields).in(inColumn, batch)
+
+    if (additionalFilters) {
+      query = additionalFilters(query)
+    }
+
+    const { data, error } = await query
+    if (error) return { data: null, error }
+    if (data) allResults.push(...data)
+  }
+
+  return { data: allResults, error: null }
+}
+
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -168,26 +201,34 @@ async function getReportDataForExport(supabase: any, report: { todolist_params_l
   // Separa todolist completate da quelle scadute
   const completedTodolistIds = (completedTodolists || []).map((t: any) => t.id)
   const expiredTodolistIds = filteredExpiredTodolists.map((t: any) => t.id)
+
+  console.log('completedTodolistIds', completedTodolistIds)
   
-  // Per le completate: solo task con completed_at
-  const { data: completedTasks, error: completedTasksError } = await supabase
-    .from('tasks')
-    .select('id, kpi_id, value, todolist_id, completed_at')
-    .in('todolist_id', completedTodolistIds)
-    .not('completed_at', 'is', null)
+  // Per le completate: solo task con completed_at (batched to avoid URL length limits)
+  const { data: completedTasks, error: completedTasksError } = await batchedInQuery(
+    supabase,
+    'tasks',
+    'id, kpi_id, value, todolist_id, completed_at',
+    'todolist_id',
+    completedTodolistIds,
+    (query) => query.not('completed_at', 'is', null)
+  )
+
+  console.log('completedTasks', completedTasks, completedTasksError)
   
   if (completedTasksError) {
     console.error('Error fetching completed tasks:', completedTasksError)
     throw new Error('Failed to fetch completed tasks')
   }
   
-  // Per le scadute: TUTTI i task (completati e non), così mostriamo anche dati parziali
-  const { data: expiredTasks, error: expiredTasksError } = expiredTodolistIds.length > 0
-    ? await supabase
-        .from('tasks')
-        .select('id, kpi_id, value, todolist_id, completed_at')
-        .in('todolist_id', expiredTodolistIds)
-    : { data: [], error: null }
+  // Per le scadute: TUTTI i task (completati e non), così mostriamo anche dati parziali (batched to avoid URL length limits)
+  const { data: expiredTasks, error: expiredTasksError } = await batchedInQuery(
+    supabase,
+    'tasks',
+    'id, kpi_id, value, todolist_id, completed_at',
+    'todolist_id',
+    expiredTodolistIds
+  )
   
   if (expiredTasksError) {
     console.error('Error fetching expired tasks:', expiredTasksError)
