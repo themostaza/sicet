@@ -1,27 +1,27 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
-import * as XLSX from 'xlsx'
-import { isTodolistExpired } from '@/lib/validation/todolist-schemas'
-import { ControlPoint, Control, TodolistParamsLinked } from '@/types/reports'
+import { NextRequest, NextResponse } from "next/server";
+import { createServerSupabaseClient } from "@/lib/supabase-server";
+import * as XLSX from "xlsx";
+import { isTodolistExpired } from "@/lib/validation/todolist-schemas";
+import { ControlPoint, Control, TodolistParamsLinked } from "@/types/reports";
 
 interface TaskData {
-  id: string
-  kpi_id: string
-  value: { id: string; value: unknown }[]
-  todolist_id: string
-  completed_at: string
-  device_id: string
-  completion_date: string
-  scheduled_execution?: string
-  time_slot_type?: string
-  time_slot_start?: number
-  time_slot_end?: number
-  end_day_time?: string
+  id: string;
+  kpi_id: string;
+  value: { id: string; value: unknown }[];
+  todolist_id: string;
+  completed_at: string;
+  device_id: string;
+  completion_date: string;
+  scheduled_execution?: string;
+  time_slot_type?: string;
+  time_slot_start?: number;
+  time_slot_end?: number;
+  end_day_time?: string;
 }
 
 interface ExcelData {
-  controlPoints: ControlPoint[]
-  taskData: TaskData[]
+  controlPoints: ControlPoint[];
+  taskData: TaskData[];
 }
 
 // Helper function to batch .in() queries to avoid URL length limits
@@ -36,241 +36,282 @@ async function batchedInQuery<T>(
   batchSize: number = 100
 ): Promise<{ data: T[] | null; error: any }> {
   if (inValues.length === 0) {
-    return { data: [], error: null }
+    return { data: [], error: null };
   }
 
-  const allResults: T[] = []
+  const allResults: T[] = [];
 
   for (let i = 0; i < inValues.length; i += batchSize) {
-    const batch = inValues.slice(i, i + batchSize)
-    let query = supabase.from(table).select(selectFields).in(inColumn, batch)
+    const batch = inValues.slice(i, i + batchSize);
+    let query = supabase.from(table).select(selectFields).in(inColumn, batch);
 
     if (additionalFilters) {
-      query = additionalFilters(query)
+      query = additionalFilters(query);
     }
 
-    const { data, error } = await query
-    if (error) return { data: null, error }
-    if (data) allResults.push(...data)
+    const { data, error } = await query;
+    if (error) return { data: null, error };
+    if (data) allResults.push(...data);
   }
 
-  return { data: allResults, error: null }
+  return { data: allResults, error: null };
 }
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { id } = await params
+    const supabase = await createServerSupabaseClient();
+    const { id } = await params;
 
     // Verifica autenticazione
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
     if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Verifica ruolo admin
     const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('auth_id', user.id)
-      .single()
+      .from("profiles")
+      .select("role")
+      .eq("auth_id", user.id)
+      .single();
 
-    if (profile?.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    if (profile?.role !== "admin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const body = await request.json()
-    const { startDate, endDate } = body
+    const body = await request.json();
+    const { startDate, endDate } = body;
 
     if (!startDate) {
-      return NextResponse.json({ error: 'startDate is required' }, { status: 400 })
+      return NextResponse.json(
+        { error: "startDate is required" },
+        { status: 400 }
+      );
     }
 
     // Se endDate non è fornita, usa startDate come singola data
-    const effectiveEndDate = endDate || startDate
+    const effectiveEndDate = endDate || startDate;
 
     // Ottieni il report
     const { data: report, error: reportError } = await supabase
-      .from('report_to_excel')
-      .select('*')
-      .eq('id', id)
-      .single()
+      .from("report_to_excel")
+      .select("*")
+      .eq("id", id)
+      .single();
 
     if (reportError || !report) {
-      console.error('Error fetching report:', reportError)
-      return NextResponse.json({ error: 'Report not found' }, { status: 404 })
+      console.error("Error fetching report:", reportError);
+      return NextResponse.json({ error: "Report not found" }, { status: 404 });
     }
 
     // Type assertion per report
-    const typedReport = report as unknown as { 
+    const typedReport = report as unknown as {
       id: string;
       name: string;
-      todolist_params_linked: TodolistParamsLinked 
-    }
+      todolist_params_linked: TodolistParamsLinked;
+    };
 
     // Ottieni i dati per l'export basati sui control points del report
-    const excelData = await getReportDataForExport(supabase, typedReport, startDate, effectiveEndDate)
+    const excelData = await getReportDataForExport(
+      supabase,
+      typedReport,
+      startDate,
+      effectiveEndDate
+    );
 
-  // Genera l'Excel basato sulla nuova struttura
-  const excelBuffer = await generateMappedExcel(typedReport, excelData, startDate, effectiveEndDate)
+    // Genera l'Excel basato sulla nuova struttura
+    const excelBuffer = await generateMappedExcel(
+      typedReport,
+      excelData,
+      startDate,
+      effectiveEndDate
+    );
 
     // Genera nome file con range date se applicabile
-    const filename = endDate 
+    const filename = endDate
       ? `${report.name}_${startDate}_${endDate}.xlsx`
-      : `${report.name}_${startDate}.xlsx`
+      : `${report.name}_${startDate}.xlsx`;
 
     // Restituisci il file Excel
     const response = new NextResponse(new Uint8Array(excelBuffer), {
       status: 200,
       headers: {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        "Content-Type":
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="${filename}"`,
       },
-    })
+    });
 
-    return response
+    return response;
   } catch (error) {
-    console.error('Unexpected error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error("Unexpected error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getReportDataForExport(supabase: any, report: { todolist_params_linked: TodolistParamsLinked }, startDate: string, endDate: string): Promise<ExcelData> {
+async function getReportDataForExport(
+  supabase: any,
+  report: { todolist_params_linked: TodolistParamsLinked },
+  startDate: string,
+  endDate: string
+): Promise<ExcelData> {
   // 1. Estrai i device IDs dalla nuova struttura
-  const todolistParams = report.todolist_params_linked
-  if (!todolistParams?.controlPoints || todolistParams.controlPoints.length === 0) {
-    throw new Error('No control points defined in report')
+  const todolistParams = report.todolist_params_linked;
+  if (
+    !todolistParams?.controlPoints ||
+    todolistParams.controlPoints.length === 0
+  ) {
+    throw new Error("No control points defined in report");
   }
 
-  const deviceIds = todolistParams.controlPoints.map(cp => cp.deviceId)
-  
+  const deviceIds = todolistParams.controlPoints.map((cp) => cp.deviceId);
+
   // 2. Trova le todolist completate O scadute per questi device nel range di date
-  
+
   // 2a. Todolist completate nel range di date
   const { data: completedTodolists, error: completedError } = await supabase
-    .from('todolist')
-    .select('id, device_id, completion_date, scheduled_execution, time_slot_type, time_slot_start, time_slot_end, end_day_time')
-    .in('device_id', deviceIds)
-    .not('completion_date', 'is', null)
-    .gte('completion_date', `${startDate}T00:00:00.000Z`)
-    .lte('completion_date', `${endDate}T23:59:59.999Z`)
+    .from("todolist")
+    .select(
+      "id, device_id, completion_date, scheduled_execution, time_slot_type, time_slot_start, time_slot_end, end_day_time"
+    )
+    .in("device_id", deviceIds)
+    .not("completion_date", "is", null)
+    .gte("completion_date", `${startDate}T00:00:00.000Z`)
+    .lte("completion_date", `${endDate}T23:59:59.999Z`);
 
   if (completedError) {
-    console.error('Error fetching completed todolists:', completedError)
-    throw new Error('Failed to fetch completed todolists')
+    console.error("Error fetching completed todolists:", completedError);
+    throw new Error("Failed to fetch completed todolists");
   }
 
   // 2b. Todolist scadute: scheduled nel range di date ma NON completate
   const { data: expiredTodolists, error: expiredError } = await supabase
-    .from('todolist')
-    .select('id, device_id, completion_date, scheduled_execution, time_slot_type, time_slot_start, time_slot_end, end_day_time')
-    .in('device_id', deviceIds)
-    .is('completion_date', null)
-    .gte('scheduled_execution', `${startDate}T00:00:00.000Z`)
-    .lte('scheduled_execution', `${endDate}T23:59:59.999Z`)
+    .from("todolist")
+    .select(
+      "id, device_id, completion_date, scheduled_execution, time_slot_type, time_slot_start, time_slot_end, end_day_time"
+    )
+    .in("device_id", deviceIds)
+    .is("completion_date", null)
+    .gte("scheduled_execution", `${startDate}T00:00:00.000Z`)
+    .lte("scheduled_execution", `${endDate}T23:59:59.999Z`);
 
   if (expiredError) {
-    console.error('Error fetching expired todolists:', expiredError)
-    throw new Error('Failed to fetch expired todolists')
+    console.error("Error fetching expired todolists:", expiredError);
+    throw new Error("Failed to fetch expired todolists");
   }
 
   // Filtra solo le todolist effettivamente scadute (deadline passata)
-  const now = new Date()
-  const filteredExpiredTodolists = (expiredTodolists || []).filter((todolist: any) => {
-    if (todolist.end_day_time) {
-      const deadline = new Date(todolist.end_day_time)
-      // La deadline già include la tolleranza nel campo end_day_time
-      return now > deadline
+  const now = new Date();
+  const filteredExpiredTodolists = (expiredTodolists || []).filter(
+    (todolist: any) => {
+      if (todolist.end_day_time) {
+        const deadline = new Date(todolist.end_day_time);
+        // La deadline già include la tolleranza nel campo end_day_time
+        return now > deadline;
+      }
+      return false;
     }
-    return false
-  })
+  );
 
   // Combina todolist completate e scadute
-  const allTodolists = [...(completedTodolists || []), ...filteredExpiredTodolists]
+  const allTodolists = [
+    ...(completedTodolists || []),
+    ...filteredExpiredTodolists,
+  ];
 
   // Se non ci sono todolist (completate o scadute) per NESSUN device, ritorna vuoto
   if (allTodolists.length === 0) {
-    return { controlPoints: todolistParams.controlPoints, taskData: [] }
+    return { controlPoints: todolistParams.controlPoints, taskData: [] };
   }
 
   // 3. Ottieni tutti i task per le todolist (completate e scadute)
   // Per le todolist scadute, prendiamo anche i task parzialmente completati
-  const todolistIds = allTodolists.map((t: any) => t.id)
-  
+  const todolistIds = allTodolists.map((t: any) => t.id);
+
   // Separa todolist completate da quelle scadute
-  const completedTodolistIds = (completedTodolists || []).map((t: any) => t.id)
-  const expiredTodolistIds = filteredExpiredTodolists.map((t: any) => t.id)
+  const completedTodolistIds = (completedTodolists || []).map((t: any) => t.id);
+  const expiredTodolistIds = filteredExpiredTodolists.map((t: any) => t.id);
 
-  console.log('completedTodolistIds', completedTodolistIds)
-  
   // Per le completate: solo task con completed_at (batched to avoid URL length limits)
-  const { data: completedTasks, error: completedTasksError } = await batchedInQuery(
-    supabase,
-    'tasks',
-    'id, kpi_id, value, todolist_id, completed_at',
-    'todolist_id',
-    completedTodolistIds,
-    (query) => query.not('completed_at', 'is', null)
-  )
+  const { data: completedTasks, error: completedTasksError } =
+    await batchedInQuery(
+      supabase,
+      "tasks",
+      "id, kpi_id, value, todolist_id, completed_at",
+      "todolist_id",
+      completedTodolistIds,
+      (query) => query.not("completed_at", "is", null)
+    );
 
-  console.log('completedTasks', completedTasks, completedTasksError)
-  
   if (completedTasksError) {
-    console.error('Error fetching completed tasks:', completedTasksError)
-    throw new Error('Failed to fetch completed tasks')
+    console.error("Error fetching completed tasks:", completedTasksError);
+    throw new Error("Failed to fetch completed tasks");
   }
-  
+
   // Per le scadute: TUTTI i task (completati e non), così mostriamo anche dati parziali (batched to avoid URL length limits)
   const { data: expiredTasks, error: expiredTasksError } = await batchedInQuery(
     supabase,
-    'tasks',
-    'id, kpi_id, value, todolist_id, completed_at',
-    'todolist_id',
+    "tasks",
+    "id, kpi_id, value, todolist_id, completed_at",
+    "todolist_id",
     expiredTodolistIds
-  )
-  
+  );
+
   if (expiredTasksError) {
-    console.error('Error fetching expired tasks:', expiredTasksError)
-    throw new Error('Failed to fetch expired tasks')
+    console.error("Error fetching expired tasks:", expiredTasksError);
+    throw new Error("Failed to fetch expired tasks");
   }
-  
+
   // Combina tutti i task
-  const tasks = [...(completedTasks || []), ...(expiredTasks || [])]
-  
+  const tasks = [...(completedTasks || []), ...(expiredTasks || [])];
+
   // Vecchio blocco error handling
-  const tasksError = null
+  const tasksError = null;
 
   if (tasksError) {
-    console.error('Error fetching tasks:', tasksError)
-    throw new Error('Failed to fetch tasks')
+    console.error("Error fetching tasks:", tasksError);
+    throw new Error("Failed to fetch tasks");
   }
 
   // 4. Combina i dati per facilitare il mapping
   const enrichedTasks: TaskData[] = (tasks || []).map((task: any) => {
-    const todolist = allTodolists.find((tl: any) => tl.id === task.todolist_id)
+    const todolist = allTodolists.find((tl: any) => tl.id === task.todolist_id);
     return {
       ...task,
-      device_id: todolist?.device_id || '',
-      completion_date: todolist?.completion_date || '',
-      scheduled_execution: todolist?.scheduled_execution || '',
-      time_slot_type: todolist?.time_slot_type || 'standard',
+      device_id: todolist?.device_id || "",
+      completion_date: todolist?.completion_date || "",
+      scheduled_execution: todolist?.scheduled_execution || "",
+      time_slot_type: todolist?.time_slot_type || "standard",
       time_slot_start: todolist?.time_slot_start,
       time_slot_end: todolist?.time_slot_end,
-      end_day_time: todolist?.end_day_time || ''
-    } as TaskData
-  })
+      end_day_time: todolist?.end_day_time || "",
+    } as TaskData;
+  });
 
   // 5. Crea task "placeholder" per i device che non hanno completato/scaduto la todolist
-  const processedDeviceIds = new Set(allTodolists.map((tl: { device_id: string }) => tl.device_id))
-  const missingDeviceIds = deviceIds.filter(deviceId => !processedDeviceIds.has(deviceId))
-  
+  const processedDeviceIds = new Set(
+    allTodolists.map((tl: { device_id: string }) => tl.device_id)
+  );
+  const missingDeviceIds = deviceIds.filter(
+    (deviceId) => !processedDeviceIds.has(deviceId)
+  );
+
   // Per ogni device mancante, crea task placeholder per ogni KPI unico nei controlli
-  const uniqueKpiIds = new Set<string>()
-  todolistParams.controlPoints.forEach(cp => {
-    cp.controls.forEach(ctrl => uniqueKpiIds.add(ctrl.kpiId))
-  })
-  
+  const uniqueKpiIds = new Set<string>();
+  todolistParams.controlPoints.forEach((cp) => {
+    cp.controls.forEach((ctrl) => uniqueKpiIds.add(ctrl.kpiId));
+  });
+
   for (const deviceId of missingDeviceIds) {
     for (const kpiId of uniqueKpiIds) {
       // Crea un task placeholder per device senza todolist completate/scadute
@@ -279,430 +320,527 @@ async function getReportDataForExport(supabase: any, report: { todolist_params_l
         kpi_id: kpiId,
         value: [], // Valore vuoto
         todolist_id: `missing-${deviceId}`,
-        completed_at: '',
+        completed_at: "",
         device_id: deviceId,
-        completion_date: '', // Nessuna data di completamento
+        completion_date: "", // Nessuna data di completamento
         scheduled_execution: `${startDate}T00:00:00.000Z`,
-        time_slot_type: 'standard',
+        time_slot_type: "standard",
         time_slot_start: undefined,
         time_slot_end: undefined,
-        end_day_time: ''
-      } as TaskData)
+        end_day_time: "",
+      } as TaskData);
     }
   }
 
   return {
     controlPoints: todolistParams.controlPoints,
-    taskData: enrichedTasks
-  }
+    taskData: enrichedTasks,
+  };
 }
 
-async function generateMappedExcel(report: { name: string; todolist_params_linked: TodolistParamsLinked }, excelData: ExcelData, startDate: string, endDate: string): Promise<Buffer> {
-  const wb = XLSX.utils.book_new()
-  
-  const { controlPoints, taskData } = excelData
-  
+async function generateMappedExcel(
+  report: { name: string; todolist_params_linked: TodolistParamsLinked },
+  excelData: ExcelData,
+  startDate: string,
+  endDate: string
+): Promise<Buffer> {
+  const wb = XLSX.utils.book_new();
+
+  const { controlPoints, taskData } = excelData;
+
   // PRIMO FOGLIO: Dati del Report
-  const dataWs = generateDataSheet(report, controlPoints, taskData, startDate, endDate)
-  XLSX.utils.book_append_sheet(wb, dataWs, 'Dati Report')
-  
+  const dataWs = generateDataSheet(
+    report,
+    controlPoints,
+    taskData,
+    startDate,
+    endDate
+  );
+  XLSX.utils.book_append_sheet(wb, dataWs, "Dati Report");
+
   // SECONDO FOGLIO: Documentazione e Tracciabilità
-  const docWs = generateDocumentationSheet(report, excelData, taskData)
-  XLSX.utils.book_append_sheet(wb, docWs, 'Documentazione')
-  
+  const docWs = generateDocumentationSheet(report, excelData, taskData);
+  XLSX.utils.book_append_sheet(wb, docWs, "Documentazione");
+
   // Genera il buffer
-  const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
-  return buffer
+  const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+  return buffer;
 }
 
 function generateDataSheet(
-  report: { name: string }, 
-  controlPoints: ControlPoint[], 
-  taskData: TaskData[], 
+  report: { name: string },
+  controlPoints: ControlPoint[],
+  taskData: TaskData[],
   startDate: string,
   endDate: string
 ): Record<string, unknown> {
-  const ws: Record<string, unknown> = {}
-  
+  const ws: Record<string, unknown> = {};
+
   // Helper per convertire numero colonna in lettera (0=A, 1=B, 2=C, etc)
   const getColumnLetter = (index: number): string => {
-    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-    if (index < 26) return letters[index]
-    return letters[Math.floor(index / 26) - 1] + letters[index % 26]
-  }
-  
+    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    if (index < 26) return letters[index];
+    return letters[Math.floor(index / 26) - 1] + letters[index % 26];
+  };
+
   // Calcola il mapping: ogni controllo ha la sua colonna
   // Struttura: colonna = 1 per ogni controllo (non per control point)
-  let currentColumn = 1 // Inizia da B (colonna 1), A è riservata
-  
-  const controlColumnMapping: Map<string, { col: number, cp: ControlPoint, control: Control }> = new Map()
-  
-  controlPoints.forEach(cp => {
-    const startCol = currentColumn
-    
-    cp.controls.forEach(control => {
+  let currentColumn = 1; // Inizia da B (colonna 1), A è riservata
+
+  const controlColumnMapping: Map<
+    string,
+    { col: number; cp: ControlPoint; control: Control }
+  > = new Map();
+
+  controlPoints.forEach((cp) => {
+    const startCol = currentColumn;
+
+    cp.controls.forEach((control) => {
       controlColumnMapping.set(`${cp.id}-${control.id}`, {
         col: currentColumn,
         cp: cp,
-        control: control
-      })
-      currentColumn++
-    })
-    
+        control: control,
+      });
+      currentColumn++;
+    });
+
     // RIGA 1: Intestazione Control Point (merged su tutte le colonne dei suoi controlli)
     if (cp.controls.length > 0) {
-      const endCol = currentColumn - 1
-      const startColLetter = getColumnLetter(startCol)
-      const endColLetter = getColumnLetter(endCol)
-      
+      const endCol = currentColumn - 1;
+      const startColLetter = getColumnLetter(startCol);
+      const endColLetter = getColumnLetter(endCol);
+
       // Imposta il valore nella prima cella
       ws[`${startColLetter}1`] = {
-        t: 's',
+        t: "s",
         v: `${cp.name}`,
         s: {
           font: { bold: true, sz: 12 },
           fill: { fgColor: { rgb: "4472C4" } },
-          alignment: { horizontal: 'center', vertical: 'center' },
+          alignment: { horizontal: "center", vertical: "center" },
           border: {
-            top: { style: 'thin', color: { rgb: '000000' } },
-            bottom: { style: 'thin', color: { rgb: '000000' } },
-            left: { style: 'thin', color: { rgb: '000000' } },
-            right: { style: 'thin', color: { rgb: '000000' } }
-          }
-        }
-      }
-      
+            top: { style: "thin", color: { rgb: "000000" } },
+            bottom: { style: "thin", color: { rgb: "000000" } },
+            left: { style: "thin", color: { rgb: "000000" } },
+            right: { style: "thin", color: { rgb: "000000" } },
+          },
+        },
+      };
+
       // Imposta il merge per l'header del control point
-      if (!ws['!merges']) {
-        ws['!merges'] = []
+      if (!ws["!merges"]) {
+        ws["!merges"] = [];
       }
       if (startCol !== endCol) {
-        const merges = ws['!merges'] as Array<{ s: { r: number; c: number }; e: { r: number; c: number } }>
+        const merges = ws["!merges"] as Array<{
+          s: { r: number; c: number };
+          e: { r: number; c: number };
+        }>;
         merges.push({
           s: { r: 0, c: startCol }, // start row, start col
-          e: { r: 0, c: endCol }     // end row, end col
-        })
+          e: { r: 0, c: endCol }, // end row, end col
+        });
       }
     }
-  })
-  
+  });
+
   // RIGA 2: Nomi dei Controlli (una colonna per ogni controllo)
   controlColumnMapping.forEach((info) => {
-    const colLetter = getColumnLetter(info.col)
+    const colLetter = getColumnLetter(info.col);
     ws[`${colLetter}2`] = {
-      t: 's',
+      t: "s",
       v: `${info.control.fieldName}`,
       s: {
         font: { bold: true, sz: 10 },
         fill: { fgColor: { rgb: "D9E1F2" } },
-        alignment: { horizontal: 'left', vertical: 'center', wrapText: true },
+        alignment: { horizontal: "left", vertical: "center", wrapText: true },
         border: {
-          top: { style: 'thin', color: { rgb: '000000' } },
-          bottom: { style: 'thin', color: { rgb: '000000' } },
-          left: { style: 'thin', color: { rgb: '000000' } },
-          right: { style: 'thin', color: { rgb: '000000' } }
-        }
-      }
-    }
-  })
-  
+          top: { style: "thin", color: { rgb: "000000" } },
+          bottom: { style: "thin", color: { rgb: "000000" } },
+          left: { style: "thin", color: { rgb: "000000" } },
+          right: { style: "thin", color: { rgb: "000000" } },
+        },
+      },
+    };
+  });
+
   // RIGHE 3 in poi: Valori effettivi dei controlli
   // Raggruppa i task per SLOT TEMPORALE (indipendentemente dal device!)
   // Uno slot è identificato da: data + time_slot (NON device!)
-  const shiftGroups = new Map<string, { 
-    tasks: TaskData[], 
-    scheduled_execution: string,
-    time_slot_type: string,
-    time_slot_start?: number,
-    time_slot_end?: number,
-    isMissing: boolean,
-    latestCompletionDate: string
-  }>()
-  
-  taskData.forEach(task => {
-    // Normalizza la scheduled_execution alla data (senza orario)
-    let scheduledDate = ''
-    if (task.scheduled_execution) {
-      const d = new Date(task.scheduled_execution)
-      scheduledDate = d.toISOString().split('T')[0] // Solo YYYY-MM-DD
+  const shiftGroups = new Map<
+    string,
+    {
+      tasks: TaskData[];
+      scheduled_execution: string;
+      time_slot_type: string;
+      time_slot_start?: number;
+      time_slot_end?: number;
+      isMissing: boolean;
+      latestCompletionDate: string;
     }
-    
+  >();
+
+  taskData.forEach((task) => {
+    // Normalizza la scheduled_execution alla data (senza orario)
+    let scheduledDate = "";
+    if (task.scheduled_execution) {
+      const d = new Date(task.scheduled_execution);
+      scheduledDate = d.toISOString().split("T")[0]; // Solo YYYY-MM-DD
+    }
+
     // Crea una chiave unica per il SLOT TEMPORALE basata su:
     // - data scheduled (senza orario)
     // - time_slot_type
     // - time_slot_start/end (se custom)
     // NON include device_id perché vogliamo raggruppare più devices nello stesso slot!
-    const shiftKey = `${scheduledDate}|${task.time_slot_type}|${task.time_slot_start || 'none'}|${task.time_slot_end || 'none'}`
-    
+    const shiftKey = `${scheduledDate}|${task.time_slot_type}|${task.time_slot_start || "none"}|${task.time_slot_end || "none"}`;
+
     if (!shiftGroups.has(shiftKey)) {
       // Determina se è mancante: è mancante se ALMENO UNO dei device è mancante
-      const isMissing = task.todolist_id.startsWith('missing-')
-      
+      const isMissing = task.todolist_id.startsWith("missing-");
+
       shiftGroups.set(shiftKey, {
         tasks: [],
-        scheduled_execution: task.scheduled_execution || '',
-        time_slot_type: task.time_slot_type || 'standard',
+        scheduled_execution: task.scheduled_execution || "",
+        time_slot_type: task.time_slot_type || "standard",
         time_slot_start: task.time_slot_start,
         time_slot_end: task.time_slot_end,
         isMissing: isMissing,
-        latestCompletionDate: task.completion_date
-      })
+        latestCompletionDate: task.completion_date,
+      });
     }
-    
-    const group = shiftGroups.get(shiftKey)!
-    group.tasks.push(task)
-    
+
+    const group = shiftGroups.get(shiftKey)!;
+    group.tasks.push(task);
+
     // Uno slot è considerato "complete" se ALMENO UN device ha completato
     // Se troviamo un task che NON è missing, lo slot non è missing
-    if (!task.todolist_id.startsWith('missing-')) {
-      group.isMissing = false
+    if (!task.todolist_id.startsWith("missing-")) {
+      group.isMissing = false;
     }
-    
+
     // Aggiorna la data di completamento più recente (tra tutti i device)
-    if (task.completion_date && (!group.latestCompletionDate || task.completion_date > group.latestCompletionDate)) {
-      group.latestCompletionDate = task.completion_date
+    if (
+      task.completion_date &&
+      (!group.latestCompletionDate ||
+        task.completion_date > group.latestCompletionDate)
+    ) {
+      group.latestCompletionDate = task.completion_date;
     }
-  })
-  
+  });
+
   // Ordina i turni (completati prima, poi mancanti; poi per scheduled_execution)
   const sortedShifts = Array.from(shiftGroups.entries()).sort((a, b) => {
-    if (a[1].isMissing && !b[1].isMissing) return 1
-    if (!a[1].isMissing && b[1].isMissing) return -1
-    
+    if (a[1].isMissing && !b[1].isMissing) return 1;
+    if (!a[1].isMissing && b[1].isMissing) return -1;
+
     // Ordina per scheduled_execution
     if (a[1].scheduled_execution && b[1].scheduled_execution) {
-      const dateA = new Date(a[1].scheduled_execution).getTime()
-      const dateB = new Date(b[1].scheduled_execution).getTime()
-      if (dateA !== dateB) return dateA - dateB
+      const dateA = new Date(a[1].scheduled_execution).getTime();
+      const dateB = new Date(b[1].scheduled_execution).getTime();
+      if (dateA !== dateB) return dateA - dateB;
     }
-    
+
     // Se hanno lo stesso scheduled, ordina per time_slot_start
-    if (a[1].time_slot_start !== undefined && b[1].time_slot_start !== undefined) {
-      return a[1].time_slot_start - b[1].time_slot_start
+    if (
+      a[1].time_slot_start !== undefined &&
+      b[1].time_slot_start !== undefined
+    ) {
+      return a[1].time_slot_start - b[1].time_slot_start;
     }
-    
-    return a[0].localeCompare(b[0])
-  })
-  
+
+    return a[0].localeCompare(b[0]);
+  });
+
   // Crea una riga per ogni turno
-  let currentRow = 3 // Inizia dalla riga 3 (dopo header CP e header controlli)
+  let currentRow = 3; // Inizia dalla riga 3 (dopo header CP e header controlli)
   for (const [shiftKey, shiftInfo] of sortedShifts) {
     // Colonna A: Info turno
-    let infoText: string
+    let infoText: string;
     if (shiftInfo.isMissing) {
-      const scheduledDate = new Date(shiftInfo.scheduled_execution)
-      const dateStr = scheduledDate.toISOString().split('T')[0]
-      infoText = `Turno NON completato (${dateStr})`
+      const scheduledDate = new Date(shiftInfo.scheduled_execution);
+      const dateStr = scheduledDate.toISOString().split("T")[0];
+      infoText = `Turno NON completato (${dateStr})`;
     } else {
       // Mostra info del turno
-      const scheduledDate = new Date(shiftInfo.scheduled_execution)
-      const dateStr = scheduledDate.toLocaleDateString('it-IT')
-      
-      let timeSlotStr = ''
-      if (shiftInfo.time_slot_type === 'custom' && shiftInfo.time_slot_start !== undefined && shiftInfo.time_slot_end !== undefined) {
-        const startHour = Math.floor(shiftInfo.time_slot_start / 60)
-        const startMin = shiftInfo.time_slot_start % 60
-        const endHour = Math.floor(shiftInfo.time_slot_end / 60)
-        const endMin = shiftInfo.time_slot_end % 60
-        timeSlotStr = `${String(startHour).padStart(2, '0')}:${String(startMin).padStart(2, '0')}-${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`
+      const scheduledDate = new Date(shiftInfo.scheduled_execution);
+      const dateStr = scheduledDate.toLocaleDateString("it-IT");
+
+      let timeSlotStr = "";
+      if (
+        shiftInfo.time_slot_type === "custom" &&
+        shiftInfo.time_slot_start !== undefined &&
+        shiftInfo.time_slot_end !== undefined
+      ) {
+        const startHour = Math.floor(shiftInfo.time_slot_start / 60);
+        const startMin = shiftInfo.time_slot_start % 60;
+        const endHour = Math.floor(shiftInfo.time_slot_end / 60);
+        const endMin = shiftInfo.time_slot_end % 60;
+        timeSlotStr = `${String(startHour).padStart(2, "0")}:${String(startMin).padStart(2, "0")}-${String(endHour).padStart(2, "0")}:${String(endMin).padStart(2, "0")}`;
       } else {
-        timeSlotStr = 'Turno standard'
+        timeSlotStr = "Turno standard";
       }
-      
-      const completedDate = new Date(shiftInfo.latestCompletionDate)
-      const completedTimeStr = completedDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
-      
-      infoText = `${dateStr} ${timeSlotStr}\n(ult. completamento: ${completedTimeStr})`
+
+      const completedDate = new Date(shiftInfo.latestCompletionDate);
+      const completedTimeStr = completedDate.toLocaleTimeString("it-IT", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+      infoText = `${dateStr} ${timeSlotStr}\n(ult. completamento: ${completedTimeStr})`;
     }
-    
+
     ws[`A${currentRow}`] = {
-      t: 's',
+      t: "s",
       v: infoText,
       s: {
         font: { sz: 9 },
         fill: { fgColor: { rgb: shiftInfo.isMissing ? "FFEEEE" : "E2EFDA" } },
-        alignment: { horizontal: 'left', vertical: 'center', wrapText: true },
+        alignment: { horizontal: "left", vertical: "center", wrapText: true },
         border: {
-          top: { style: 'thin', color: { rgb: '000000' } },
-          bottom: { style: 'thin', color: { rgb: '000000' } },
-          left: { style: 'thin', color: { rgb: '000000' } },
-          right: { style: 'thin', color: { rgb: '000000' } }
-        }
-      }
-    }
-    
+          top: { style: "thin", color: { rgb: "000000" } },
+          bottom: { style: "thin", color: { rgb: "000000" } },
+          left: { style: "thin", color: { rgb: "000000" } },
+          right: { style: "thin", color: { rgb: "000000" } },
+        },
+      },
+    };
+
+    // console.log("[CURRENT ROW]", [`A${currentRow}`]);
+
     // Per ogni controllo, scrivi il suo valore nella sua colonna
     controlColumnMapping.forEach((info) => {
-      const colLetter = getColumnLetter(info.col)
-      
+      const colLetter = getColumnLetter(info.col);
+
+      // console.log("\t[COL LETTER]", colLetter);
+      // console.log("\t[INFO]", JSON.stringify(info));
+
       // Cerca il valore per questo specifico controllo tra tutti i task del turno
       // Filtra per device_id del control point + kpiId del controllo
-      const relevantTasks = shiftInfo.tasks.filter(t => 
-        t.kpi_id === info.control.kpiId && 
-        t.device_id === info.cp.deviceId
-      )
-      
+      const relevantTasks = shiftInfo.tasks.filter(
+        (t) =>
+          t.kpi_id === info.control.kpiId && t.device_id === info.cp.deviceId
+      );
+
+      // console.log("\t\t[RELEVANT TASKS]", JSON.stringify(relevantTasks));
+
       // Ordina per completion_date (più recente prima)
       relevantTasks.sort((a, b) => {
-        const dateA = new Date(a.completed_at || a.completion_date).getTime()
-        const dateB = new Date(b.completed_at || b.completion_date).getTime()
-        return dateB - dateA
-      })
-      
-      let cellValue = '-'
+        const dateA = new Date(a.completed_at || a.completion_date).getTime();
+        const dateB = new Date(b.completed_at || b.completion_date).getTime();
+        return dateB - dateA;
+      });
+
+      let cellValue = "-";
       for (const task of relevantTasks) {
+        // console.log("\t\t\t[TASK]", JSON.stringify(task));
         if (task.value && Array.isArray(task.value)) {
-          const fieldValue = task.value.find(v => v.id === info.control.fieldId)
+          // console.log("\t\t\t\t[TASK VALUE]", JSON.stringify(task.value));
+          const fieldValue = task.value.find(
+            (v) => v.id === info.control.fieldId
+          );
+          // console.log("\t\t\t\t[FIELD VALUE]", JSON.stringify(fieldValue));
           if (fieldValue && fieldValue.value !== undefined) {
-            let formatted = fieldValue.value
-            if (typeof formatted === 'boolean') {
-              formatted = formatted ? 'Sì' : 'No'
-            } else if (formatted === '') {
-              formatted = '-'
+            let formatted = fieldValue.value;
+            if (typeof formatted === "boolean") {
+              formatted = formatted ? "Sì" : "No";
+            } else if (formatted === "") {
+              formatted = "-";
             }
-            cellValue = String(formatted)
-            break // Prendi il primo valore valido (il più recente)
+            cellValue = String(formatted);
+            break; // Prendi il primo valore valido (il più recente)
+          }
+        } // else if task value is and object
+        else if (task.value && typeof task.value === "object") {
+          // console.log("\t\t\t\t[TASK VALUE]", JSON.stringify(task.value));
+          // console.log("\t\t\t\t[FIELD ID]", info.control.fieldId);
+          const fieldValue = (
+            task.value as { id: string; value: string | number | boolean }
+          )?.value;
+          //console.log("\t\t\t\t[FIELD VALUE]", JSON.stringify(fieldValue));
+          if (fieldValue !== undefined) {
+            let formatted: string | number | boolean = fieldValue;
+            if (typeof formatted === "boolean") {
+              formatted = formatted ? "Sì" : "No";
+            } else if (formatted === "") {
+              formatted = "-";
+            }
+            cellValue = String(fieldValue);
+            break; // Prendi il primo valore valido (il più recente)
           }
         }
+        // console.log("\t\t\t\t[CELL VALUE]", cellValue);
       }
-      
+
       ws[`${colLetter}${currentRow}`] = {
-        t: typeof cellValue === 'number' || (!isNaN(Number(cellValue)) && cellValue !== '-') ? 'n' : 's',
-        v: typeof cellValue === 'number' || (!isNaN(Number(cellValue)) && cellValue !== '-') ? Number(cellValue) : cellValue,
+        t:
+          typeof cellValue === "number" ||
+          (!isNaN(Number(cellValue)) && cellValue !== "-")
+            ? "n"
+            : "s",
+        v:
+          typeof cellValue === "number" ||
+          (!isNaN(Number(cellValue)) && cellValue !== "-")
+            ? Number(cellValue)
+            : cellValue,
         s: {
           fill: { fgColor: { rgb: shiftInfo.isMissing ? "FFEEEE" : "FFFFFF" } },
-          alignment: { horizontal: 'center', vertical: 'center' },
+          alignment: { horizontal: "center", vertical: "center" },
           border: {
-            top: { style: 'thin', color: { rgb: '000000' } },
-            bottom: { style: 'thin', color: { rgb: '000000' } },
-            left: { style: 'thin', color: { rgb: '000000' } },
-            right: { style: 'thin', color: { rgb: '000000' } }
-          }
-        }
-      }
-    })
-    
-    currentRow++
+            top: { style: "thin", color: { rgb: "000000" } },
+            bottom: { style: "thin", color: { rgb: "000000" } },
+            left: { style: "thin", color: { rgb: "000000" } },
+            right: { style: "thin", color: { rgb: "000000" } },
+          },
+        },
+      };
+    });
+
+    currentRow++;
   }
-  
+
   // Calcola il range finale
-  const totalColumns = currentColumn - 1 // Numero totale di colonne di controlli
-  const lastCol = getColumnLetter(totalColumns)
-  const lastRow = currentRow - 1
-  ws['!ref'] = `A1:${lastCol}${lastRow}`
-  
+  const totalColumns = currentColumn - 1; // Numero totale di colonne di controlli
+  const lastCol = getColumnLetter(totalColumns);
+  const lastRow = currentRow - 1;
+  ws["!ref"] = `A1:${lastCol}${lastRow}`;
+
   // Imposta larghezza colonne
-  const cols: { wch: number }[] = Array(totalColumns + 1).fill({ wch: 20 })
-  cols[0] = { wch: 30 } // Colonna A più larga per info todolist
-  ws['!cols'] = cols
-  
-  return ws
+  const cols: { wch: number }[] = Array(totalColumns + 1).fill({ wch: 20 });
+  cols[0] = { wch: 30 }; // Colonna A più larga per info todolist
+  ws["!cols"] = cols;
+
+  return ws;
 }
 
 // Helper per raggruppare task per todolist
-function groupTasksByTodolist(taskData: TaskData[]): Record<string, TaskData[]> {
-  const groups: Record<string, TaskData[]> = {}
-  
+function groupTasksByTodolist(
+  taskData: TaskData[]
+): Record<string, TaskData[]> {
+  const groups: Record<string, TaskData[]> = {};
+
   for (const task of taskData) {
-    const todolistId = task.todolist_id
+    const todolistId = task.todolist_id;
     if (!groups[todolistId]) {
-      groups[todolistId] = []
+      groups[todolistId] = [];
     }
-    groups[todolistId].push(task)
+    groups[todolistId].push(task);
   }
-  
-  return groups
+
+  return groups;
 }
 
 function generateDocumentationSheet(
-  report: { name?: string; id?: string; todolist_params_linked: TodolistParamsLinked }, 
-  excelData: ExcelData, 
+  report: {
+    name?: string;
+    id?: string;
+    todolist_params_linked: TodolistParamsLinked;
+  },
+  excelData: ExcelData,
   taskData: TaskData[]
 ): Record<string, unknown> {
-  const ws: Record<string, unknown> = {}
-  let currentRow = 1
-  
+  const ws: Record<string, unknown> = {};
+  let currentRow = 1;
+
   // SEZIONE 1: Metadati del Report
-  ws[`A${currentRow}`] = { t: 's', v: 'INFORMAZIONI REPORT', s: { font: { bold: true, sz: 14 } } }
-  currentRow += 2
-  
-  ws[`A${currentRow}`] = { t: 's', v: 'Nome Report:' }
-  ws[`B${currentRow}`] = { t: 's', v: report.name || 'N/A' }
-  currentRow++
-  
-  ws[`A${currentRow}`] = { t: 's', v: 'Data Generazione:' }
-  ws[`B${currentRow}`] = { t: 's', v: new Date().toLocaleString('it-IT') }
-  currentRow++
-  
-  ws[`A${currentRow}`] = { t: 's', v: 'ID Report:' }
-  ws[`B${currentRow}`] = { t: 's', v: report.id || 'N/A' }
-  currentRow += 3
-  
+  ws[`A${currentRow}`] = {
+    t: "s",
+    v: "INFORMAZIONI REPORT",
+    s: { font: { bold: true, sz: 14 } },
+  };
+  currentRow += 2;
+
+  ws[`A${currentRow}`] = { t: "s", v: "Nome Report:" };
+  ws[`B${currentRow}`] = { t: "s", v: report.name || "N/A" };
+  currentRow++;
+
+  ws[`A${currentRow}`] = { t: "s", v: "Data Generazione:" };
+  ws[`B${currentRow}`] = { t: "s", v: new Date().toLocaleString("it-IT") };
+  currentRow++;
+
+  ws[`A${currentRow}`] = { t: "s", v: "ID Report:" };
+  ws[`B${currentRow}`] = { t: "s", v: report.id || "N/A" };
+  currentRow += 3;
+
   // SEZIONE 2: Control Points e Controlli del Report
-  ws[`A${currentRow}`] = { t: 's', v: 'PUNTI DI CONTROLLO E CONTROLLI', s: { font: { bold: true, sz: 14 } } }
-  currentRow += 2
-  
+  ws[`A${currentRow}`] = {
+    t: "s",
+    v: "PUNTI DI CONTROLLO E CONTROLLI",
+    s: { font: { bold: true, sz: 14 } },
+  };
+  currentRow += 2;
+
   if (excelData.controlPoints && excelData.controlPoints.length > 0) {
-    ws[`A${currentRow}`] = { t: 's', v: 'Punto di Controllo' }
-    ws[`B${currentRow}`] = { t: 's', v: 'ID Dispositivo' }
-    ws[`C${currentRow}`] = { t: 's', v: 'Controlli Configurati' }
-    currentRow++
-    
+    ws[`A${currentRow}`] = { t: "s", v: "Punto di Controllo" };
+    ws[`B${currentRow}`] = { t: "s", v: "ID Dispositivo" };
+    ws[`C${currentRow}`] = { t: "s", v: "Controlli Configurati" };
+    currentRow++;
+
     for (const controlPoint of excelData.controlPoints) {
       const controlsText = controlPoint.controls
         .map((c, idx) => `${idx + 1}. ${c.fieldName} (KPI: ${c.kpiName})`)
-        .join('\n')
-      
-      ws[`A${currentRow}`] = { t: 's', v: controlPoint.name || 'N/A' }
-      ws[`B${currentRow}`] = { t: 's', v: controlPoint.deviceId || 'N/A' }
-      ws[`C${currentRow}`] = { 
-        t: 's', 
-        v: controlsText || 'Nessun controllo',
-        s: { alignment: { wrapText: true, vertical: 'top' } }
-      }
-      currentRow++
+        .join("\n");
+
+      ws[`A${currentRow}`] = { t: "s", v: controlPoint.name || "N/A" };
+      ws[`B${currentRow}`] = { t: "s", v: controlPoint.deviceId || "N/A" };
+      ws[`C${currentRow}`] = {
+        t: "s",
+        v: controlsText || "Nessun controllo",
+        s: { alignment: { wrapText: true, vertical: "top" } },
+      };
+      currentRow++;
     }
   }
-  currentRow += 2
-  
+  currentRow += 2;
+
   // SEZIONE 3: Todolist Processate
-  ws[`A${currentRow}`] = { t: 's', v: 'TODOLIST PROCESSATE', s: { font: { bold: true, sz: 14 } } }
-  currentRow += 2
-  
+  ws[`A${currentRow}`] = {
+    t: "s",
+    v: "TODOLIST PROCESSATE",
+    s: { font: { bold: true, sz: 14 } },
+  };
+  currentRow += 2;
+
   // Raggruppa i task per todolist
-  const todolistGroups = groupTasksByTodolist(taskData)
-  
-  ws[`A${currentRow}`] = { t: 's', v: 'ID Todolist' }
-  ws[`B${currentRow}`] = { t: 's', v: 'Device ID' }
-  ws[`C${currentRow}`] = { t: 's', v: 'Data Completamento' }
-  ws[`D${currentRow}`] = { t: 's', v: 'Ora Completamento' }
-  ws[`E${currentRow}`] = { t: 's', v: 'Task Completati' }
-  currentRow++
-  
+  const todolistGroups = groupTasksByTodolist(taskData);
+
+  ws[`A${currentRow}`] = { t: "s", v: "ID Todolist" };
+  ws[`B${currentRow}`] = { t: "s", v: "Device ID" };
+  ws[`C${currentRow}`] = { t: "s", v: "Data Completamento" };
+  ws[`D${currentRow}`] = { t: "s", v: "Ora Completamento" };
+  ws[`E${currentRow}`] = { t: "s", v: "Task Completati" };
+  currentRow++;
+
   for (const [todolistId, tasks] of Object.entries(todolistGroups)) {
-    const firstTask: TaskData = tasks[0]
-    if (!firstTask) continue
-    
-    const completionDate = new Date(firstTask.completion_date)
-    
-    ws[`A${currentRow}`] = { t: 's', v: todolistId }
-    ws[`B${currentRow}`] = { t: 's', v: firstTask.device_id }
-    ws[`C${currentRow}`] = { t: 's', v: completionDate.toLocaleDateString('it-IT') }
-    ws[`D${currentRow}`] = { t: 's', v: completionDate.toLocaleTimeString('it-IT') }
-    ws[`E${currentRow}`] = { t: 's', v: tasks.length.toString() }
-    currentRow++
+    const firstTask: TaskData = tasks[0];
+    if (!firstTask) continue;
+
+    const completionDate = new Date(firstTask.completion_date);
+
+    ws[`A${currentRow}`] = { t: "s", v: todolistId };
+    ws[`B${currentRow}`] = { t: "s", v: firstTask.device_id };
+    ws[`C${currentRow}`] = {
+      t: "s",
+      v: completionDate.toLocaleDateString("it-IT"),
+    };
+    ws[`D${currentRow}`] = {
+      t: "s",
+      v: completionDate.toLocaleTimeString("it-IT"),
+    };
+    ws[`E${currentRow}`] = { t: "s", v: tasks.length.toString() };
+    currentRow++;
   }
-  currentRow += 2
-  
+  currentRow += 2;
+
   // Imposta il range del worksheet
-  ws['!ref'] = `A1:C${currentRow - 1}`
-  
+  ws["!ref"] = `A1:C${currentRow - 1}`;
+
   // Applica larghezze colonne ottimizzate
-  ws['!cols'] = [
+  ws["!cols"] = [
     { wch: 30 }, // A: Punto di Controllo
     { wch: 20 }, // B: ID Dispositivo
-    { wch: 50 }  // C: Controlli
-  ]
-  
-  return ws
+    { wch: 50 }, // C: Controlli
+  ];
+
+  return ws;
 }
