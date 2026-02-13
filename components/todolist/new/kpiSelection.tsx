@@ -480,14 +480,17 @@ export function KpiSelection() {
                     <Label htmlFor={`${field.id}-match`}>Alert when text contains:</Label>
                     <Input 
                       id={`${field.id}-match`} 
-                      placeholder="Text to match"
-                      value={localAlertConditions.find(c => c.field_id === field.id)?.match_text ?? ''}
+                      placeholder="Usa * per qualsiasi testo"
+                      value={localAlertConditions.find(c => c.field_id === field.id)?.match_text ?? '*'}
                       onChange={(e) => handleConditionChange(
                         field.id,
                         'text',
                         { match_text: e.target.value }
                       )}
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Usa <code className="bg-muted px-1 rounded">*</code> per ricevere alert con qualsiasi testo inserito
+                    </p>
                   </div>
                 ) : field.type === 'boolean' ? (
                   <div className="space-y-2">

@@ -338,9 +338,19 @@ export async function checkKpiAlerts(
           break
 
         case 'text':
-          const textValue = String(fieldValue)
-          if (condition.match_text && textValue.toLowerCase().includes(condition.match_text.toLowerCase())) {
-            conditionTriggered = true
+          const textValue = String(fieldValue).trim()
+          if (condition.match_text) {
+            // Wildcard: "*" significa "qualsiasi testo non vuoto"
+            if (condition.match_text === '*') {
+              if (textValue.length > 0) {
+                conditionTriggered = true
+              }
+            } else {
+              // Logica esistente: cerca testo specifico
+              if (textValue.toLowerCase().includes(condition.match_text.toLowerCase())) {
+                conditionTriggered = true
+              }
+            }
           }
           break
 
