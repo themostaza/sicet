@@ -50,7 +50,7 @@ export async function POST(
       .eq("auth_id", user.id)
       .single();
 
-    if (profile?.role !== "admin") {
+    if (profile?.role !== "admin" && profile?.role !== "referrer") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

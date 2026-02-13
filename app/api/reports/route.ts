@@ -52,14 +52,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Verifica ruolo admin
+    // Verifica ruolo admin o referrer (referrer può solo visualizzare)
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('auth_id', user.id)
       .single()
 
-    if (profile?.role !== 'admin') {
+    if (profile?.role !== 'admin' && profile?.role !== 'referrer') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

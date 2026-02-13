@@ -115,6 +115,11 @@ const menuItemsByRole: Record<Role, Array<{
       href: "/todolist",
       icon: <ClipboardList size={20} />,
       label: "Todolist"
+    },
+    {
+      href: "/reports",
+      icon: <FileSpreadsheet size={20} />,
+      label: "Report"
     }
   ]
 }
