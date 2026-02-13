@@ -17,8 +17,8 @@ import { getKpis } from "@/app/actions/actions-kpi"
 import { getDevice } from "@/app/actions/actions-device"
 import type { Task } from "@/lib/validation/todolist-schemas"
 import type { Kpi } from "@/lib/validation/kpi-schemas"
-import { Check, AlertCircle, Info, Save, Loader2, Upload, X, Eye, Calendar as CalendarIcon } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { Check, AlertCircle, Info, Save, Loader2, Upload, X, Eye, Calendar as CalendarIcon, ArrowLeft } from "lucide-react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { createClientSupabaseClient } from "@/lib/supabase-client"
 import Image from "next/image"
 import { isTodolistExpired, isCustomTimeSlotString, parseCustomTimeSlotString } from "@/lib/validation/todolist-schemas"
@@ -214,6 +214,7 @@ export default function TodolistClient({
   userRole = null,
 }: Props) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClientSupabaseClient()
   const [tasks, setTasks] = useState<Task[]>(initialData.tasks)
   const [hasMore, setHasMore] = useState(initialData.hasMore)
@@ -236,6 +237,34 @@ export default function TodolistClient({
     update: setLocalValue,
     clear: clearDirty,
   } = usePersistedValues(storageKey(deviceId, date, timeSlot))
+
+  /* ------- navigazione indietro con filtri preservati -------- */
+  const handleGoBack = useCallback(() => {
+    const params = new URLSearchParams()
+    
+    // Recupera i filtri dalla URL corrente
+    const filter = searchParams.get('filter')
+    const dateParam = searchParams.get('date')
+    const device = searchParams.get('device')
+    const tags = searchParams.get('tags')
+    const category = searchParams.get('category')
+    const categories = searchParams.get('categories')
+    const sort = searchParams.get('sort')
+    const dir = searchParams.get('dir')
+    
+    // Ricostruisci i query parameters
+    if (filter) params.set('filter', filter)
+    if (dateParam) params.set('date', dateParam)
+    if (device) params.set('device', device)
+    if (tags) params.set('tags', tags)
+    if (category) params.set('category', category)
+    if (categories) params.set('categories', categories)
+    if (sort) params.set('sort', sort)
+    if (dir) params.set('dir', dir)
+    
+    const queryString = params.toString()
+    router.push(`/todolist${queryString ? `?${queryString}` : ''}`)
+  }, [router, searchParams])
 
   /* ------- lazy fetch of KPI e device -------- */
   useEffect(() => {
@@ -829,6 +858,15 @@ export default function TodolistClient({
         <CardHeader>
           <div className="flex flex-col sm:flex-row justify-between gap-2">
             <div>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleGoBack}
+                className="mb-2 -ml-2 text-muted-foreground hover:text-foreground"
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Indietro
+              </Button>
               <CardTitle>Todolist</CardTitle>
               <p className="text-gray-600 font-medium">
                 {deviceId} – {deviceInfo && typeof deviceInfo === 'object' && 'name' in deviceInfo && deviceInfo.name ? deviceInfo.name : "Dispositivo sconosciuto"}
