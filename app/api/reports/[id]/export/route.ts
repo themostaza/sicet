@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import * as XLSX from "xlsx";
 import { isTodolistExpired } from "@/lib/validation/todolist-schemas";
 import { ControlPoint, Control, TodolistParamsLinked } from "@/types/reports";
+import pool from "@/lib/db";
 
 interface TaskData {
   id: string;
@@ -17,6 +18,7 @@ interface TaskData {
   time_slot_start?: number;
   time_slot_end?: number;
   end_day_time?: string;
+  completed_by_email?: string;
 }
 
 interface ExcelData {
@@ -24,42 +26,9 @@ interface ExcelData {
   taskData: TaskData[];
 }
 
-// Helper function to batch .in() queries to avoid URL length limits
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function batchedInQuery<T>(
-  supabase: any,
-  table: string,
-  selectFields: string,
-  inColumn: string,
-  inValues: string[],
-  additionalFilters?: (query: any) => any,
-  batchSize: number = 100
-): Promise<{ data: T[] | null; error: any }> {
-  if (inValues.length === 0) {
-    return { data: [], error: null };
-  }
-
-  const allResults: T[] = [];
-
-  for (let i = 0; i < inValues.length; i += batchSize) {
-    const batch = inValues.slice(i, i + batchSize);
-    let query = supabase.from(table).select(selectFields).in(inColumn, batch);
-
-    if (additionalFilters) {
-      query = additionalFilters(query);
-    }
-
-    const { data, error } = await query;
-    if (error) return { data: null, error };
-    if (data) allResults.push(...data);
-  }
-
-  return { data: allResults, error: null };
-}
-
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const supabase = await createServerSupabaseClient();
@@ -91,7 +60,7 @@ export async function POST(
     if (!startDate) {
       return NextResponse.json(
         { error: "startDate is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -122,7 +91,7 @@ export async function POST(
       supabase,
       typedReport,
       startDate,
-      effectiveEndDate
+      effectiveEndDate,
     );
 
     // Genera l'Excel basato sulla nuova struttura
@@ -130,7 +99,7 @@ export async function POST(
       typedReport,
       excelData,
       startDate,
-      effectiveEndDate
+      effectiveEndDate,
     );
 
     // Genera nome file con range date se applicabile
@@ -153,17 +122,16 @@ export async function POST(
     console.error("Unexpected error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getReportDataForExport(
   supabase: any,
   report: { todolist_params_linked: TodolistParamsLinked },
   startDate: string,
-  endDate: string
+  endDate: string,
 ): Promise<ExcelData> {
   // 1. Estrai i device IDs dalla nuova struttura
   const todolistParams = report.todolist_params_linked;
@@ -176,173 +144,216 @@ async function getReportDataForExport(
 
   const deviceIds = todolistParams.controlPoints.map((cp) => cp.deviceId);
 
-  // 2. Trova le todolist completate O scadute per questi device nel range di date
+  // 2. Trova le todolist completate O scadute per questi device nel range di date usando pg
+  const client = await pool.connect();
 
-  // 2a. Todolist completate nel range di date
-  const { data: completedTodolists, error: completedError } = await supabase
-    .from("todolist")
-    .select(
-      "id, device_id, completion_date, scheduled_execution, time_slot_type, time_slot_start, time_slot_end, end_day_time"
-    )
-    .in("device_id", deviceIds)
-    .not("completion_date", "is", null)
-    .gte("completion_date", `${startDate}T00:00:00.000Z`)
-    .lte("completion_date", `${endDate}T23:59:59.999Z`);
+  try {
+    // 2a. Todolist completate nel range di date
+    const completedQuery = `
+      SELECT id, device_id, completion_date, scheduled_execution, 
+             time_slot_type, time_slot_start, time_slot_end, end_day_time, completed_by
+      FROM todolist
+      WHERE device_id = ANY($1)
+        AND completion_date IS NOT NULL
+        AND completion_date >= $2
+        AND completion_date <= $3
+    `;
 
-  if (completedError) {
-    console.error("Error fetching completed todolists:", completedError);
-    throw new Error("Failed to fetch completed todolists");
-  }
+    const completedResult = await client.query(completedQuery, [
+      deviceIds,
+      `${startDate}T00:00:00.000Z`,
+      `${endDate}T23:59:59.999Z`,
+    ]);
 
-  // 2b. Todolist scadute: scheduled nel range di date ma NON completate
-  const { data: expiredTodolists, error: expiredError } = await supabase
-    .from("todolist")
-    .select(
-      "id, device_id, completion_date, scheduled_execution, time_slot_type, time_slot_start, time_slot_end, end_day_time"
-    )
-    .in("device_id", deviceIds)
-    .is("completion_date", null)
-    .gte("scheduled_execution", `${startDate}T00:00:00.000Z`)
-    .lte("scheduled_execution", `${endDate}T23:59:59.999Z`);
+    const completedTodolists = completedResult.rows;
 
-  if (expiredError) {
-    console.error("Error fetching expired todolists:", expiredError);
-    throw new Error("Failed to fetch expired todolists");
-  }
+    // 2b. Todolist scadute: scheduled nel range di date ma NON completate
+    const expiredQuery = `
+      SELECT id, device_id, completion_date, scheduled_execution,
+             time_slot_type, time_slot_start, time_slot_end, end_day_time, completed_by
+      FROM todolist
+      WHERE device_id = ANY($1)
+        AND completion_date IS NULL
+        AND scheduled_execution >= $2
+        AND scheduled_execution <= $3
+    `;
 
-  // Filtra solo le todolist effettivamente scadute (deadline passata)
-  const now = new Date();
-  const filteredExpiredTodolists = (expiredTodolists || []).filter(
-    (todolist: any) => {
-      if (todolist.end_day_time) {
-        const deadline = new Date(todolist.end_day_time);
-        // La deadline già include la tolleranza nel campo end_day_time
-        return now > deadline;
-      }
-      return false;
-    }
-  );
+    const expiredResult = await client.query(expiredQuery, [
+      deviceIds,
+      `${startDate}T00:00:00.000Z`,
+      `${endDate}T23:59:59.999Z`,
+    ]);
 
-  // Combina todolist completate e scadute
-  const allTodolists = [
-    ...(completedTodolists || []),
-    ...filteredExpiredTodolists,
-  ];
-
-  // Se non ci sono todolist (completate o scadute) per NESSUN device, ritorna vuoto
-  if (allTodolists.length === 0) {
-    return { controlPoints: todolistParams.controlPoints, taskData: [] };
-  }
-
-  // 3. Ottieni tutti i task per le todolist (completate e scadute)
-  // Per le todolist scadute, prendiamo anche i task parzialmente completati
-  const todolistIds = allTodolists.map((t: any) => t.id);
-
-  // Separa todolist completate da quelle scadute
-  const completedTodolistIds = (completedTodolists || []).map((t: any) => t.id);
-  const expiredTodolistIds = filteredExpiredTodolists.map((t: any) => t.id);
-
-  // Per le completate: solo task con completed_at (batched to avoid URL length limits)
-  const { data: completedTasks, error: completedTasksError } =
-    await batchedInQuery(
-      supabase,
-      "tasks",
-      "id, kpi_id, value, todolist_id, completed_at",
-      "todolist_id",
-      completedTodolistIds,
-      (query) => query.not("completed_at", "is", null)
+    // Filtra solo le todolist effettivamente scadute (deadline passata)
+    const now = new Date();
+    const filteredExpiredTodolists = expiredResult.rows.filter(
+      (todolist: any) => {
+        if (todolist.end_day_time) {
+          const deadline = new Date(todolist.end_day_time);
+          // La deadline già include la tolleranza nel campo end_day_time
+          return now > deadline;
+        }
+        return false;
+      },
     );
 
-  if (completedTasksError) {
-    console.error("Error fetching completed tasks:", completedTasksError);
-    throw new Error("Failed to fetch completed tasks");
-  }
+    // Combina todolist completate e scadute
+    const allTodolists = [...completedTodolists, ...filteredExpiredTodolists];
 
-  // Per le scadute: TUTTI i task (completati e non), così mostriamo anche dati parziali (batched to avoid URL length limits)
-  const { data: expiredTasks, error: expiredTasksError } = await batchedInQuery(
-    supabase,
-    "tasks",
-    "id, kpi_id, value, todolist_id, completed_at",
-    "todolist_id",
-    expiredTodolistIds
-  );
-
-  if (expiredTasksError) {
-    console.error("Error fetching expired tasks:", expiredTasksError);
-    throw new Error("Failed to fetch expired tasks");
-  }
-
-  // Combina tutti i task
-  const tasks = [...(completedTasks || []), ...(expiredTasks || [])];
-
-  // Vecchio blocco error handling
-  const tasksError = null;
-
-  if (tasksError) {
-    console.error("Error fetching tasks:", tasksError);
-    throw new Error("Failed to fetch tasks");
-  }
-
-  // 4. Combina i dati per facilitare il mapping
-  const enrichedTasks: TaskData[] = (tasks || []).map((task: any) => {
-    const todolist = allTodolists.find((tl: any) => tl.id === task.todolist_id);
-    return {
-      ...task,
-      device_id: todolist?.device_id || "",
-      completion_date: todolist?.completion_date || "",
-      scheduled_execution: todolist?.scheduled_execution || "",
-      time_slot_type: todolist?.time_slot_type || "standard",
-      time_slot_start: todolist?.time_slot_start,
-      time_slot_end: todolist?.time_slot_end,
-      end_day_time: todolist?.end_day_time || "",
-    } as TaskData;
-  });
-
-  // 5. Crea task "placeholder" per i device che non hanno completato/scaduto la todolist
-  const processedDeviceIds = new Set(
-    allTodolists.map((tl: { device_id: string }) => tl.device_id)
-  );
-  const missingDeviceIds = deviceIds.filter(
-    (deviceId) => !processedDeviceIds.has(deviceId)
-  );
-
-  // Per ogni device mancante, crea task placeholder per ogni KPI unico nei controlli
-  const uniqueKpiIds = new Set<string>();
-  todolistParams.controlPoints.forEach((cp) => {
-    cp.controls.forEach((ctrl) => uniqueKpiIds.add(ctrl.kpiId));
-  });
-
-  for (const deviceId of missingDeviceIds) {
-    for (const kpiId of uniqueKpiIds) {
-      // Crea un task placeholder per device senza todolist completate/scadute
-      enrichedTasks.push({
-        id: `placeholder-${deviceId}-${kpiId}`,
-        kpi_id: kpiId,
-        value: [], // Valore vuoto
-        todolist_id: `missing-${deviceId}`,
-        completed_at: "",
-        device_id: deviceId,
-        completion_date: "", // Nessuna data di completamento
-        scheduled_execution: `${startDate}T00:00:00.000Z`,
-        time_slot_type: "standard",
-        time_slot_start: undefined,
-        time_slot_end: undefined,
-        end_day_time: "",
-      } as TaskData);
+    // Se non ci sono todolist (completate o scadute) per NESSUN device, ritorna vuoto
+    if (allTodolists.length === 0) {
+      return { controlPoints: todolistParams.controlPoints, taskData: [] };
     }
-  }
 
-  return {
-    controlPoints: todolistParams.controlPoints,
-    taskData: enrichedTasks,
-  };
+    // 2c. Fetch user profiles for completed_by users
+    // Collect all unique completed_by IDs (auth.users.id)
+    const completedByIds = allTodolists
+      .map((tl: any) => tl.completed_by)
+      .filter((id: any) => id != null);
+
+    const uniqueCompletedByIds = [...new Set(completedByIds)];
+
+    // Map to store auth_id -> email
+    const userEmailMap: Record<string, string> = {};
+
+    if (uniqueCompletedByIds.length > 0) {
+      const profilesQuery = `
+        SELECT auth_id, email
+        FROM profiles
+        WHERE auth_id = ANY($1)
+      `;
+
+      const profilesResult = await client.query(profilesQuery, [
+        uniqueCompletedByIds,
+      ]);
+
+      // Build the map
+      profilesResult.rows.forEach((profile: any) => {
+        if (profile.auth_id && profile.email) {
+          userEmailMap[profile.auth_id] = profile.email;
+        }
+      });
+    }
+
+    // 3. Ottieni tutti i task per le todolist (completate e scadute)
+    // Per le todolist scadute, prendiamo anche i task parzialmente completati
+    const todolistIds = allTodolists.map((t: any) => t.id);
+
+    // Separa todolist completate da quelle scadute
+    const completedTodolistIds = completedTodolists.map((t: any) => t.id);
+    const expiredTodolistIds = filteredExpiredTodolists.map((t: any) => t.id);
+
+    let completedTasks: any[] = [];
+    let expiredTasks: any[] = [];
+
+    // Per le completate: solo task con completed_at
+    if (completedTodolistIds.length > 0) {
+      const completedTasksQuery = `
+        SELECT id, kpi_id, value, todolist_id, completed_at
+        FROM tasks
+        WHERE todolist_id = ANY($1)
+          AND completed_at IS NOT NULL
+      `;
+
+      const completedTasksResult = await client.query(completedTasksQuery, [
+        completedTodolistIds,
+      ]);
+
+      completedTasks = completedTasksResult.rows;
+    }
+
+    // Per le scadute: TUTTI i task (completati e non), così mostriamo anche dati parziali
+    if (expiredTodolistIds.length > 0) {
+      const expiredTasksQuery = `
+        SELECT id, kpi_id, value, todolist_id, completed_at
+        FROM tasks
+        WHERE todolist_id = ANY($1)
+      `;
+
+      const expiredTasksResult = await client.query(expiredTasksQuery, [
+        expiredTodolistIds,
+      ]);
+
+      expiredTasks = expiredTasksResult.rows;
+    }
+
+    // Combina tutti i task
+    const tasks = [...completedTasks, ...expiredTasks];
+
+    // 4. Combina i dati per facilitare il mapping
+    const enrichedTasks: TaskData[] = tasks.map((task: any) => {
+      const todolist = allTodolists.find(
+        (tl: any) => tl.id === task.todolist_id,
+      );
+      const completedByEmail = todolist?.completed_by
+        ? userEmailMap[todolist.completed_by]
+        : undefined;
+
+      return {
+        ...task,
+        device_id: todolist?.device_id || "",
+        completion_date: todolist?.completion_date || "",
+        scheduled_execution: todolist?.scheduled_execution || "",
+        time_slot_type: todolist?.time_slot_type || "standard",
+        time_slot_start: todolist?.time_slot_start,
+        time_slot_end: todolist?.time_slot_end,
+        end_day_time: todolist?.end_day_time || "",
+        completed_by_email: completedByEmail,
+      } as TaskData;
+    });
+
+    // 5. Crea task "placeholder" per i device che non hanno completato/scaduto la todolist
+    const processedDeviceIds = new Set(
+      allTodolists.map((tl: { device_id: string }) => tl.device_id),
+    );
+    const missingDeviceIds = deviceIds.filter(
+      (deviceId) => !processedDeviceIds.has(deviceId),
+    );
+
+    // Per ogni device mancante, crea task placeholder per ogni KPI unico nei controlli
+    const uniqueKpiIds = new Set<string>();
+    todolistParams.controlPoints.forEach((cp) => {
+      cp.controls.forEach((ctrl) => uniqueKpiIds.add(ctrl.kpiId));
+    });
+
+    for (const deviceId of missingDeviceIds) {
+      for (const kpiId of uniqueKpiIds) {
+        // Crea un task placeholder per device senza todolist completate/scadute
+        enrichedTasks.push({
+          id: `placeholder-${deviceId}-${kpiId}`,
+          kpi_id: kpiId,
+          value: [], // Valore vuoto
+          todolist_id: `missing-${deviceId}`,
+          completed_at: "",
+          device_id: deviceId,
+          completion_date: "", // Nessuna data di completamento
+          scheduled_execution: `${startDate}T00:00:00.000Z`,
+          time_slot_type: "standard",
+          time_slot_start: undefined,
+          time_slot_end: undefined,
+          end_day_time: "",
+        } as TaskData);
+      }
+    }
+
+    return {
+      controlPoints: todolistParams.controlPoints,
+      taskData: enrichedTasks,
+    };
+  } catch (error) {
+    console.error("Error fetching report data:", error);
+    throw new Error("Failed to fetch report data from database");
+  } finally {
+    // Release the client back to the pool
+    client.release();
+  }
 }
 
 async function generateMappedExcel(
   report: { name: string; todolist_params_linked: TodolistParamsLinked },
   excelData: ExcelData,
   startDate: string,
-  endDate: string
+  endDate: string,
 ): Promise<Buffer> {
   const wb = XLSX.utils.book_new();
 
@@ -354,7 +365,7 @@ async function generateMappedExcel(
     controlPoints,
     taskData,
     startDate,
-    endDate
+    endDate,
   );
   XLSX.utils.book_append_sheet(wb, dataWs, "Dati Report");
 
@@ -372,7 +383,7 @@ function generateDataSheet(
   controlPoints: ControlPoint[],
   taskData: TaskData[],
   startDate: string,
-  endDate: string
+  endDate: string,
 ): Record<string, unknown> {
   const ws: Record<string, unknown> = {};
 
@@ -384,8 +395,8 @@ function generateDataSheet(
   };
 
   // Calcola il mapping: ogni controllo ha la sua colonna
-  // Struttura: colonna = 1 per ogni controllo (non per control point)
-  let currentColumn = 1; // Inizia da B (colonna 1), A è riservata
+  // Struttura: colonna = 2 per ogni controllo (non per control point)
+  let currentColumn = 2; // Inizia da C (colonna 2), A è riservata per info turno, B per operatore
 
   const controlColumnMapping: Map<
     string,
@@ -444,6 +455,23 @@ function generateDataSheet(
     }
   });
 
+  // RIGA 2: Header "Operatore" nella colonna B
+  ws["B2"] = {
+    t: "s",
+    v: "Operatore",
+    s: {
+      font: { bold: true, sz: 10 },
+      fill: { fgColor: { rgb: "D9E1F2" } },
+      alignment: { horizontal: "left", vertical: "center", wrapText: true },
+      border: {
+        top: { style: "thin", color: { rgb: "000000" } },
+        bottom: { style: "thin", color: { rgb: "000000" } },
+        left: { style: "thin", color: { rgb: "000000" } },
+        right: { style: "thin", color: { rgb: "000000" } },
+      },
+    },
+  };
+
   // RIGA 2: Nomi dei Controlli (una colonna per ogni controllo)
   controlColumnMapping.forEach((info) => {
     const colLetter = getColumnLetter(info.col);
@@ -477,10 +505,12 @@ function generateDataSheet(
       time_slot_end?: number;
       isMissing: boolean;
       latestCompletionDate: string;
+      completedByEmail?: string;
     }
   >();
 
   taskData.forEach((task) => {
+    //console.log("\t[TASK]", JSON.stringify(task));
     // Normalizza la scheduled_execution alla data (senza orario)
     let scheduledDate = "";
     if (task.scheduled_execution) {
@@ -507,6 +537,7 @@ function generateDataSheet(
         time_slot_end: task.time_slot_end,
         isMissing: isMissing,
         latestCompletionDate: task.completion_date,
+        completedByEmail: task.completed_by_email,
       });
     }
 
@@ -526,6 +557,11 @@ function generateDataSheet(
         task.completion_date > group.latestCompletionDate)
     ) {
       group.latestCompletionDate = task.completion_date;
+    }
+
+    // Aggiorna l'email dell'utente se disponibile e non ancora impostata
+    if (task.completed_by_email && !group.completedByEmail) {
+      group.completedByEmail = task.completed_by_email;
     }
   });
 
@@ -582,6 +618,7 @@ function generateDataSheet(
       }
 
       const completedDate = new Date(shiftInfo.latestCompletionDate);
+      // console.log("\t[COMPLETED DATE]", completedDate);
       const completedTimeStr = completedDate.toLocaleTimeString("it-IT", {
         hour: "2-digit",
         minute: "2-digit",
@@ -606,23 +643,40 @@ function generateDataSheet(
       },
     };
 
-    // console.log("[CURRENT ROW]", [`A${currentRow}`]);
+    // Colonna B: Operatore (email dell'utente che ha completato)
+    ws[`B${currentRow}`] = {
+      t: "s",
+      v: shiftInfo.completedByEmail || "-",
+      s: {
+        font: { sz: 9 },
+        fill: { fgColor: { rgb: shiftInfo.isMissing ? "FFEEEE" : "E2EFDA" } },
+        alignment: { horizontal: "left", vertical: "center", wrapText: true },
+        border: {
+          top: { style: "thin", color: { rgb: "000000" } },
+          bottom: { style: "thin", color: { rgb: "000000" } },
+          left: { style: "thin", color: { rgb: "000000" } },
+          right: { style: "thin", color: { rgb: "000000" } },
+        },
+      },
+    };
+
+    //console.log("[CURRENT ROW]", [`A${currentRow}`]);
 
     // Per ogni controllo, scrivi il suo valore nella sua colonna
     controlColumnMapping.forEach((info) => {
       const colLetter = getColumnLetter(info.col);
 
-      // console.log("\t[COL LETTER]", colLetter);
-      // console.log("\t[INFO]", JSON.stringify(info));
+      //console.log("\t[COL LETTER]", colLetter);
+      //console.log("\t[INFO]", JSON.stringify(info));
 
       // Cerca il valore per questo specifico controllo tra tutti i task del turno
       // Filtra per device_id del control point + kpiId del controllo
       const relevantTasks = shiftInfo.tasks.filter(
         (t) =>
-          t.kpi_id === info.control.kpiId && t.device_id === info.cp.deviceId
+          t.kpi_id === info.control.kpiId && t.device_id === info.cp.deviceId,
       );
 
-      // console.log("\t\t[RELEVANT TASKS]", JSON.stringify(relevantTasks));
+      //console.log("\t\t[RELEVANT TASKS]", JSON.stringify(relevantTasks));
 
       // Ordina per completion_date (più recente prima)
       relevantTasks.sort((a, b) => {
@@ -633,13 +687,13 @@ function generateDataSheet(
 
       let cellValue = "-";
       for (const task of relevantTasks) {
-        // console.log("\t\t\t[TASK]", JSON.stringify(task));
+        //console.log("\t\t\t[TASK]", JSON.stringify(task));
         if (task.value && Array.isArray(task.value)) {
-          // console.log("\t\t\t\t[TASK VALUE]", JSON.stringify(task.value));
+          //console.log("\t\t\t\t[TASK VALUE]", JSON.stringify(task.value));
           const fieldValue = task.value.find(
-            (v) => v.id === info.control.fieldId
+            (v) => v.id === info.control.fieldId,
           );
-          // console.log("\t\t\t\t[FIELD VALUE]", JSON.stringify(fieldValue));
+          //console.log("\t\t\t\t[FIELD VALUE]", JSON.stringify(fieldValue));
           if (fieldValue && fieldValue.value !== undefined) {
             let formatted = fieldValue.value;
             if (typeof formatted === "boolean") {
@@ -652,8 +706,8 @@ function generateDataSheet(
           }
         } // else if task value is and object
         else if (task.value && typeof task.value === "object") {
-          // console.log("\t\t\t\t[TASK VALUE]", JSON.stringify(task.value));
-          // console.log("\t\t\t\t[FIELD ID]", info.control.fieldId);
+          //console.log("\t\t\t\t[TASK VALUE]", JSON.stringify(task.value));
+          //console.log("\t\t\t\t[FIELD ID]", info.control.fieldId);
           const fieldValue = (
             task.value as { id: string; value: string | number | boolean }
           )?.value;
@@ -669,7 +723,7 @@ function generateDataSheet(
             break; // Prendi il primo valore valido (il più recente)
           }
         }
-        // console.log("\t\t\t\t[CELL VALUE]", cellValue);
+        //console.log("\t\t\t\t[CELL VALUE]", cellValue);
       }
 
       ws[`${colLetter}${currentRow}`] = {
@@ -708,6 +762,7 @@ function generateDataSheet(
   // Imposta larghezza colonne
   const cols: { wch: number }[] = Array(totalColumns + 1).fill({ wch: 20 });
   cols[0] = { wch: 30 }; // Colonna A più larga per info todolist
+  cols[1] = { wch: 25 }; // Colonna B per operatore (email)
   ws["!cols"] = cols;
 
   return ws;
@@ -715,7 +770,7 @@ function generateDataSheet(
 
 // Helper per raggruppare task per todolist
 function groupTasksByTodolist(
-  taskData: TaskData[]
+  taskData: TaskData[],
 ): Record<string, TaskData[]> {
   const groups: Record<string, TaskData[]> = {};
 
@@ -737,7 +792,7 @@ function generateDocumentationSheet(
     todolist_params_linked: TodolistParamsLinked;
   },
   excelData: ExcelData,
-  taskData: TaskData[]
+  taskData: TaskData[],
 ): Record<string, unknown> {
   const ws: Record<string, unknown> = {};
   let currentRow = 1;
