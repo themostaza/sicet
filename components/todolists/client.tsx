@@ -112,6 +112,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
   const [allFilteredIds, setAllFilteredIds] = useState<Set<string>>(new Set())
   const [filteredCount, setFilteredCount] = useState<number>(0)
   const [isLoadingCount, setIsLoadingCount] = useState(false)
+  const [deleteProgress, setDeleteProgress] = useState<{ current: number; total: number } | null>(null)
   
   // Infinite scroll state
   const [todolists, setTodolists] = useState<TodolistItem[]>([])
@@ -500,18 +501,28 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
 
     try {
       setIsBulkDeleting(true)
-      const deletePromises = Array.from(selectedItems).map(async (id) => {
-        await deleteTodolistById(id)
-      })
+      const idsToDelete = Array.from(selectedItems)
+      const total = idsToDelete.length
+      
+      // Inizializza il progress
+      setDeleteProgress({ current: 0, total })
 
-      await Promise.all(deletePromises)
+      // Elimina in sequenza
+      for (let i = 0; i < idsToDelete.length; i++) {
+        await deleteTodolistById(idsToDelete[i])
+        // Aggiorna il counter dopo ogni eliminazione
+        setDeleteProgress({ current: i + 1, total })
+      }
       
       toast({
         title: "Todolist eliminate",
-        description: `${selectedItems.size} todolist sono state eliminate con successo.`,
+        description: `${total} todolist sono state eliminate con successo.`,
       })
       
+      // Reset
+      setDeleteProgress(null)
       setSelectedItems(new Set())
+      setAllFilteredIds(new Set())
       // Refresh the list
       setCurrentOffset(0)
       setTodolists([])
@@ -524,6 +535,7 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
         description: "Impossibile eliminare alcune todolist. Riprova più tardi.",
         variant: "destructive"
       })
+      setDeleteProgress(null)
     } finally {
       setIsBulkDeleting(false)
     }
@@ -727,44 +739,71 @@ export default function TodolistListClient({ todolistsByFilter, counts, initialF
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Sei sicuro?</AlertDialogTitle>
+                    <AlertDialogTitle>
+                      {deleteProgress ? "Eliminazione in corso..." : "Sei sicuro?"}
+                    </AlertDialogTitle>
                     <AlertDialogDescription asChild>
                       <div className="space-y-2">
-                        <div>Questa azione non può essere annullata. Le {selectedItems.size} todolist selezionate e tutte le loro attività verranno eliminate permanentemente.</div>
-                        {(() => {
-                          const selectedTodolists = todolists.filter(t => selectedItems.has(t.id))
-                          const totalTasks = selectedTodolists.reduce((sum, t) => sum + t.count, 0)
-                          const completedTasks = selectedTodolists.reduce((sum, t) => 
-                            sum + t.tasks.filter(task => task.status === 'completed').length, 0
-                          )
-                          const percentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
-                          
-                          return (
-                            <div className="mt-3 p-3 bg-muted rounded-md">
-                              <div className="font-semibold text-foreground">Stato avanzamento complessivo:</div>
-                              <div className="text-foreground">
-                                {completedTasks} di {totalTasks} task completati ({percentage}%)
-                              </div>
-                              <div className="mt-2 w-full bg-background rounded-full h-2">
-                                <div 
-                                  className="bg-primary rounded-full h-2 transition-all" 
-                                  style={{ width: `${percentage}%` }}
-                                />
-                              </div>
+                        {deleteProgress ? (
+                          // Mostra progress durante l'eliminazione
+                          <div className="space-y-3">
+                            <div className="text-foreground">
+                              Eliminazione todolist {deleteProgress.current} di {deleteProgress.total}
                             </div>
-                          )
-                        })()}
+                            <div className="w-full bg-muted rounded-full h-3">
+                              <div 
+                                className="bg-destructive rounded-full h-3 transition-all duration-300" 
+                                style={{ width: `${(deleteProgress.current / deleteProgress.total) * 100}%` }}
+                              />
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {Math.round((deleteProgress.current / deleteProgress.total) * 100)}% completato
+                            </div>
+                          </div>
+                        ) : (
+                          // Mostra conferma prima dell'eliminazione
+                          <>
+                            <div>Questa azione non può essere annullata. Le {selectedItems.size} todolist selezionate e tutte le loro attività verranno eliminate permanentemente.</div>
+                            {(() => {
+                              const selectedTodolists = todolists.filter(t => selectedItems.has(t.id))
+                              const totalTasks = selectedTodolists.reduce((sum, t) => sum + t.count, 0)
+                              const completedTasks = selectedTodolists.reduce((sum, t) => 
+                                sum + t.tasks.filter(task => task.status === 'completed').length, 0
+                              )
+                              const percentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
+                              
+                              return (
+                                <div className="mt-3 p-3 bg-muted rounded-md">
+                                  <div className="font-semibold text-foreground">Stato avanzamento complessivo:</div>
+                                  <div className="text-foreground">
+                                    {completedTasks} di {totalTasks} task completati ({percentage}%)
+                                  </div>
+                                  <div className="mt-2 w-full bg-background rounded-full h-2">
+                                    <div 
+                                      className="bg-primary rounded-full h-2 transition-all" 
+                                      style={{ width: `${percentage}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              )
+                            })()}
+                          </>
+                        )}
                       </div>
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>Annulla</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={handleBulkDelete}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    >
-                      Elimina
-                    </AlertDialogAction>
+                    {!deleteProgress && (
+                      <>
+                        <AlertDialogCancel>Annulla</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={handleBulkDelete}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Elimina
+                        </AlertDialogAction>
+                      </>
+                    )}
                   </AlertDialogFooter>
                 </AlertDialogContent>
                 </AlertDialog>
